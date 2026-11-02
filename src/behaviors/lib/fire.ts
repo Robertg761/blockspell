@@ -28,7 +28,7 @@ export function emitFlames(world: GameWorld, e: Entity, dt: number, strength = 1
 
 /** Sets a flammable entity on fire. Returns false if it can't burn right now. */
 export function ignite(e: Entity, world: GameWorld): boolean {
-  if (!e.alive || e.state.burning || e.state.charred || e.has('wet')) return false;
+  if (!e.alive || e.state.burning || e.state.charred || e.has('wet') || e.has('frozen') || e.has('metal')) return false;
   e.state.burning = true;
   e.state.heat = 1;
   const total = e.prop('burnTime', 7) * Math.sqrt(e.scale);

@@ -4,7 +4,10 @@ import { defineBehavior } from '../types';
 const force = new Vec3();
 const point = new Vec3();
 
-/** Lift that counteracts gravity, settling around a ceiling height, with a gentle sway. */
+/**
+ * Lift that counteracts gravity, settling around a ceiling height, with a gentle
+ * sway. Carriers get extra lift for whatever hangs off their strings.
+ */
 export default defineBehavior({
   id: 'flies',
   tags: ['flies'],
@@ -17,6 +20,7 @@ export default defineBehavior({
     e.body.allowSleep = true;
   },
   fixedUpdate(e, world, _h) {
+    if (e.has('frozen') || e.body.mass === 0) return;
     const b = e.body;
     const ground = Math.max(0, world.groundAt(b.position.x, b.position.z));
     const alt = b.position.y - ground;
@@ -24,8 +28,10 @@ export default defineBehavior({
     const baseLift = e.prop('lift', 1.25);
     const lift = alt < ceiling ? baseLift : Math.max(0.85, baseLift - (alt - ceiling) * 0.5);
     const t = world.time * 0.6 + e.id * 1.7;
+    const payload = (e.state.payloadMass as number) ?? 0;
     const g = 9.82 * b.mass;
-    force.set(Math.sin(t) * 0.08 * g, g * lift, Math.cos(t * 0.8) * 0.08 * g);
+    const carry = 9.82 * payload * (alt < ceiling ? 1.12 : Math.max(0.8, 1.12 - (alt - ceiling) * 0.3));
+    force.set(Math.sin(t) * 0.08 * g, g * lift + carry, Math.cos(t * 0.8) * 0.08 * g);
     // apply lift above the center so the object hangs upright like a pendulum
     point.set(0, e.size.y * 0.3, 0);
     b.applyForce(force, point);

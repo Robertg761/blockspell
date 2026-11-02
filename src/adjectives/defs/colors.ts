@@ -3,7 +3,7 @@ import type { AdjectiveDef } from '../types';
 const COLORS: [string, string, string[]][] = [
   ['red', '#e0443e', ['crimson', 'scarlet']],
   ['orange', '#f08a24', []],
-  ['yellow', '#f2cf3a', ['golden', 'gold']],
+  ['yellow', '#f2cf3a', ['lemon']],
   ['green', '#52b848', ['lime']],
   ['blue', '#3d7fe0', ['navy']],
   ['cyan', '#3cc8d8', ['teal', 'turquoise']],

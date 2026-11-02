@@ -1,7 +1,7 @@
 import { extinguish } from '../lib/fire';
 import { defineBehavior } from '../types';
 
-/** Wet things drip, can't burn, and put out fires they touch. */
+/** Wet things drip, can't burn, put out fires they touch, and dry off if they were only soaked. */
 export default defineBehavior({
   id: 'wet',
   tags: ['wet'],
@@ -13,6 +13,12 @@ export default defineBehavior({
       if (o === e) continue;
       if ((o.state.burning || (o.has('hot') && o.prop('extinguishable', 0) > 0)) && world.touching(e, o, 0.25)) extinguish(o, world);
     }
+    if (e.state.soakedTag && world.time > ((e.state.soakedUntil as number) ?? 0)) {
+      e.state.soakedTag = false;
+      world.removeTag(e, 'wet');
+      return;
+    }
+    if (e.has('liquid')) return;
     if (Math.random() < dt * 6) {
       const p = e.body.position;
       world.fx.burst(
