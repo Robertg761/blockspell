@@ -5,7 +5,7 @@ and a voxel object spawns into a cannon-es physics world. Objects are pure data 
 a procedural voxel model. Interactions come from **behavior tags**, which are
 implemented centrally in `src/behaviors/defs/` — you only choose tags and props.
 
-Never use the word "Scribblenauts" anywhere. Everything is offline: no URLs, no
+Don't name or reference other games. Everything is offline: no URLs, no
 assets, no network. Models are built in code.
 
 ## Read first
