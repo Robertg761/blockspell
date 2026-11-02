@@ -12,6 +12,12 @@ export interface ObjectPhysics {
   shape?: 'auto' | 'box' | 'sphere';
   /** Max boxes for 'auto'. Default 8. */
   maxBoxes?: number;
+  /**
+   * Explicit collider boxes for 'auto' in voxel coords, [x0, y0, z0, x1, y1, z1]
+   * with max exclusive. Skips the decomposition (for detailed models whose
+   * voxels don't decompose well, e.g. the braided rope).
+   */
+  boxes?: [number, number, number, number, number, number][];
   friction?: number;
   restitution?: number;
   linearDamping?: number;

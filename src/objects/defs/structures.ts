@@ -150,31 +150,50 @@ export default [
     tags: ['climbable', 'flammable'],
     tintKeys: ['ropeTan', 'ropeDark'],
     burstColor: '#cfae6e',
-    voxelSize: 0.1,
-    physics: { mass: 1, shape: 'auto', maxBoxes: 4, friction: 0.8 },
+    // Half-size voxels (same 1 m x 2.2 m bounds as before) so the strand can be thin and braided.
+    voxelSize: 0.05,
+    // Collider: the same small 0.4 m block at the base that the old coarse rope decomposed to.
+    physics: { mass: 1, shape: 'auto', boxes: [[6, 0, 6, 14, 8, 14]], friction: 0.8 },
     props: { burnTime: 4 },
     build(b) {
-      // coil at the bottom
-      b.cylinderY(5, 5, 0, 0, 4.6, 'ropeTan');
-      b.cylinderY(5, 5, 0, 0, 2.4, null);
-      b.cylinderY(5, 5, 1, 1, 3.8, 'ropeDark');
-      b.cylinderY(5, 5, 1, 1, 2.2, null);
-      b.cylinderY(5, 5, 2, 2, 3.2, 'ropeTan');
-      b.cylinderY(5, 5, 2, 2, 1.5, null);
-      // vertical strand, twisted two-tone
-      for (let y = 0; y < 22; y++) {
-        const f = Math.floor(y / 2) % 2 === 0;
-        b.box(4, y, 4, 5, y, 5, 'ropeTan');
-        b.set(f ? 4 : 5, y, f ? 4 : 5, 'ropeDark');
-        b.set(f ? 5 : 4, y, f ? 5 : 4, 'ropeDark');
+      // Two-tone twist: the color steps around the strand as it goes, giving diagonal stripes.
+      const twist = (x: number, y: number, z: number, cx: number, cz: number) =>
+        ((Math.round(((Math.atan2(z - cz, x - cx) / Math.PI) * 2 + 4) + y / 2) % 2) === 0 ? 'ropeTan' : 'ropeDark');
+      // Coil at the bottom: three stacked rings, each a little smaller, twisted like the strand.
+      for (const [y, r] of [[0, 9.4], [2, 8], [4, 6.6]] as const) {
+        for (let x = 0; x < 20; x++)
+          for (let z = 0; z < 20; z++) {
+            const d = Math.hypot(x - 9.5, z - 9.5);
+            if (d <= r && d >= r - 2.2) for (const yy of [y, y + 1]) b.set(x, yy, z, twist(x, yy, z, 9.5, 9.5));
+          }
       }
-      // knots
-      for (const y of [9, 16]) b.box(3, y, 3, 6, y + 1, 6, 'ropeDark');
-      for (const y of [9, 16]) b.box(3, y + 1, 3, 6, y + 1, 6, 'ropeTan');
-      // loop at the top
-      b.box(3, 21, 3, 6, 21, 6, 'ropeTan');
-      b.box(4, 21, 4, 5, 21, 5, null);
-      b.box(4, 21, 4, 5, 21, 5, 'ropeDark');
+      // Loose frayed end trailing off the coil.
+      b.box(17, 0, 13, 18, 0, 15, 'ropeTan').set(19, 0, 15, 'ropeDark').set(19, 1, 16, 'ropeTan').set(18, 0, 16, 'ropeDark');
+      // The hanging strand: 3x3 with rounded corners, a gentle S-curve, rising out of the coil.
+      const sway = (y: number) => Math.round(Math.sin(y * 0.16) * 1.5);
+      for (let y = 4; y < 40; y++) {
+        const cx = 9 + sway(y);
+        for (let dx = -1; dx <= 1; dx++)
+          for (let dz = -1; dz <= 1; dz++) {
+            if (dx && dz && (y + dx + dz) % 3 !== 0) continue; // nubbly corners read as twisted fibre
+            b.set(cx + dx, y, 9 + dz, twist(cx + dx, y, 9 + dz, cx, 9));
+          }
+      }
+      // Two knots: rounded bulges, twisted like the rest of the rope.
+      for (const ky of [16, 30]) {
+        const cx = 9 + sway(ky);
+        for (let x = cx - 3; x <= cx + 3; x++)
+          for (let y = ky - 3; y <= ky + 3; y++)
+            for (let z = 6; z <= 12; z++)
+              if (((x - cx) / 2.3) ** 2 + ((y - ky) / 2.6) ** 2 + ((z - 9) / 2.3) ** 2 <= 1) b.set(x, y, z, twist(x, y + (x - cx), z, cx, 9));
+      }
+      // Hanging loop at the top (a vertical ring).
+      const top = 9 + sway(40);
+      for (let x = -4; x <= 4; x++)
+        for (let y = -4; y <= 4; y++) {
+          const d = Math.hypot(x, y);
+          if (d <= 3.9 && d >= 2.4) for (const z of [8, 9]) b.set(top + x, 40 + y, z, twist(top + x, 40 + y, z, top, 40));
+        }
     },
   }),
 

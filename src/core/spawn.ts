@@ -86,7 +86,7 @@ export function createEntity(def: ObjectDef, mods: SpawnModifiers, label: string
   } else if (shape === 'box') {
     body.addShape(new Box(new Vec3(size.x / 2, size.y / 2, size.z / 2)));
   } else {
-    const boxes = decomposeBoxes(model, phys.maxBoxes ?? 8);
+    const boxes = phys.boxes?.map(([x0, y0, z0, x1, y1, z1]) => ({ min: [x0, y0, z0], max: [x1, y1, z1] })) ?? decomposeBoxes(model, phys.maxBoxes ?? 8);
     // Thin legs/wheels often don't make the cut; add a footing box so things stand on their feet.
     const lowest = Math.min(...boxes.map((bx) => bx.min[1]));
     if (lowest > 0) {
