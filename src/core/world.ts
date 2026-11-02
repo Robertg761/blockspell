@@ -66,6 +66,8 @@ export interface StaticBoxOptions {
   size: [number, number, number];
   color?: string;
   topColor?: string;
+  /** Rotation about the vertical axis in radians (diagonal bridges). */
+  yaw?: number;
 }
 
 /**
@@ -77,7 +79,8 @@ export class GameWorld {
   readonly events = new EventBus();
   readonly entities: Entity[] = [];
   readonly groundMaterial = new PhysMaterial('ground');
-  terrain: Terrain | null = null;
+  /** Every floating island currently built (one for classic levels, several for the open world). */
+  readonly terrains: Terrain[] = [];
   /** Water surface height, or null for no water (used by `floats`). */
   waterLevel: number | null = null;
   /** Level-scoped scratch state (cleared on level change). */
@@ -90,7 +93,7 @@ export class GameWorld {
   hero: Entity | null = null;
   readonly input: HeroInput = { move: { x: 0, z: 0 }, up: false, down: false, jump: false };
 
-  private statics: { mesh: Mesh; body: Body }[] = [];
+  private statics: { mesh: Mesh; body: Body; yaw: number }[] = [];
   private bodyMap = new Map<number, Entity>();
   private pendingContacts: { e: Entity; other: Entity | null; speed: number }[] = [];
   private pendingRemoval: Entity[] = [];
@@ -312,25 +315,45 @@ export class GameWorld {
   // ---------------------------------------------------------------- level geometry
   /** Builds the island terrain, or removes it (null) for levels made only of static boxes. */
   loadTerrain(opts: Partial<TerrainOptions> | null = {}): void {
-    if (this.terrain) {
-      this.scene.remove(this.terrain.group);
-      for (const b of this.terrain.bodies) this.physics.removeBody(b);
-      this.terrain.dispose();
-      this.terrain = null;
-    }
-    if (!opts) return;
-    this.terrain = buildTerrain(opts, this.groundMaterial);
-    this.scene.add(this.terrain.group);
-    for (const b of this.terrain.bodies) this.physics.addBody(b);
+    this.setIslands(opts ? [opts] : []);
   }
 
-  /** Ground height under a point, including static boxes. */
+  /** Replaces every island with a fresh set (an empty list removes them all). */
+  setIslands(list: Partial<TerrainOptions>[]): void {
+    this.removeIslands();
+    for (const opts of list) this.addIsland(opts);
+  }
+
+  /** Builds one more floating island (centered at opts.cx, opts.cz) and adds it to the scene and physics. */
+  addIsland(opts: Partial<TerrainOptions> = {}): Terrain {
+    const t = buildTerrain(opts, this.groundMaterial);
+    this.scene.add(t.group);
+    for (const b of t.bodies) this.physics.addBody(b);
+    this.terrains.push(t);
+    return t;
+  }
+
+  removeIslands(): void {
+    for (const t of this.terrains) {
+      this.scene.remove(t.group);
+      for (const b of t.bodies) this.physics.removeBody(b);
+      t.dispose();
+    }
+    this.terrains.length = 0;
+  }
+
+  /** Ground height under a point: the highest of every island and static box there. */
   groundAt(x: number, z: number): number {
-    let h = this.terrain ? this.terrain.heightAt(x, z) : -Infinity;
+    let h = -Infinity;
+    for (const t of this.terrains) h = Math.max(h, t.heightAt(x, z));
     for (const s of this.statics) {
       const b = s.body;
       const he = (b.shapes[0] as Box).halfExtents;
-      if (Math.abs(x - b.position.x) <= he.x && Math.abs(z - b.position.z) <= he.z) h = Math.max(h, b.position.y + he.y);
+      // into the box's own frame (yaw only)
+      const dx = x - b.position.x, dz = z - b.position.z;
+      const c = Math.cos(s.yaw), sn = Math.sin(s.yaw);
+      const lx = c * dx - sn * dz, lz = sn * dx + c * dz;
+      if (Math.abs(lx) <= he.x && Math.abs(lz) <= he.z) h = Math.max(h, b.position.y + he.y);
     }
     return h;
   }
@@ -345,23 +368,27 @@ export class GameWorld {
     if (o.topColor) b.box(0, sy - 1, 0, sx - 1, sy - 1, sz - 1, o.topColor);
     const mesh = new Mesh(meshVoxels(b.build(), { voxelSize: V }).geometry, this.staticMat);
     mesh.position.set(...o.position);
+    const yaw = o.yaw ?? 0;
+    mesh.rotation.y = yaw;
     mesh.castShadow = mesh.receiveShadow = true;
     mesh.name = 'static';
     const body = new Body({ mass: 0, type: Body.STATIC, material: this.groundMaterial });
     body.addShape(new Box(new Vec3((sx * V) / 2, (sy * V) / 2, (sz * V) / 2)));
     body.position.set(...o.position);
+    if (yaw) body.quaternion.setFromEuler(0, yaw, 0);
     this.physics.addBody(body);
     this.scene.add(mesh);
-    this.statics.push({ mesh, body });
+    this.statics.push({ mesh, body, yaw });
     return mesh;
   }
 
   /** Meshes the player can click to place the spawn marker. */
   pickables(): Mesh[] {
     const list: Mesh[] = this.statics.map((s) => s.mesh);
-    this.terrain?.group.traverse((c) => {
-      if (c instanceof Mesh) list.push(c);
-    });
+    for (const t of this.terrains)
+      t.group.traverse((c) => {
+        if (c instanceof Mesh) list.push(c);
+      });
     return list;
   }
 
@@ -392,6 +419,7 @@ export class GameWorld {
     this.input.move.x = this.input.move.z = 0;
     this.input.up = this.input.down = this.input.jump = false;
     this.waterLevel = null;
+    this.acc = 0;
     this.fx.particles.clear();
     this.fx.flames.clear();
     this.fx.tweens.clear();

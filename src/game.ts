@@ -5,12 +5,14 @@ import { Effects } from './engine/fx';
 import { SpawnMarker } from './engine/marker';
 import { Renderer } from './engine/renderer';
 import { DEFAULT_TERRAIN } from './engine/terrain';
-import { orderedLevels } from './levels';
+import { menuLevels, orderedLevels } from './levels';
 import { mark } from './levels/goals';
 import { progress } from './levels/progress';
 import { SolutionRunner } from './levels/solve';
 import { starsFor, type LevelDef, type V3 } from './levels/types';
 import type { Entity } from './core/entity';
+import { zoneAt, zoneEntry } from './tasks';
+import type { ZoneDef } from './tasks/types';
 import { spellbookObjects } from './objects';
 import { parseSpell, randomWords, suggestAdjectives } from './parser/parser';
 import { adjectives } from './adjectives';
@@ -41,6 +43,8 @@ export class Game {
   lastResult: { stars: number; words: number } | null = null;
   /** True while the title screen is up (slow camera orbit, no hero input). */
   titleMode = false;
+  /** Open world: the zone the hero is in, or was last in while on a bridge (null in classic levels). */
+  zone: ZoneDef | null = null;
   private keys = new Set<string>();
   private failed = false;
   private winTimer = 0;
@@ -55,7 +59,7 @@ export class Game {
     this.world = new GameWorld(this.renderer.scene, this.fx);
     this.renderer.scene.add(this.marker.group);
 
-    const levels = orderedLevels();
+    const levels = menuLevels();
     this.hud = new Hud(root, {
       onCast: (t) => this.cast(t),
       onLevel: (id) => this.loadLevel(id),
@@ -80,7 +84,7 @@ export class Game {
 
   /** Title screen over the free-play island; Play jumps to the first unsolved level. */
   showTitle(logo?: HTMLElement): void {
-    const puzzles = orderedLevels().filter((l) => l.goal);
+    const puzzles = menuLevels().filter((l) => l.goal);
     const records = progress.all();
     const next = puzzles.find((l) => !records[l.id]) ?? puzzles[0];
     const started = puzzles.some((l) => records[l.id]);
@@ -97,7 +101,7 @@ export class Game {
   }
 
   showLevels(): void {
-    this.hud.showLevels(orderedLevels(), progress.all(), this.titleMode ? null : this.level?.id ?? null);
+    this.hud.showLevels(menuLevels(), progress.all(), this.titleMode ? null : this.level?.id ?? null);
   }
 
   // ------------------------------------------------------------ levels
@@ -113,13 +117,16 @@ export class Game {
     clearTimeout(this.winTimer);
     this.hud.hideWin();
     this.world.clear();
-    const terrain = level.terrain === null ? null : { ...DEFAULT_TERRAIN, ...level.terrain };
+    const islands = level.islands ?? (level.terrain === null ? [] : [level.terrain ?? {}]);
+    const terrain = islands.map((t) => ({ ...DEFAULT_TERRAIN, ...t }));
     const key = JSON.stringify(terrain);
     if (key !== this.terrainKey) {
-      this.world.loadTerrain(terrain);
+      this.world.setIslands(terrain);
       this.terrainKey = key;
     }
+    this.renderer.setRange(level.view ?? null);
     level.setup(this.world);
+    this.zone = level.zones && level.hero ? zoneAt(...level.hero, level.zones) : null;
     if (level.hero) this.spawnHero(level.hero);
     if (level.camera) this.renderer.setView(level.camera.position, level.camera.target);
     const sp = level.spawnPoint ?? [0, 0, 0];
@@ -143,9 +150,20 @@ export class Game {
     return e;
   }
 
-  /** Puts a fallen (or lost) hero back at the start of the level. */
+  /**
+   * Updates the hero's zone, but only while they stand on solid ground: a
+   * hero falling through a gap keeps the zone they fell from (and respawns there).
+   */
+  private trackZone(hero: Entity): void {
+    const feet = hero.y - hero.size.y / 2;
+    const g = this.world.groundAt(hero.x, hero.z);
+    if (!Number.isFinite(g) || feet < g - 0.5) return;
+    this.zone = zoneAt(hero.x, feet, hero.z, this.level.zones) ?? this.zone;
+  }
+
+  /** Puts a fallen (or lost) hero back at the start of the level, or at the entry of the zone they were last in. */
   private respawnHero(): void {
-    const start = this.level.hero;
+    const start = this.zone ? zoneEntry(this.zone) : this.level.hero;
     if (!start) return;
     const old = this.world.hero;
     if (old?.alive) this.world.remove(old, 'respawn');
@@ -153,7 +171,7 @@ export class Game {
     if (e) {
       this.fx.poof(e.body.position, ['#fff6a8', '#ffffff'], 1);
       this.fx.sparkle(e.body.position);
-      this.hud.toasts.show('Back to the start!', { kind: 'info', duration: 1600 });
+      this.hud.toasts.show(this.zone ? `Back to ${this.zone.name}!` : 'Back to the start!', { kind: 'info', duration: 1600 });
     }
   }
 
@@ -186,7 +204,7 @@ export class Game {
       this.hud.toasts.show(`“${res.def.name}” won't work in this level.`, { kind: 'warn' });
       return false;
     }
-    const range = this.level.castRange;
+    const range = this.zone?.castRange ?? this.level.castRange;
     const hero = this.world.hero;
     if (range && hero?.alive && Math.hypot(this.marker.position.x - hero.x, this.marker.position.z - hero.z) > range) {
       this.fizzle();
@@ -402,6 +420,7 @@ export class Game {
     this.marker.update(dt);
 
     const hero = this.world.hero;
+    if (this.level.zones && hero?.alive) this.trackZone(hero);
     if (this.level.hero && (!hero?.alive || hero.y < (this.level.killY ?? -6))) this.respawnHero();
 
     if (this.level.goal && !this.won && this.level.goal.check(this.world)) this.win();
@@ -430,7 +449,7 @@ export class Game {
     const p = h?.alive ? h.body.position : this.marker.position;
     this.fx.celebrate({ x: p.x, y: p.y, z: p.z });
     this.world.events.emit('levelComplete', { levelId: this.level.id });
-    const levels = orderedLevels().filter((l) => l.goal);
+    const levels = menuLevels().filter((l) => l.goal);
     const next = levels[levels.indexOf(this.level) + 1] ?? null;
     const level = this.level;
     clearTimeout(this.winTimer);

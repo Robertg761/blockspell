@@ -7,4 +7,7 @@ levels.registerModules(import.meta.glob<{ default: LevelDef | LevelDef[] }>('./d
 
 export const orderedLevels = () => levels.all().sort((a, b) => a.order - b.order);
 
+/** Levels shown in the level menu (everything but hidden ones like the open world). */
+export const menuLevels = () => orderedLevels().filter((l) => !l.hidden);
+
 export type { LevelDef } from './types';

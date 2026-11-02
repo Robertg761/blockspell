@@ -1,5 +1,6 @@
 import type { GameWorld } from '../core/world';
 import type { TerrainOptions } from '../engine/terrain';
+import type { ZoneDef } from '../tasks/types';
 
 export type V3 = [number, number, number];
 
@@ -47,6 +48,14 @@ export interface LevelDef {
   hint?: string;
   /** Island terrain overrides, or null for no island (build everything from static boxes over the void). */
   terrain?: Partial<TerrainOptions> | null;
+  /** Several islands at once (the open world). Used instead of `terrain` when set. */
+  islands?: Partial<TerrainOptions>[];
+  /** Open-world zones: the hero's zone is tracked and a fallen hero respawns at its entry. */
+  zones?: ZoneDef[];
+  /** Kept out of the level menu (the open world has its own entry point). */
+  hidden?: boolean;
+  /** View distance overrides: fog start and end, camera far plane and max zoom-out distance. */
+  view?: { fog: [number, number]; far: number; maxDistance: number };
   camera?: { position: V3; target: V3 };
   /** Default spawn point for typed objects (before the player clicks the ground). */
   spawnPoint?: V3;

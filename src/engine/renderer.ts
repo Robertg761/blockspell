@@ -13,6 +13,15 @@ import { createSky } from './sky';
 import { Clouds } from './clouds';
 import type { CameraShake } from './shake';
 
+export interface ViewRange {
+  fog: [number, number];
+  far: number;
+  maxDistance: number;
+}
+
+const DEFAULT_RANGE: ViewRange = { fog: [45, 150], far: 1200, maxDistance: 60 };
+const _right = new Vector3(), _up = new Vector3(), _center = new Vector3();
+
 const SKY = { top: '#4a8fe0', horizon: '#cfe6f7', bottom: '#9cc4dd' };
 
 export class Renderer {
@@ -23,6 +32,7 @@ export class Renderer {
   readonly sun: DirectionalLight;
   readonly clouds: Clouds;
   private sky;
+  private sunDir = new Vector3(0.55, 0.85, 0.35).normalize();
   /** Null when bloom is disabled (?nobloom) or unsupported; then we render straight to screen. */
   private composer: EffectComposer | null = null;
 
@@ -39,13 +49,13 @@ export class Renderer {
     setEnvMap(pmrem.fromScene(new RoomEnvironment(), 0.04).texture);
     pmrem.dispose();
 
-    this.camera = new PerspectiveCamera(50, 1, 0.1, 1200);
+    this.camera = new PerspectiveCamera(50, 1, 0.1, DEFAULT_RANGE.far);
     this.camera.position.set(9, 8, 14);
 
-    const sunDir = new Vector3(0.55, 0.85, 0.35).normalize();
+    const sunDir = this.sunDir;
     this.sky = createSky(SKY, sunDir);
     this.scene.add(this.sky);
-    this.scene.fog = new Fog(new Color(SKY.horizon), 45, 150);
+    this.scene.fog = new Fog(new Color(SKY.horizon), DEFAULT_RANGE.fog[0], DEFAULT_RANGE.fog[1]);
 
     const hemi = new HemisphereLight('#cfe8ff', '#7a6243', 1.1);
     this.scene.add(hemi);
@@ -69,7 +79,7 @@ export class Renderer {
     this.controls.dampingFactor = 0.08;
     this.controls.maxPolarAngle = Math.PI * 0.47;
     this.controls.minDistance = 3;
-    this.controls.maxDistance = 60;
+    this.controls.maxDistance = DEFAULT_RANGE.maxDistance;
     this.controls.target.set(0, 1, 0);
 
     this.initBloom();
@@ -97,6 +107,37 @@ export class Renderer {
     }
   }
 
+  /** Fog, far plane and zoom-out limit for a level (null restores the defaults). */
+  setRange(view: ViewRange | null): void {
+    const v = view ?? DEFAULT_RANGE;
+    const fog = this.scene.fog as Fog;
+    [fog.near, fog.far] = v.fog;
+    this.camera.far = v.far;
+    this.camera.updateProjectionMatrix();
+    this.controls.maxDistance = v.maxDistance;
+  }
+
+  /**
+   * Keeps the sun's shadow box centered on the camera target, so shadows work
+   * anywhere in the open world. The center snaps to whole shadow-map texels
+   * (in the light's own frame) so shadow edges don't shimmer while moving.
+   */
+  private followSun(): void {
+    const t = this.controls.target;
+    const sc = this.sun.shadow.camera;
+    const texel = (sc.right - sc.left) / this.sun.shadow.mapSize.x;
+    const d = this.sunDir;
+    const right = _right.set(d.z, 0, -d.x).normalize(); // up × d
+    const up = _up.crossVectors(d, right).normalize();
+    const r = Math.round(t.dot(right) / texel) * texel;
+    const u = Math.round(t.dot(up) / texel) * texel;
+    const f = t.dot(d);
+    const c = _center.copy(right).multiplyScalar(r).addScaledVector(up, u).addScaledVector(d, f);
+    this.sun.target.position.copy(c);
+    this.sun.position.copy(c).addScaledVector(d, 40);
+    this.sun.target.updateMatrixWorld();
+  }
+
   setView(position: [number, number, number], target: [number, number, number]): void {
     this.camera.position.set(...position);
     this.controls.target.set(...target);
@@ -118,6 +159,7 @@ export class Renderer {
   render(dt: number, shake: CameraShake): void {
     this.controls.update();
     this.clouds.update(dt);
+    this.followSun();
     shake.apply(this.camera);
     this.sky.position.copy(this.camera.position);
     if (this.composer) this.composer.render(dt);

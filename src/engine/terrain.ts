@@ -17,6 +17,10 @@ export interface TerrainOptions {
   hilliness: number;
   trees: number;
   rocks: number;
+  /** World x of the island center. */
+  cx: number;
+  /** World z of the island center. */
+  cz: number;
 }
 
 export const DEFAULT_TERRAIN: TerrainOptions = {
@@ -27,6 +31,8 @@ export const DEFAULT_TERRAIN: TerrainOptions = {
   hilliness: 1,
   trees: 9,
   rocks: 10,
+  cx: 0,
+  cz: 0,
 };
 
 export interface Terrain {
@@ -39,7 +45,7 @@ export interface Terrain {
 
 const BOTTOM = -3; // meters; collision boxes extend down to here
 
-/** Builds a floating voxel island: flat center, rolling hills, trees and rocks. */
+/** Builds a floating voxel island centered at (cx, cz): flat center, rolling hills, trees and rocks. */
 export function buildTerrain(opts: Partial<TerrainOptions>, physMat: PhysMaterial): Terrain {
   const o = { ...DEFAULT_TERRAIN, ...opts };
   const rng = makeRng(o.seed);
@@ -104,11 +110,12 @@ export function buildTerrain(opts: Partial<TerrainOptions>, physMat: PhysMateria
       const hx = ((i1 - i + 1) * T) / 2, hz = ((j1 - j + 1) * T) / 2, hy = (top - BOTTOM) / 2;
       const body = new Body({ mass: 0, material: physMat, type: Body.STATIC });
       body.addShape(new Box(new Vec3(hx, hy, hz)));
-      body.position.set(i * T + hx, BOTTOM + hy, j * T + hz);
+      body.position.set(o.cx + i * T + hx, BOTTOM + hy, o.cz + j * T + hz);
       bodies.push(body);
     }
 
-  const heightAt = (x: number, z: number) => {
+  // local (island-centered) height lookup; the world one below subtracts the center
+  const localHeight = (x: number, z: number) => {
     const i = Math.floor(x / T), j = Math.floor(z / T);
     if (Math.abs(i) > n || Math.abs(j) > n) return -Infinity;
     const h = heights[hIdx(i, j)];
@@ -123,7 +130,7 @@ export function buildTerrain(opts: Partial<TerrainOptions>, physMat: PhysMateria
       const a = rng() * Math.PI * 2;
       const r = randRange(rng, o.flatRadius + 2, o.radius * minFrac);
       const x = Math.cos(a) * r, z = Math.sin(a) * r;
-      const h = heightAt(x, z);
+      const h = localHeight(x, z);
       if (h > -1) return { x, z, h };
     }
     return null;
@@ -139,7 +146,7 @@ export function buildTerrain(opts: Partial<TerrainOptions>, physMat: PhysMateria
     decor.ellipsoid(cx + 1 + rng() * 2 - 1, cy + trunkH + lr * 1.3, cz + 1, lr * 0.7, lr * 0.6, lr * 0.7, 'leafDark');
     const tb = new Body({ mass: 0, material: physMat, type: Body.STATIC });
     tb.addShape(new Box(new Vec3(DV, (trunkH * DV) / 2, DV)));
-    tb.position.set((cx + 1) * DV, p.h + (trunkH * DV) / 2, (cz + 1) * DV);
+    tb.position.set(o.cx + (cx + 1) * DV, p.h + (trunkH * DV) / 2, o.cz + (cz + 1) * DV);
     bodies.push(tb);
   }
   for (let r = 0; r < o.rocks; r++) {
@@ -156,10 +163,11 @@ export function buildTerrain(opts: Partial<TerrainOptions>, physMat: PhysMateria
     group.add(dm);
   }
 
+  group.position.set(o.cx, 0, o.cz);
   return {
     group,
     bodies,
-    heightAt,
+    heightAt: (x, z) => localHeight(x - o.cx, z - o.cz),
     dispose() {
       group.traverse((c) => {
         if (c instanceof Mesh) c.geometry.dispose();

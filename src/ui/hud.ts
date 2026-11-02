@@ -133,7 +133,7 @@ export class Hud {
   }
 
   setLevel(level: LevelDef): void {
-    this.levelName.textContent = level.order > 0 ? `${level.order}. ${level.name}` : level.name;
+    this.levelName.textContent = level.order > 0 && !level.hidden ? `${level.order}. ${level.name}` : level.name;
     this.levelDesc.textContent = level.description;
     this.hint = level.hint ?? '';
     this.hintBtn.style.display = level.hint && level.goal ? '' : 'none';
