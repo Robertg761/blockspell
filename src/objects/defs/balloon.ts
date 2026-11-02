@@ -5,13 +5,13 @@ export default defineObject({
   name: 'balloon',
   synonyms: ['party balloon', 'helium balloon', 'baloon', 'ballon'],
   category: 'items',
-  blurb: 'Floats up, up, and away. Keep it away from fire!',
-  tags: ['flies', 'poppable'],
+  blurb: 'Floats up and carries light things it touches. Keep it away from fire!',
+  tags: ['flies', 'poppable', 'carrier'],
   tintKeys: ['balloon', 'balloonShine'],
   burstColor: '#ff4f7b',
   spawnSound: 'squeak',
   physics: { mass: 0.08, shape: 'auto', maxBoxes: 5, linearDamping: 0.6, angularDamping: 0.9, restitution: 0.4 },
-  props: { lift: 1.3, ceiling: 7 },
+  props: { lift: 1.3, ceiling: 7, carryMass: 1.5 },
   build(b) {
     const cx = 3.5, cz = 3.5;
     b.ellipsoid(cx, 13, cz, 3.6, 4.4, 3.6, 'balloon');

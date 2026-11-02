@@ -7,6 +7,8 @@ export default defineObject({
   category: 'animals',
   blurb: 'A good dog. Loves snacks, hates fire.',
   tags: ['animal', 'eats'],
+  diet: ['bone', 'steak', 'burger', 'pizza', 'cookie'],
+  voice: 'bark',
   tintKeys: ['fur', 'furDark', 'furLight'],
   burstColor: '#c98a4f',
   spawnSound: 'bark',
