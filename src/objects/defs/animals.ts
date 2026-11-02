@@ -11,6 +11,11 @@ definePalette({
   mouseFur: '#a9a29a',
   mouseFurDark: '#85807a',
   mouseEar: '#f2b2bd',
+  dragonScale: '#3fae5a',
+  dragonDark: '#2a7a3e',
+  dragonBelly: '#f2d27a',
+  dragonWing: '#e0584a',
+  dragonHorn: '#f4ead2',
   birdBody: '#4a9be0',
   birdBodyDark: '#2f74b8',
   birdBelly: '#f3ecd8',
@@ -727,6 +732,75 @@ export default [
       b.set(3, 14, 9, 'eyeShine').set(7, 14, 9, 'eyeShine');
       sym(b, W, 0, 12, 4, 0, 14, 5, 'robotAccent'); // ear bolts
       b.box(5, 15, 4, 5, 15, 4, 'robotDark');
+    },
+  }),
+
+  // --------------------------------------------------------------- dragon
+  defineObject({
+    id: 'dragon',
+    name: 'dragon',
+    synonyms: ['wyvern', 'dragonling'],
+    category: 'animals',
+    blurb: 'A little dragon. Flaps around and sniffs out steak.',
+    tags: ['animal', 'flies', 'eats'],
+    diet: ['steak'],
+    voice: 'rumble',
+    spawnSound: 'whoosh',
+    tintKeys: ['dragonScale', 'dragonDark'],
+    burstColor: '#3fae5a',
+    voxelSize: 0.06,
+    physics: { mass: 4, shape: 'auto', maxBoxes: 4, uprightOnly: true, friction: 0.3 },
+    props: { speed: 2.2, sight: 12, lift: 1.12, ceiling: 3.5 },
+    parts: [
+      {
+        name: 'wingL',
+        pivot: [8, 9, 8],
+        build(b) {
+          b.box(8, 9, 5, 15, 9, 11, 'dragonWing');
+          b.box(8, 10, 10, 15, 10, 11, 'dragonDark');
+          b.box(15, 9, 9, 16, 10, 11, 'dragonDark');
+        },
+      },
+      {
+        name: 'wingR',
+        pivot: [1, 9, 8],
+        build(b) {
+          b.box(-6, 9, 5, 1, 9, 11, 'dragonWing');
+          b.box(-6, 10, 10, 1, 10, 11, 'dragonDark');
+          b.box(-7, 9, 9, -6, 10, 11, 'dragonDark');
+        },
+      },
+    ],
+    update(e) {
+      const a = Math.sin(performance.now() / 1000 * 9 + e.id) * 0.55;
+      e.parts.get('wingL')!.rotation.z = a;
+      e.parts.get('wingR')!.rotation.z = -a;
+    },
+    build(b) {
+      const W = 10;
+      // legs
+      sym(b, W, 2, 0, 4, 3, 3, 5, 'dragonDark');
+      sym(b, W, 2, 0, 10, 3, 3, 11, 'dragonDark');
+      // body and belly
+      b.ellipsoid(4.5, 6, 8, 3.2, 2.8, 5, 'dragonScale');
+      b.ellipsoid(4.5, 5, 8.5, 2.4, 2, 4, 'dragonBelly');
+      // neck and head
+      b.box(3, 7, 12, 6, 10, 13, 'dragonScale');
+      b.box(3, 9, 13, 6, 12, 17, 'dragonScale');
+      b.box(3, 9, 18, 6, 10, 19, 'dragonScale'); // snout
+      b.box(3, 8, 14, 6, 8, 18, 'dragonBelly'); // jaw
+      symSet(b, W, 3, 10, 19, 'dragonDark'); // nostrils
+      symSet(b, W, 3, 11, 16, 'eye');
+      symSet(b, W, 3, 12, 16, 'eyeShine');
+      sym(b, W, 3, 13, 13, 3, 14, 13, 'dragonHorn');
+      sym(b, W, 3, 15, 12, 3, 15, 12, 'dragonHorn');
+      // spikes down the back
+      for (let z = 2; z <= 12; z += 2) b.box(4, 9, z, 5, 9, z, 'dragonHorn');
+      // tail
+      b.box(4, 5, 0, 5, 6, 3, 'dragonScale');
+      b.box(4, 4, -3, 5, 5, -1, 'dragonScale');
+      b.box(4, 4, -6, 5, 4, -4, 'dragonDark');
+      b.box(3, 4, -7, 6, 5, -7, 'dragonWing'); // tail tip
     },
   }),
 

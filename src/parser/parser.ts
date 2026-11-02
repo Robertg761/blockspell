@@ -18,7 +18,46 @@ export type ParseResult =
       correctedFrom?: string;
     }
   | { ok: false; reason: 'empty' }
+  /** `word` is the unknown noun; `suggestions` are up to 3 close or related known nouns. */
   | { ok: false; reason: 'unknown'; word: string; suggestions: string[] };
+
+/**
+ * Common words Blockspell has no model for, mapped to the closest things it
+ * does know. Only consulted when the word itself is unknown.
+ */
+const RELATED: Record<string, string[]> = {
+  dinosaur: ['dragon', 'turtle', 'frog'],
+  lizard: ['dragon', 'frog', 'turtle'],
+  snake: ['rope', 'frog', 'fish'],
+  horse: ['cow', 'sheep', 'car'],
+  unicorn: ['dragon', 'cow', 'star'],
+  monster: ['dragon', 'bear', 'robot'],
+  house: ['hut', 'wall', 'door'],
+  castle: ['wall', 'hut', 'stairs'],
+  tower: ['ladder', 'wall', 'stairs'],
+  table: ['chair', 'crate', 'box'],
+  bed: ['pillow', 'chair', 'crate'],
+  ship: ['boat', 'rocket', 'ufo'],
+  bike: ['skateboard', 'car', 'train'],
+  bicycle: ['skateboard', 'car', 'train'],
+  lamp: ['torch', 'candle', 'sun'],
+  light: ['torch', 'candle', 'sun'],
+  gun: ['sword', 'hammer', 'bomb'],
+  knife: ['sword', 'hammer', 'key'],
+  shield: ['door', 'wall', 'crate'],
+  wizard: ['book', 'star', 'candle'],
+  ghost: ['cloud', 'pillow', 'balloon'],
+  moon: ['sun', 'star', 'rock'],
+  planet: ['ball', 'sun', 'star'],
+  river: ['water', 'bridge', 'boat'],
+  lake: ['water', 'boat', 'fish'],
+  mountain: ['rock', 'stairs', 'ramp'],
+  hill: ['ramp', 'rock', 'stairs'],
+  gold: ['coin', 'key', 'star'],
+  money: ['coin', 'gift', 'key'],
+  sandwich: ['bread', 'burger', 'cheese'],
+  milk: ['mug', 'bottle', 'cow'],
+};
 
 function lookupNoun(phrase: string): ObjectDef | undefined {
   const { nouns } = getLexicon();
@@ -47,13 +86,13 @@ export function parseSpell(input: string): ParseResult {
     const word = rest[rest.length - 1];
     const hits = fuzzyFind(singularize(word), lex.nouns.entries(), 6);
     // confident single-typo autocorrect for longer words
-    if (hits.length && hits[0].distance === 1 && word.length >= 4 && (hits.length === 1 || hits[1].distance > 1 || hits[1].value === hits[0].value)) {
+    const related = RELATED[singularize(word)] ?? RELATED[word];
+    if (!related && hits.length && hits[0].distance === 1 && word.length >= 4 && (hits.length === 1 || hits[1].distance > 1 || hits[1].value === hits[0].value)) {
       def = hits[0].value;
       nounLen = 1;
       correctedFrom = word;
     } else {
-      const suggestions = [...new Set(hits.map((h) => h.value.name))].slice(0, 3);
-      return { ok: false, reason: 'unknown', word: rest.join(' '), suggestions };
+      return { ok: false, reason: 'unknown', word, suggestions: suggestNouns(word) };
     }
   }
 
@@ -92,9 +131,28 @@ export function parseSpell(input: string): ParseResult {
   return { ok: true, def, adjectives: found, unknownAdjectives: unknown, count, label, correctedFrom };
 }
 
+/**
+ * Up to `n` known nouns close to an unknown word: hand-picked related words
+ * first, then the nearest by edit distance (looser than autocorrect).
+ */
+export function suggestNouns(word: string, n = 3): string[] {
+  const { nouns } = getLexicon();
+  const w = singularize(word);
+  const related = (RELATED[w] ?? RELATED[word] ?? []).filter((id) => nouns.has(id)).map((id) => nouns.get(id)!.name);
+  const near = fuzzyFind(w, nouns.entries(), 12, Math.max(2, Math.ceil(w.length / 2))).map((h) => h.value.name);
+  return [...new Set([...related, ...near])].filter((name) => name !== 'hero').slice(0, n);
+}
+
+/** Up to `n` known adjectives close to an unknown one. */
+export function suggestAdjectives(word: string, n = 3): string[] {
+  const { adjectives } = getLexicon();
+  const hits = fuzzyFind(word, adjectives.entries(), 12, Math.max(2, Math.ceil(word.length / 2)));
+  return [...new Set(hits.map((h) => h.value.id))].slice(0, n);
+}
+
 /** A few random known words, for "try one of these" hints. */
 export function randomWords(n: number): string[] {
-  const names = [...new Set([...getLexicon().nouns.values()].map((d) => d.name))];
+  const names = [...new Set([...getLexicon().nouns.values()].filter((d) => !d.tags.includes('player')).map((d) => d.name))];
   for (let i = names.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [names[i], names[j]] = [names[j], names[i]];

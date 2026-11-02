@@ -12,7 +12,7 @@ import { SolutionRunner } from './levels/solve';
 import { starsFor, type LevelDef, type V3 } from './levels/types';
 import type { Entity } from './core/entity';
 import { spellbookObjects } from './objects';
-import { parseSpell, randomWords } from './parser/parser';
+import { parseSpell, randomWords, suggestAdjectives } from './parser/parser';
 import { adjectives } from './adjectives';
 import { Hud } from './ui/hud';
 import { Spellbook } from './ui/spellbook';
@@ -172,27 +172,24 @@ export class Game {
     if (this.level.hero) this.hud.input.blur();
     if (!res.ok) {
       if (res.reason === 'empty') return false;
-      this.fx.sound('error');
-      this.hud.shakeInput();
+      this.fizzle();
       const sugg = res.suggestions.length ? res.suggestions : randomWords(3);
-      this.hud.toasts.show(res.suggestions.length ? 'Did you mean one of these?' : 'Maybe try one of these:', {
+      this.hud.toasts.show(`No spell for “${res.word}”. ${res.suggestions.length ? 'Did you mean one of these?' : 'Maybe try one of these:'}`, {
         kind: 'warn',
-        title: `I don't know “${res.word}” yet`,
+        title: "Blockspell doesn't know that word yet",
         actions: sugg.map((w) => ({ label: w, onClick: () => this.cast(text.replace(/\S+\s*$/, w)) })),
       });
       return false;
     }
     if (this.level.allowedWords && !this.level.allowedWords.includes(res.def.id)) {
-      this.fx.sound('error');
-      this.hud.shakeInput();
+      this.fizzle();
       this.hud.toasts.show(`“${res.def.name}” won't work in this level.`, { kind: 'warn' });
       return false;
     }
     const range = this.level.castRange;
     const hero = this.world.hero;
     if (range && hero?.alive && Math.hypot(this.marker.position.x - hero.x, this.marker.position.z - hero.z) > range) {
-      this.fx.sound('error');
-      this.hud.shakeInput();
+      this.fizzle();
       this.hud.toasts.show(`Your magic only reaches ${range} m in this level. Walk closer, or click nearer to you.`, { kind: 'warn', title: 'Too far away' });
       return false;
     }
@@ -240,9 +237,22 @@ export class Game {
       this.hud.toasts.show(res.def.blurb, { title: `✦ New word: ${name}  (${this.spellbook.count}/${this.spellbook.total})`, kind: 'success' });
     else if (!this.seen.has(res.def.id) && res.def.blurb) this.hud.toasts.show(res.def.blurb, { title: `✦ ${name}`, kind: 'success' });
     this.seen.add(res.def.id);
-    if (res.unknownAdjectives.length)
-      this.hud.toasts.show(`I don't know “${res.unknownAdjectives.join('”, “')}” yet, so I left it out.`, { kind: 'info' });
+    if (res.unknownAdjectives.length) {
+      const bad = res.unknownAdjectives;
+      const sugg = suggestAdjectives(bad[0]);
+      this.hud.toasts.show(
+        `Blockspell doesn't know “${bad.join('”, “')}” yet, so ${bad.length === 1 ? 'it was' : 'they were'} left out.${sugg.length ? ' Pick one to fix the spell:' : ''}`,
+        { kind: 'info', actions: sugg.map((a) => ({ label: a, onClick: () => this.hud.prefill(text.replace(new RegExp(`\\b${bad[0]}\\b`, 'i'), a)) })) },
+      );
+    }
     return true;
+  }
+
+  /** Failed-spell feedback: a small grey puff at the cast point, the error buzz and a shake. */
+  private fizzle(): void {
+    this.fx.poof(this.marker.position, ['#cfc8e8', '#a9a3c4', '#ffffff'], 0.5);
+    this.fx.sound('error');
+    this.hud.shakeInput();
   }
 
   /** Yaw for objects with an `orient` hint, based on the caster → aim direction. */

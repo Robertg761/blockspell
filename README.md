@@ -159,7 +159,7 @@ Guides: `tools/level-brief.md` for writing levels and `tools/object-brief.md` fo
 
 ## What's in the box
 
-99 spellbook words (plus the hero) across creatures, vehicles & flyers, building & gadgets, nature, food and
+100 spellbook words (plus the hero) across creatures, vehicles & flyers, building & gadgets, nature, food and
 everyday things, each with a few synonyms (*dog*: puppy, doggo, hound…). Interactions
 come from behavior tags (documented in `src/core/tags.ts`), for example:
 

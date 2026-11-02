@@ -119,6 +119,12 @@ export class Hud {
     } else if (ev.key === 'Escape') this.input.blur();
   }
 
+  /** Puts text in the spell bar, ready to edit or cast. */
+  prefill(text: string): void {
+    this.input.value = text;
+    this.input.focus();
+  }
+
   setWordChips(words: string[]): void {
     this.chips.replaceChildren(
       h('span.chips-label', { text: 'Try:' }),

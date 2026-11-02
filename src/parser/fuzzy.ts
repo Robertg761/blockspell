@@ -24,10 +24,12 @@ export interface FuzzyHit<T> {
   distance: number;
 }
 
-/** Ranked fuzzy matches of `query` against `keys` (prefix matches get a bonus). */
-export function fuzzyFind<T>(query: string, entries: Iterable<[string, T]>, limit = 3): FuzzyHit<T>[] {
+/**
+ * Ranked fuzzy matches of `query` against `keys` (prefix matches get a bonus).
+ * `maxDist` defaults to a strict, typo-sized threshold.
+ */
+export function fuzzyFind<T>(query: string, entries: Iterable<[string, T]>, limit = 3, maxDist = Math.max(1, Math.min(3, Math.floor(query.length / 3)))): FuzzyHit<T>[] {
   const hits: FuzzyHit<T>[] = [];
-  const maxDist = Math.max(1, Math.min(3, Math.floor(query.length / 3)));
   for (const [key, value] of entries) {
     let dist = editDistance(query, key);
     if (key.startsWith(query) && query.length >= 3) dist = Math.min(dist, 1);
