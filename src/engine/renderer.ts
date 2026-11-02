@@ -1,8 +1,10 @@
 import {
-  ACESFilmicToneMapping, Color, DirectionalLight, Fog, HemisphereLight, PCFShadowMap,
+  ACESFilmicToneMapping, PMREMGenerator, Color, DirectionalLight, Fog, HemisphereLight, PCFShadowMap,
   PerspectiveCamera, Scene, SRGBColorSpace, Vector3, WebGLRenderer,
 } from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
+import { setEnvMap } from './env';
 import { createSky } from './sky';
 import { Clouds } from './clouds';
 import type { CameraShake } from './shake';
@@ -27,6 +29,9 @@ export class Renderer {
     this.gl.shadowMap.enabled = true;
     this.gl.shadowMap.type = PCFShadowMap;
     container.appendChild(this.gl.domElement);
+    const pmrem = new PMREMGenerator(this.gl);
+    setEnvMap(pmrem.fromScene(new RoomEnvironment(), 0.04).texture);
+    pmrem.dispose();
 
     this.camera = new PerspectiveCamera(50, 1, 0.1, 1200);
     this.camera.position.set(9, 8, 14);

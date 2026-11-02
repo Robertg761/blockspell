@@ -1,5 +1,5 @@
-import { Body, Box, Material as PhysMaterial, SAPBroadphase, Vec3, World } from 'cannon-es';
-import { Mesh, MeshStandardMaterial, type Scene } from 'three';
+import { Body, Box, DistanceConstraint, LockConstraint, Material as PhysMaterial, SAPBroadphase, Vec3, World, type Constraint } from 'cannon-es';
+import { BufferAttribute, BufferGeometry, Line, LineBasicMaterial, Mesh, MeshStandardMaterial, type Scene } from 'three';
 import { buildModifiers } from '../adjectives';
 import type { AdjectiveDef, SpawnModifiers } from '../adjectives/types';
 import { emptyModifiers } from '../adjectives/types';
@@ -19,7 +19,21 @@ import type { Tag } from './tags';
 
 const STEP = 1 / 60;
 const MAX_STEPS = 4;
-export const MAX_ENTITIES = 120;
+/** Hard cap on live objects; the oldest is poofed away to make room. */
+export const MAX_ENTITIES = 80;
+
+export { GROUP } from './groups';
+
+export type LinkKind = 'lock' | 'rope';
+
+/** A physics joint between two entities (sticky glue, balloon strings). */
+export interface Link {
+  a: Entity;
+  b: Entity;
+  kind: LinkKind;
+  constraint: Constraint;
+  line: Line | null;
+}
 
 type P3 = { x: number; y: number; z: number };
 
@@ -57,6 +71,9 @@ export class GameWorld {
   /** Level-scoped scratch state (cleared on level change). */
   flags: Record<string, unknown> = {};
   time = 0;
+  /** Where the player last clicked the ground (the hero walks there). */
+  aim: P3 | null = null;
+  readonly links: Link[] = [];
 
   private statics: { mesh: Mesh; body: Body }[] = [];
   private bodyMap = new Map<number, Entity>();
@@ -65,6 +82,7 @@ export class GameWorld {
   private levelSubs: (() => void)[] = [];
   private acc = 0;
   private staticMat = new MeshStandardMaterial({ vertexColors: true, roughness: 0.9 });
+  private ropeMat = new LineBasicMaterial({ color: '#f4f1ea' });
 
   constructor(readonly scene: Scene, readonly fx: Effects) {
     this.physics.broadphase = new SAPBroadphase(this.physics);
@@ -87,13 +105,19 @@ export class GameWorld {
 
   // ---------------------------------------------------------------- spawning
   spawn(def: ObjectDef, opts: SpawnOptions): Entity {
-    if (this.entities.length >= MAX_ENTITIES) {
-      const oldest = this.entities.find((e) => e.alive);
-      if (oldest) this.remove(oldest, 'limit');
+    let alive = 0;
+    for (const o of this.entities) if (o.alive) alive++;
+    if (alive >= MAX_ENTITIES) {
+      const oldest = this.entities.find((o) => o.alive);
+      if (oldest) this.remove(oldest, 'limit', 'poof');
     }
     const mods = opts.mods ?? (opts.adjectives ? buildModifiers(opts.adjectives, def) : emptyModifiers());
     const e = createEntity(def, mods, opts.label ?? def.name);
-    const y = opts.grounded ? opts.position.y + e.size.y / 2 + 0.01 : opts.position.y;
+    let y = opts.grounded ? opts.position.y + e.size.y / 2 + 0.01 : opts.position.y;
+    if (def.physics?.anchored) {
+      const g = this.groundAt(opts.position.x, opts.position.z);
+      y = (Number.isFinite(g) ? g : opts.position.y) + e.size.y / 2;
+    }
     e.body.position.set(opts.position.x, y, opts.position.z);
     if (opts.yaw) e.body.quaternion.setFromAxisAngle(new Vec3(0, 1, 0), opts.yaw);
     this.physics.addBody(e.body);
@@ -151,7 +175,66 @@ export class GameWorld {
     e.alive = false;
     if (effect === 'poof') this.fx.poof(e.body.position, undefined, Math.max(0.6, Math.min(2, e.radius * 1.5)));
     this.pendingRemoval.push(e);
+    this.unlinkAll(e);
     this.events.emit('remove', { entity: e, reason });
+  }
+
+  // ---------------------------------------------------------------- links
+  /** Joins two entities: 'lock' welds them rigidly, 'rope' keeps them within their current distance. */
+  link(a: Entity, b: Entity, kind: LinkKind, length?: number): Link | null {
+    if (!a.alive || !b.alive || a === b || this.linked(a, b)) return null;
+    const constraint =
+      kind === 'lock'
+        ? new LockConstraint(a.body, b.body, { maxForce: 400 + 60 * (a.body.mass + b.body.mass) })
+        : new DistanceConstraint(a.body, b.body, length ?? a.distanceTo(b), 1e4);
+    this.physics.addConstraint(constraint);
+    let line: Line | null = null;
+    if (kind === 'rope') {
+      const geo = new BufferGeometry();
+      geo.setAttribute('position', new BufferAttribute(new Float32Array(6), 3));
+      line = new Line(geo, this.ropeMat);
+      line.frustumCulled = false;
+      this.scene.add(line);
+    }
+    const l: Link = { a, b, kind, constraint, line };
+    this.links.push(l);
+    a.body.wakeUp();
+    b.body.wakeUp();
+    return l;
+  }
+
+  linked(a: Entity, b: Entity): boolean {
+    return this.links.some((l) => (l.a === a && l.b === b) || (l.a === b && l.b === a));
+  }
+
+  linksOf(e: Entity, kind?: LinkKind): Link[] {
+    return this.links.filter((l) => (l.a === e || l.b === e) && (!kind || l.kind === kind));
+  }
+
+  unlink(l: Link): void {
+    const i = this.links.indexOf(l);
+    if (i < 0) return;
+    this.links.splice(i, 1);
+    this.physics.removeConstraint(l.constraint);
+    if (l.line) {
+      this.scene.remove(l.line);
+      l.line.geometry.dispose();
+    }
+  }
+
+  unlinkAll(e: Entity): void {
+    for (const l of this.linksOf(e)) this.unlink(l);
+  }
+
+  private syncLinks(): void {
+    for (const l of this.links) {
+      if (!l.line) continue;
+      const pa = l.a.body.position, pb = l.b.body.position;
+      const arr = (l.line.geometry.getAttribute('position') as BufferAttribute).array as Float32Array;
+      arr[0] = pa.x; arr[1] = pa.y - l.a.size.y * 0.45; arr[2] = pa.z;
+      arr[3] = pb.x; arr[4] = pb.y + l.b.size.y * 0.4; arr[5] = pb.z;
+      l.line.geometry.getAttribute('position').needsUpdate = true;
+    }
   }
 
   // ---------------------------------------------------------------- tags
@@ -271,6 +354,7 @@ export class GameWorld {
 
   /** Removes all entities, statics and level subscriptions. Keeps terrain. */
   clear(): void {
+    for (const l of [...this.links]) this.unlink(l);
     for (const e of this.entities) this.disposeEntity(e);
     this.entities.length = 0;
     this.bodyMap.clear();
@@ -285,6 +369,7 @@ export class GameWorld {
     for (const off of this.levelSubs) off();
     this.levelSubs.length = 0;
     this.flags = {};
+    this.aim = null;
     this.waterLevel = null;
     this.fx.particles.clear();
     this.fx.tweens.clear();
@@ -327,6 +412,7 @@ export class GameWorld {
       this.syncEntity(e);
       if (e.body.position.y < -30) this.remove(e, 'fell');
     }
+    this.syncLinks();
 
     if (this.pendingRemoval.length) {
       for (const e of this.pendingRemoval) this.disposeEntity(e);

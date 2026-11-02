@@ -13,6 +13,9 @@ export interface GameEvents {
   tagRemoved: { entity: Entity; tag: string };
   contact: { a: Entity; b: Entity | null; speed: number };
   levelComplete: { levelId: string };
+  unlocked: { entity: Entity; key: Entity };
+  exploded: { at: { x: number; y: number; z: number }; source: Entity | null };
+  broken: { entity: Entity };
 }
 
 type Handler<T> = (payload: T) => void;

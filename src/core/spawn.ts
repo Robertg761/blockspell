@@ -8,6 +8,8 @@ import { meshVoxels } from '../voxel/mesher';
 import { remapModel } from '../voxel/model';
 import { makeTintMap, resolveColor } from '../voxel/palette';
 import { Entity } from './entity';
+import { GROUP } from './groups';
+import { envMap } from '../engine/env';
 import { makeRng } from './rng';
 
 /** Builds the mesh + physics body for an object definition with modifiers applied. */
@@ -23,9 +25,18 @@ export function createEntity(def: ObjectDef, mods: SpawnModifiers, label: string
   const vs = (def.voxelSize ?? 0.1) * mods.scale;
   const { geometry, size } = meshVoxels(model, { voxelSize: vs });
   const materials: Material[] = [
-    new MeshStandardMaterial({ vertexColors: true, roughness: 0.78, metalness: 0.02 }),
+    new MeshStandardMaterial({
+      vertexColors: true,
+      roughness: (mods.flags.roughness as number | undefined) ?? 0.78,
+      metalness: (mods.flags.metalness as number | undefined) ?? 0.02,
+    }),
     new MeshBasicMaterial({ vertexColors: true }),
   ];
+  if (((mods.flags.metalness as number | undefined) ?? 0) > 0.3 && envMap) {
+    const m = materials[0] as MeshStandardMaterial;
+    m.envMap = envMap;
+    m.envMapIntensity = 1.1;
+  }
   const mesh = new Mesh(geometry, materials);
   mesh.castShadow = true;
   mesh.receiveShadow = true;
@@ -57,9 +68,11 @@ export function createEntity(def: ObjectDef, mods: SpawnModifiers, label: string
   const physMat = new PhysMaterial(def.id);
   physMat.friction = mods.friction ?? phys.friction ?? 0.5;
   physMat.restitution = mods.restitution ?? phys.restitution ?? 0.15;
-  const mass = (phys.mass ?? 1) * mods.scale ** 3 * mods.massMul;
+  const mass = phys.anchored ? 0 : (phys.mass ?? 1) * mods.scale ** 3 * mods.massMul;
   const body = new Body({
     mass,
+    type: phys.anchored ? Body.STATIC : Body.DYNAMIC,
+    collisionFilterGroup: GROUP.ENTITY,
     material: physMat,
     linearDamping: phys.linearDamping ?? 0.05,
     angularDamping: phys.angularDamping ?? 0.15,
@@ -73,7 +86,21 @@ export function createEntity(def: ObjectDef, mods: SpawnModifiers, label: string
   } else if (shape === 'box') {
     body.addShape(new Box(new Vec3(size.x / 2, size.y / 2, size.z / 2)));
   } else {
-    for (const bx of decomposeBoxes(model, phys.maxBoxes ?? 8)) {
+    const boxes = decomposeBoxes(model, phys.maxBoxes ?? 8);
+    // Thin legs/wheels often don't make the cut; add a footing box so things stand on their feet.
+    const lowest = Math.min(...boxes.map((bx) => bx.min[1]));
+    if (lowest > 0) {
+      let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+      for (let z = 0; z < model.sz; z++)
+        for (let y = 0; y < lowest; y++)
+          for (let x = 0; x < model.sx; x++)
+            if (model.grid[x + model.sx * (y + model.sy * z)]) {
+              x0 = Math.min(x0, x); x1 = Math.max(x1, x + 1);
+              z0 = Math.min(z0, z); z1 = Math.max(z1, z + 1);
+            }
+      if (x1 > x0) boxes.push({ min: [x0, 0, z0], max: [x1, lowest, z1] });
+    }
+    for (const bx of boxes) {
       const he = new Vec3(((bx.max[0] - bx.min[0]) * vs) / 2, ((bx.max[1] - bx.min[1]) * vs) / 2, ((bx.max[2] - bx.min[2]) * vs) / 2);
       const off = new Vec3(
         ((bx.min[0] + bx.max[0]) / 2) * vs - size.x / 2,

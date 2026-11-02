@@ -21,6 +21,13 @@ export interface BurstOptions {
   grow?: boolean;
 }
 
+const colorCache = new Map<string, Color>();
+function cachedColor(hex: string): Color {
+  let c = colorCache.get(hex);
+  if (!c) colorCache.set(hex, (c = new Color(hex)));
+  return c;
+}
+
 interface Particle {
   p: Vector3;
   v: Vector3;
@@ -57,9 +64,21 @@ class Pool {
     scene.add(this.mesh);
   }
 
-  add(pt: Particle) {
-    if (this.items.length >= this.capacity) this.items.shift();
+  private free: Particle[] = [];
+  private oldest = 0;
+
+  /** Returns a recycled particle slot (reusing the oldest live one when full). */
+  obtain(): Particle {
+    if (this.items.length >= this.capacity) {
+      this.oldest = (this.oldest + 1) % this.items.length;
+      return this.items[this.oldest];
+    }
+    const pt = this.free.pop() ?? {
+      p: new Vector3(), v: new Vector3(), rot: new Euler(), spin: new Vector3(),
+      life: 0, max: 1, size: 0, gravity: 0, drag: 0, grow: false, color: new Color(),
+    };
     this.items.push(pt);
+    return pt;
   }
 
   update(dt: number) {
@@ -70,6 +89,7 @@ class Pool {
       if (pt.life <= 0) {
         items[i] = items[items.length - 1];
         items.pop();
+        this.free.push(pt);
         continue;
       }
       pt.v.y -= pt.gravity * dt;
@@ -95,6 +115,7 @@ class Pool {
   }
 
   clear() {
+    for (const pt of this.items) this.free.push(pt);
     this.items.length = 0;
     this.mesh.count = 0;
   }
@@ -115,24 +136,22 @@ export class Particles {
     const colors = Array.isArray(o.color) ? o.color : [o.color ?? '#ffffff'];
     const speed = o.speed ?? 4;
     const pool = o.glow ? this.glow : this.lit;
+    const spread = o.spread ?? 0.15;
+    const up = o.up ?? 2;
     for (let i = 0; i < count; i++) {
-      const dir = new Vector3(Math.random() * 2 - 1, Math.random() * 2 - 1, Math.random() * 2 - 1).normalize();
-      const sp = speed * (0.4 + Math.random() * 0.8);
-      const spread = o.spread ?? 0.15;
-      const life = (o.life ?? 0.8) * (0.6 + Math.random() * 0.7);
-      pool.add({
-        p: new Vector3(at.x + dir.x * spread, at.y + dir.y * spread, at.z + dir.z * spread),
-        v: dir.multiplyScalar(sp).add(new Vector3(0, o.up ?? 2, 0)),
-        rot: new Euler(Math.random() * 6, Math.random() * 6, Math.random() * 6),
-        spin: new Vector3(Math.random() * 10 - 5, Math.random() * 10 - 5, Math.random() * 10 - 5),
-        life,
-        max: life,
-        size: (o.size ?? 0.12) * (0.6 + Math.random() * 0.8),
-        gravity: o.gravity ?? 9,
-        drag: o.drag ?? 1,
-        grow: !!o.grow,
-        color: new Color(colors[Math.floor(Math.random() * colors.length)]),
-      });
+      const pt = pool.obtain();
+      const dir = pt.v.set(Math.random() * 2 - 1, Math.random() * 2 - 1, Math.random() * 2 - 1).normalize();
+      pt.p.set(at.x + dir.x * spread, at.y + dir.y * spread, at.z + dir.z * spread);
+      dir.multiplyScalar(speed * (0.4 + Math.random() * 0.8));
+      dir.y += up;
+      pt.rot.set(Math.random() * 6, Math.random() * 6, Math.random() * 6);
+      pt.spin.set(Math.random() * 10 - 5, Math.random() * 10 - 5, Math.random() * 10 - 5);
+      pt.life = pt.max = (o.life ?? 0.8) * (0.6 + Math.random() * 0.7);
+      pt.size = (o.size ?? 0.12) * (0.6 + Math.random() * 0.8);
+      pt.gravity = o.gravity ?? 9;
+      pt.drag = o.drag ?? 1;
+      pt.grow = !!o.grow;
+      pt.color.copy(cachedColor(colors[Math.floor(Math.random() * colors.length)]));
     }
   }
 
