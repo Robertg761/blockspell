@@ -11,17 +11,95 @@ away and pop near flames. Solve each level by summoning the right things.
 
 Built for **Hackyard Yard #6: "Offline"**.
 
+## How to play
+
+Pick a level from the title screen (**▶ Play** continues where you left off, **☰ Levels**
+shows every level with your saved stars). Each level has a one-line goal. Summon things to
+reach it, using as few words as you can.
+
+| Key / action | What it does |
+| --- | --- |
+| **WASD** / **arrows** | Walk (relative to the camera) |
+| **Space** | Jump. Walking into knee-high steps hops onto them |
+| **W** (or Space) next to a ladder, rope, tree or stairs | Climb. At the top you hop over the edge |
+| **Enter** (or **T**, **/**) | Open the spell bar. Type a spell and press Enter to cast it. Esc closes it |
+| **Click the ground** | Choose where the next spell appears (the glowing marker) |
+| **Click an object** | Poke it |
+| **Drag / scroll** | Orbit / zoom the camera, which follows the hero |
+| **R** or ↺ | Restart the level |
+| **Tab** or 📖 | Spellbook of discovered words |
+| ♪ | Mute music and sound (remembered) |
+
+In **Free Play** there's no hero, so typing anywhere goes straight to the spell bar. On
+touch screens, hero levels show a joystick with Jump and Climb buttons. Tips about the
+controls pop up the first time you need them.
+
+**Stars.** Every word you cast counts: "ladder" is 1 word, "giant plank" is 2. Solve a
+level within its *par* for ★★★, or within twice par for ★★. Your best result per level
+is saved in `localStorage`. Some levels limit how far from the hero you can cast, so you
+can't simply summon the answer next to the goal.
+
+### Spells
+
+`[count] [adjectives…] noun`, for example *ladder*, *giant plank*, *3 tiny balloons*,
+*very big flaming dog*.
+
+- **Size:** *tiny, small, big, giant*. *very* doubles an adjective.
+- **Color:** *red, blue, green, golden, rainbow…*
+- **Magic:** *flaming, frozen, hot, wet, heavy, light, flying, bouncy, sticky, slippery,
+  ghostly, angry, fast, slow, metal, magnetic, explosive, glowing, alive, wooden, tasty*
+- **Counts:** *3 balls*, *two dogs* (up to 5)
+- Unknown words get close-match suggestions, and small typos are autocorrected.
+
+Some favourite words: *ladder, stairs, ramp, bridge, plank, trampoline, spring, rope,
+balloon, hot air balloon, rocket, jetpack, fan, magnet, bomb, tnt, water, cloud, ice,
+snowman, bucket, fire, torch, bone, steak, cheese, dog, cat, mouse, robot, hut, tree, star*.
+Objects with a direction line up with your aim: bridges and planks span from the hero
+toward the marker, ramps rise toward it, and stairs climb away from you.
+
+## Levels (and some ways to solve them)
+
+Every level has several solutions. Those listed here are scripted in the level file and
+replayed by the headless checker (see *Development*).
+
+1. **Star on the Cliff.** Bring the star down from a 2.5 m cliff (par 1).
+   *ladder* (climb it, then walk into the star) · *stairs* (walk up, jump onto the ledge) ·
+   *bomb* cast on the ledge. Unscripted ideas: a *boulder* or *giant ball* dropped on top.
+2. **Cross the Chasm.** Get to the flag across a 4 m gap between floating cliffs (par 2).
+   *big bridge* or *giant plank* aimed into the gap · *trampoline* or *spring* at the edge,
+   then jump on it to bounce across.
+3. **Put Out the Fire.** The hut is burning and you have about 50 s (par 1).
+   Walk up the path, then *water* · *cloud* (rain) · *bucket* · *snowball* · *ice* ·
+   *giant snowman*.
+4. **Feed the Pup.** A hungry dog sits in a tall pen, and your magic only reaches 1.8 m (par 2).
+   Get on top of the wall or into the pen, then cast a *bone* (or *steak*, *burger*…):
+   *ladder* + *bone* · *stairs* + *bone* · *trampoline* + *bone* · *big box* + *box* + *bone*.
+5. **Sky Island.** Reach the island floating 3.6 m up (par 2).
+   *trampoline* · *giant ramp* · *big ladder* · *giant stairs*.
+
 ## Works 100% offline
 
 Blockspell makes no network requests at all. There's no CDN, no remote fonts, no
-analytics, and no audio or texture files to fetch:
+analytics, and no audio, texture or model files to fetch:
 
-- Every model is generated in code from a small voxel DSL.
-- Every sound is synthesized live with the WebAudio API.
+- Every model, including the title logo, is generated in code from a small voxel DSL.
+- Every sound effect and the music loop are synthesized live with the WebAudio API.
 - The UI uses your system font stack.
-- `three` and `cannon-es` are bundled from npm at build time.
+- `three` (including the bloom post-processing from `three/examples`) and `cannon-es` are
+  bundled from npm at build time.
 
-Once you've installed dependencies, it plays fine in airplane mode.
+Once you've installed dependencies, it plays fine in airplane mode. To check a build:
+
+```bash
+npm run build
+npm run check-offline   # scans dist/ for external URLs that would be fetched at runtime
+```
+
+`check-offline` fails (exit 1) on any http(s) or protocol-relative URL in a fetching
+position: HTML/SVG resource attributes, CSS `url()`/`@import`, and JS `fetch`,
+`import()`, `new URL`, `WebSocket`, `Worker`, `.src =` and similar. Harmless strings such
+as XML namespaces, license comments and doc links are listed but don't fail the check.
+Use `--dir <path>` to scan another folder.
 
 ## Running it
 
@@ -49,28 +127,37 @@ cd dist && python3 -m http.server 8080
 (Browsers won't load ES modules from `file://`, so use a local server rather than
 double-clicking `index.html`.)
 
-## How to play
+## Development and automation
 
-- **Type** a word in the spell bar and press **Enter**. Typing anywhere focuses it,
-  and ↑/↓ recall earlier spells.
-- **Adjectives** stack (*giant flaming dog*, *tiny golden rocket*, *angry ghostly cow*):
-  size (*tiny, small, big, giant*), color (*red, blue, rainbow, golden*…), and magic
-  (*flaming, frozen, hot, wet, heavy, light, flying, bouncy, sticky, slippery, ghostly,
-  angry, fast, slow, metal, magnetic, explosive, glowing, alive, wooden, tasty*).
-  *very* doubles an adjective.
-- **Spellbook** (📖 button or **Tab**) lists every word you've discovered, by category.
-  Click a word to cast it again. Discoveries are saved locally.
-- **The hero** (*hero*, *kid*, *explorer*…) walks to wherever you click and climbs
-  ladders, ropes, stairs and trees to reach higher ground.
-- **Counts**: *3 balls*, *two dogs* (up to 5).
-- **Click the ground** to choose where things appear. **Click an object** to poke it.
-- **Drag** to orbit the camera, **scroll** to zoom.
-- If Blockspell doesn't know a word, it suggests close matches and autocorrects
-  small typos.
+`window.__blockspell` is available in every build (see `src/debug.ts`):
+`load(n)`, `cast('giant balloon', [x, z])`, `step(seconds)` (synchronous simulation),
+`render()`, `state()`, `solve(level, i)` and `solveAll()`.
+
+URL flags for screenshots:
+
+- `?level=2` skips the title. It takes an order number or an id.
+- `&spawn=giant%20balloon` casts a spell. Repeat it, or separate spells with `;`.
+- `&at=x,z` sets where to cast.
+- `&t=2` simulates 2 s before the first frame.
+- `&solve=0` plays solution #0 live.
+- `&cam=x,y,z,tx,ty,tz` sets the camera position and target.
+- `&mute`, `&nobloom` and `&notips` turn off sound, bloom and the control tips.
+- `?levels` opens level select.
+
+Dev-only pages (served by `npm run dev`, not part of the build):
+
+- `tools/levels.html` replays every level solution headlessly and logs PASS/FAIL.
+  From the shell, run `tools/check-levels.sh` or `tools/check-levels.sh "level=chasm&dump"`
+  with the dev server on port 5199.
+- `tools/gallery.html` renders object models in a grid.
+- `tools/scenario.html` runs scripted interaction scenarios.
+- `tools/fx.html` previews the win celebration.
+
+Guides: `tools/level-brief.md` for writing levels and `tools/object-brief.md` for objects.
 
 ## What's in the box
 
-99 objects across creatures, vehicles & flyers, building & gadgets, nature, food and
+100 objects across creatures, vehicles & flyers, building & gadgets, nature, food and
 everyday things, each with a few synonyms (*dog*: puppy, doggo, hound…). Interactions
 come from behavior tags (documented in `src/core/tags.ts`), for example:
 
@@ -88,8 +175,9 @@ come from behavior tags (documented in `src/core/tags.ts`), for example:
 
 ```
 src/
-  main.ts            entry point
-  game.ts            wires renderer, world, input, parser, levels and HUD
+  main.ts            entry point (title screen or ?level= query flags)
+  game.ts            wires renderer, world, input, parser, levels and HUD; tick/step, win flow, camera follow
+  debug.ts           window.__blockspell automation hook + URL query flags
   core/              engine-agnostic simulation
     world.ts         GameWorld: entities, physics, behavior dispatch, spawn juice, queries
     entity.ts        Entity: mesh + body + tags + state
@@ -98,23 +186,21 @@ src/
     events.ts        typed event bus (spawn, ignite, ate, popped, ...)
     registry.ts      id registry with import.meta.glob auto-registration
   engine/            rendering & juice
-    renderer.ts      three.js scene, ACES tone mapping, soft shadows, fog, OrbitControls
+    renderer.ts      three.js scene, bloom post-processing, ACES tone mapping, soft shadows, fog, OrbitControls
     sky.ts clouds.ts terrain.ts noise.ts   procedural sky, voxel clouds, floating island
     particles.ts     pooled InstancedMesh voxel particles (lit + glowing)
     audio.ts         WebAudio synth sound effects
+    music.ts         generative music loop on a lookahead scheduler
     fx.ts shake.ts tween.ts marker.ts      juice helpers
   voxel/             voxel DSL (builder), palette, face-culled AO mesher, box decomposition
   objects/defs/      one file per spawnable object      <- add objects here
   adjectives/defs/   adjective modifiers                <- add adjectives here
   behaviors/defs/    per-tag behaviors                  <- add behaviors here
-  levels/defs/       puzzle levels                      <- add levels here
+  levels/            goals.ts (goal helpers), progress.ts (localStorage stars), solve.ts (solution replay)
+  levels/defs/       puzzle levels                      <- add levels here (see tools/level-brief.md)
   parser/            tokenize -> count -> adjectives + noun -> synonyms, fuzzy suggestions
-  ui/                DOM HUD, toasts, styles
+  ui/                DOM HUD, level select, toasts, spellbook, tutorial tips, touch controls, voxel logo
 ```
-
-Dev-only helpers live in `tools/` (served by `npm run dev`, not part of the build):
-`tools/gallery.html` renders object models in a grid, `tools/scenario.html` runs scripted
-interaction scenarios, and `tools/object-brief.md` describes how to write new objects.
 
 Objects, adjectives, behaviors and levels are discovered automatically: drop a file
 into the matching `defs/` folder that default-exports a definition (or an array of
@@ -137,6 +223,9 @@ export default defineObject({
   },
 });
 ```
+
+The keyboard hero is the `hero` object retagged with `controlled`
+(`src/behaviors/defs/controlled.ts`).
 
 ### Adding a behavior
 
