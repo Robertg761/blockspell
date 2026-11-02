@@ -1,0 +1,28 @@
+.tutorial-tip {
+  position: absolute; left: 0; top: 0; z-index: 20; max-width: min(300px, calc(100vw - 24px));
+  display: flex; align-items: flex-start; gap: 8px; padding: 10px 10px 10px 14px;
+  background: #fff8e0; color: var(--ink, #1d2433); border-radius: 14px; font-size: 14px; font-weight: 650; line-height: 1.35;
+  box-shadow: 0 8px 26px rgba(20, 30, 60, 0.3), 0 0 0 2px rgba(255, 159, 28, 0.6);
+  pointer-events: none; opacity: 0; transition: opacity 0.3s;
+  --ax: 50%;
+}
+.tutorial-tip.show { opacity: 1; animation: tip-bob 2.2s ease-in-out infinite; }
+.tutorial-tip.out { opacity: 0; }
+.tutorial-tip .tip-text { flex: 1; text-align: left; }
+.tutorial-tip kbd {
+  font: inherit; font-size: 12.5px; font-weight: 800; padding: 1px 6px; border-radius: 6px;
+  background: #fff; box-shadow: 0 2px 0 #d8c9a0; border: 1px solid #e7d9b0;
+}
+.tutorial-tip .tip-x {
+  pointer-events: auto; border: 0; background: rgba(0, 0, 0, 0.07); width: 22px; height: 22px; border-radius: 50%;
+  font-size: 13px; line-height: 1; cursor: pointer; flex: none; padding: 0;
+}
+.tutorial-tip .tip-x:hover { background: rgba(0, 0, 0, 0.16); }
+.tutorial-tip::after {
+  content: ''; position: absolute; left: var(--ax); width: 14px; height: 14px; background: #fff8e0;
+  transform: translateX(-50%) rotate(45deg); bottom: -6px; border-radius: 0 0 4px 0;
+  box-shadow: 3px 3px 4px rgba(20, 30, 60, 0.12);
+}
+.tutorial-tip.no-arrow::after { display: none; }
+@keyframes tip-bob { 50% { margin-top: -4px; } }
+@media (prefers-reduced-motion: reduce) { .tutorial-tip.show { animation: none; } }

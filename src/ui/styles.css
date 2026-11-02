@@ -147,13 +147,14 @@ button, input, select { font: inherit; color: inherit; }
 
 /* ---------- overlays ---------- */
 .overlay {
-  position: absolute; inset: 0; display: grid; place-items: center;
+  position: absolute; inset: 0; display: grid; place-items: center; overflow: auto;
   background: radial-gradient(ellipse at center, rgba(20, 40, 80, 0.25), rgba(20, 40, 80, 0.55));
   animation: fade-in 0.3s;
 }
 .overlay.hidden { display: none; }
 @keyframes fade-in { from { opacity: 0; } }
 .panel {
+  max-height: calc(100vh - 24px); max-height: calc(100dvh - 24px); overflow-y: auto; overscroll-behavior: contain;
   background: var(--panel-solid); border-radius: 22px; box-shadow: 0 20px 60px rgba(10, 20, 50, 0.4);
   padding: 28px 32px; max-width: min(460px, calc(100vw - 32px)); text-align: center;
   animation: panel-in 0.45s cubic-bezier(0.2, 1.5, 0.4, 1);
@@ -236,3 +237,107 @@ button.sb-word:hover { background: #ffe0b0; }
 .tile-stars { color: #f0a800; font-size: 20px; letter-spacing: 3px; }
 .tile-stars.muted { color: inherit; opacity: 0.4; font-size: 12px; letter-spacing: 0; }
 .tile-best { font-size: 11px; opacity: 0.6; }
+
+/* ---------- touch controls (hero levels on touch devices; see src/ui/touch.ts) ---------- */
+.touch-controls {
+  position: absolute; left: 0; right: 0; bottom: 0; height: 0; z-index: 12; pointer-events: none;
+  touch-action: none; -webkit-touch-callout: none;
+}
+.touch-controls.hidden { display: none; }
+.touch-controls > * { position: absolute; pointer-events: auto; touch-action: none; }
+.joy {
+  left: max(16px, env(safe-area-inset-left)); bottom: 150px; width: 128px; height: 128px; border-radius: 50%;
+  background: rgba(255, 255, 255, 0.35); border: 3px solid rgba(255, 255, 255, 0.75);
+  box-shadow: 0 6px 20px rgba(20, 30, 60, 0.25); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+}
+.joy.active { background: rgba(255, 255, 255, 0.5); }
+.joy-knob {
+  position: absolute; left: 50%; top: 50%; width: 56px; height: 56px; margin: -28px 0 0 -28px; border-radius: 50%;
+  background: linear-gradient(180deg, #ffb340, var(--accent-dark)); box-shadow: 0 3px 0 #b86400, 0 4px 12px rgba(0, 0, 0, 0.25);
+  pointer-events: none;
+}
+.touch-actions {
+  right: max(16px, env(safe-area-inset-right)); bottom: 150px; display: flex; flex-direction: column; align-items: flex-end; gap: 12px;
+}
+.touch-btn {
+  border: 3px solid rgba(255, 255, 255, 0.8); border-radius: 50%; width: 76px; height: 76px; padding: 0;
+  background: linear-gradient(180deg, #ffb340, var(--accent-dark)); color: #fff; font-weight: 800; font-size: 15px;
+  box-shadow: 0 4px 0 #b86400, 0 6px 16px rgba(0, 0, 0, 0.25); touch-action: none; user-select: none; -webkit-user-select: none;
+}
+.touch-btn.climb { width: 64px; height: 64px; font-size: 13px; background: linear-gradient(180deg, #6fd08a, var(--good)); box-shadow: 0 4px 0 #2a7c40, 0 6px 16px rgba(0, 0, 0, 0.25); }
+.touch-btn.active { transform: translateY(3px); box-shadow: 0 1px 0 #b86400; }
+body.touch-hero .toasts { bottom: 290px; }
+body.touch button, body.touch .level-card { -webkit-tap-highlight-color: transparent; }
+body.touch .chip, body.touch .icon-btn { min-height: 40px; }
+
+/* ---------- responsive ---------- */
+@media (max-width: 900px) {
+  .help { display: none; }
+}
+
+/* phones & small tablets (portrait or narrow) */
+@media (max-width: 640px) {
+  .hud-top-left { top: 8px; left: 8px; right: 8px; max-width: none; gap: 4px; }
+  .brand { font-size: 18px; height: 36px; display: flex; align-items: center; }
+  .hud-top-right { top: 8px; right: 8px; gap: 6px; }
+  .icon-btn, .level-select { height: 36px; min-width: 36px; font-size: 16px; border-radius: 10px; }
+  .levels-btn { font-size: 0; padding: 0; width: 36px; }
+  .levels-btn::before { content: '\2630'; font-size: 17px; }
+  .level-card { padding: 8px 12px; gap: 2px; }
+  .level-name { font-size: 14px; }
+  .level-card:not(.expanded) .level-desc,
+  .level-card:not(.expanded) .link-btn,
+  .level-card:not(.expanded) .words-line { display: none; }
+  .level-card::after { content: 'tap for details'; font-size: 10.5px; opacity: 0.45; }
+  .level-card.expanded::after { content: 'tap to collapse'; }
+  .goal { margin-top: 2px; font-size: 13px; }
+  .hud-bottom { bottom: max(12px, env(safe-area-inset-bottom)); gap: 6px; width: calc(100vw - 16px); }
+  .spell-bar { padding-left: 14px; }
+  .spell-input { font-size: 16px; padding: 8px 2px; } /* 16px stops iOS zoom-on-focus */
+  .cast-btn { height: 40px; padding: 0 16px; font-size: 15px; }
+  .word-chips { gap: 5px; max-height: 76px; overflow: hidden; }
+  .chip { padding: 4px 10px; font-size: 12.5px; }
+  .chips-label { display: none; }
+  .spellbook { left: 8px; right: 8px; top: 52px; bottom: 8px; width: auto; border-radius: 16px; z-index: 15; }
+  .panel { padding: 20px 18px; border-radius: 18px; }
+  .panel h1 { font-size: 34px; }
+  .panel h2 { font-size: 24px; }
+  .panel.levels { padding: 18px 12px; }
+  .level-grid { grid-template-columns: repeat(auto-fill, minmax(128px, 1fr)); gap: 10px; }
+  .level-tile { padding: 10px 8px; }
+  .toasts { width: calc(100vw - 16px); }
+}
+
+/* short screens: phones in landscape */
+@media (max-height: 520px) {
+  .hud-top-left { top: 8px; left: 8px; gap: 4px; max-width: min(300px, 45vw); }
+  .brand { font-size: 16px; }
+  .hud-top-right { top: 8px; right: 8px; gap: 6px; }
+  .icon-btn, .level-select { height: 36px; min-width: 36px; }
+  .level-card { padding: 8px 12px; }
+  .level-card:not(.expanded) .level-desc,
+  .level-card:not(.expanded) .link-btn,
+  .level-card:not(.expanded) .words-line { display: none; }
+  .hud-bottom { bottom: 8px; gap: 4px; }
+  .spell-input { font-size: 16px; padding: 6px 2px; }
+  .cast-btn { height: 38px; }
+  .word-chips { display: none; }
+  .spellbook { top: 52px; bottom: 8px; width: min(380px, 55vw); }
+  .toasts { top: 8px; bottom: auto; width: min(380px, 45vw); }
+  .panel { padding: 14px 20px; }
+  .panel h1 { font-size: 28px; margin: 0; }
+  .panel h2 { font-size: 22px; margin: 2px 0; }
+  .panel p { margin: 6px 0; line-height: 1.35; }
+  .intro-logo { font-size: 36px; }
+  .panel-actions { margin-top: 8px; }
+  .btn.big { padding: 10px 24px; font-size: 16px; margin-top: 4px; }
+  .level-grid { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; margin-top: 8px; }
+  .tile-goal { min-height: 0; }
+  /* touch pads sit beside the spell bar, low in the corners */
+  .joy { bottom: 16px; width: 112px; height: 112px; }
+  .touch-actions { bottom: 16px; flex-direction: row; align-items: flex-end; }
+  .touch-btn { width: 68px; height: 68px; }
+  .touch-btn.climb { width: 56px; height: 56px; }
+  body.touch .hud-bottom { width: min(520px, calc(100vw - 340px)); }
+  body.touch-hero .toasts { bottom: auto; }
+}

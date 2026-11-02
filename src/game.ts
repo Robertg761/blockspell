@@ -16,6 +16,7 @@ import { parseSpell, randomWords } from './parser/parser';
 import { adjectives } from './adjectives';
 import { Hud } from './ui/hud';
 import { Spellbook } from './ui/spellbook';
+import { Tutorial } from './ui/tutorial';
 
 /** Wires renderer, world, input, parser, levels and HUD together. */
 export class Game {
@@ -24,6 +25,7 @@ export class Game {
   readonly world: GameWorld;
   readonly hud: Hud;
   readonly spellbook: Spellbook;
+  readonly tutorial: Tutorial;
   private marker = new SpawnMarker();
   level!: LevelDef;
   won = false;
@@ -64,6 +66,7 @@ export class Game {
     }, levels);
     this.spellbook = new Spellbook(objects.all(), adjectives.all(), (w) => this.cast(w));
     root.append(this.spellbook.el);
+    this.tutorial = new Tutorial(root);
     this.refreshChips();
 
     this.bindInput();
@@ -121,6 +124,7 @@ export class Game {
     this.hud.autoFocus = !level.hero;
     this.hud.setLevel(level);
     if (level.hero) this.hud.input.blur();
+    this.tutorial.onLevel(level);
   }
 
   /** Spawns the keyboard-controlled hero at its feet position. */
@@ -445,6 +449,7 @@ export class Game {
     this.last = now;
     this.tick(dt);
     this.followCamera(dt);
+    this.tutorial.update(this, dt);
     this.renderer.render(dt, this.fx.shake);
     requestAnimationFrame(this.frame);
   };
