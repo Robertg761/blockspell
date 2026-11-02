@@ -1,3 +1,4 @@
+import type { LevelRecord } from '../levels/progress';
 import type { LevelDef } from '../levels/types';
 import { h } from './dom';
 import { Toasts } from './toast';
@@ -9,7 +10,19 @@ export interface HudCallbacks {
   onMute: (muted: boolean) => void;
   onStart: () => void;
   onSpellbook: () => void;
+  onLevels: () => void;
 }
+
+export interface WinInfo {
+  level: LevelDef;
+  stars: number;
+  words: number;
+  par: number;
+  newBest: boolean;
+  next: LevelDef | null;
+}
+
+const starText = (n: number, of = 3) => '★'.repeat(n) + '☆'.repeat(Math.max(0, of - n));
 
 /** All DOM UI: spell input, level card, toasts, overlays. */
 export class Hud {
@@ -20,14 +33,17 @@ export class Hud {
   private levelDesc = h('div.level-desc');
   private goal = h('div.goal');
   private hintBtn: HTMLButtonElement;
-  private levelSelect: HTMLSelectElement;
+  private wordsLine = h('div.words-line');
   private chips = h('div.word-chips');
+  private help = h('div.help');
   private overlay = h('div.overlay.hidden');
   private history: string[] = [];
   private historyIdx = -1;
   private hint = '';
   private muted = false;
   readonly bookBtn: HTMLButtonElement;
+  /** Focus the spell bar after closing overlays (off in hero levels, where keys move the hero). */
+  autoFocus = true;
 
   constructor(root: HTMLElement, private cb: HudCallbacks, levels: LevelDef[]) {
     this.input = h('input.spell-input', {
@@ -47,11 +63,7 @@ export class Hud {
     this.input.addEventListener('keydown', (ev) => this.onKey(ev));
 
     this.hintBtn = h('button.link-btn', { text: 'Need a hint?', onClick: () => this.toasts.show(this.hint, { title: 'Hint', kind: 'info', duration: 6000 }) });
-    this.levelSelect = h(
-      'select.level-select',
-      { 'aria-label': 'Choose level', onChange: () => cb.onLevel(this.levelSelect.value) },
-      levels.map((l) => h('option', { value: l.id, text: `${l.order}. ${l.name}` })),
-    );
+    void levels;
     const muteBtn = h('button.icon-btn', {
       title: 'Toggle sound',
       text: '♪',
@@ -67,20 +79,19 @@ export class Hud {
     root.append(
       h('div.hud-top-left', {}, [
         h('div.brand', {}, [h('span.brand-mark', { text: '▣' }), ' Blockspell']),
-        h('div.level-card', {}, [this.levelName, this.levelDesc, this.goal, this.hintBtn]),
+        h('div.level-card', {}, [this.levelName, this.levelDesc, this.goal, this.wordsLine, this.hintBtn]),
       ]),
       h('div.hud-top-right', {}, [
-        this.levelSelect,
+        h('button.icon-btn.levels-btn', { title: 'Level select', text: '☰ Levels', onClick: () => cb.onLevels() }),
         this.bookBtn,
-        h('button.icon-btn', { title: 'Restart level', text: '↺', onClick: () => cb.onReset() }),
+        h('button.icon-btn.reset-btn', { title: 'Restart level (R)', text: '↺', onClick: () => cb.onReset() }),
         muteBtn,
       ]),
       this.toasts.el,
       h('div.hud-bottom', {}, [this.chips, this.form]),
-      h('div.help', { text: 'Drag to orbit · Scroll to zoom · Click ground to aim · Click things to poke' }),
+      this.help,
       this.overlay,
     );
-    this.showIntro();
   }
 
   private submit(ev: Event): void {
@@ -114,8 +125,7 @@ export class Hud {
   }
 
   setLevel(level: LevelDef): void {
-    this.levelSelect.value = level.id;
-    this.levelName.textContent = level.name;
+    this.levelName.textContent = level.order > 0 ? `${level.order}. ${level.name}` : level.name;
     this.levelDesc.textContent = level.description;
     this.hint = level.hint ?? '';
     this.hintBtn.style.display = level.hint && level.goal ? '' : 'none';
@@ -123,6 +133,23 @@ export class Hud {
     if (level.goal) this.goal.append(h('span.goal-box'), h('span', { text: level.goal.text }));
     else if (level.hint) this.goal.append(h('span.goal-free', { text: level.hint }));
     this.goal.classList.remove('done');
+    this.help.textContent = level.hero
+      ? 'WASD / arrows: move · Space: jump · W near a ladder: climb · Enter: write a word · Click ground: aim · R: restart'
+      : 'Drag to orbit · Scroll to zoom · Click ground to aim · Click things to poke';
+    this.setWords(0, level.goal ? (level.par ?? 2) : null);
+  }
+
+  /** Words-used counter under the goal. `par` null hides it (free play). */
+  setWords(words: number, par: number | null): void {
+    if (par === null) {
+      this.wordsLine.replaceChildren();
+      return;
+    }
+    const stars = words <= par ? 3 : words <= par * 2 ? 2 : 1;
+    this.wordsLine.replaceChildren(
+      h('span', { text: `Words used: ${words}` }),
+      h('span.words-stars', { text: starText(stars), title: `3 stars for ${par} word${par === 1 ? '' : 's'} or fewer` }),
+    );
   }
 
   setGoalDone(): void {
@@ -141,27 +168,60 @@ export class Hud {
     this.form.classList.add('pulse');
   }
 
-  showWin(levelName: string, next: LevelDef | null, onNext: () => void): void {
+  showWin(info: WinInfo, onNext: () => void, onRetry: () => void): void {
+    const starsEl = h('div.win-stars', {}, [0, 1, 2].map((i) => h(`span.win-star${i < info.stars ? '.on' : ''}`, { text: '★', style: `animation-delay:${0.25 + i * 0.22}s` })));
     this.overlay.replaceChildren(
       h('div.panel.win', {}, [
-        h('div.win-stars', { text: '★ ★ ★' }),
+        starsEl,
         h('h2', { text: 'Solved!' }),
-        h('p', { text: `You finished “${levelName}”.` }),
+        h('p', { text: `“${info.level.name}” with ${info.words} word${info.words === 1 ? '' : 's'}${info.newBest ? ' — new best!' : '.'}` }),
+        info.stars < 3 ? h('p.small', { text: `Can you do it in ${info.par} word${info.par === 1 ? '' : 's'} or fewer for ★★★?` }) : null,
         h('div.panel-actions', {}, [
-          h('button.btn.secondary', { text: 'Keep playing', onClick: () => this.hideOverlay() }),
-          next
-            ? h('button.btn', {
-                text: `Next: ${next.name} →`,
-                onClick: () => {
-                  this.hideOverlay();
-                  onNext();
-                },
-              })
-            : null,
+          h('button.btn.secondary', { text: '↺ Retry', onClick: () => { this.hideOverlay(); onRetry(); } }),
+          h('button.btn.secondary', { text: '☰ Levels', onClick: () => this.cb.onLevels() }),
+          next(info.next, onNext, this),
         ]),
       ]),
     );
     this.overlay.classList.remove('hidden');
+    function next(n: LevelDef | null, go: () => void, hud: Hud) {
+      return n
+        ? h('button.btn', { text: `Next: ${n.name} →`, onClick: () => { hud.hideOverlay(); go(); } })
+        : h('button.btn', { text: 'Keep playing', onClick: () => hud.hideOverlay() });
+    }
+  }
+
+  /** Level select screen: a card per level with saved stars. */
+  showLevels(levels: LevelDef[], records: Record<string, LevelRecord>, current: string | null): void {
+    const card = (l: LevelDef) => {
+      const rec = records[l.id];
+      const free = !l.goal;
+      return h(`button.level-tile${rec ? '.solved' : ''}${l.id === current ? '.current' : ''}${free ? '.free' : ''}`, {
+        onClick: () => { this.hideOverlay(); this.cb.onLevel(l.id); },
+      }, [
+        h('div.tile-num', { text: free ? '✦' : String(l.order) }),
+        h('div.tile-name', { text: l.name }),
+        h('div.tile-goal', { text: l.goal?.text ?? 'Sandbox: write anything' }),
+        free ? h('div.tile-stars.muted', { text: 'no goal' }) : h('div.tile-stars', { text: starText(rec?.stars ?? 0), title: rec ? `Best: ${rec.words} words` : 'Not solved yet' }),
+        rec ? h('div.tile-best', { text: `best: ${rec.words} word${rec.words === 1 ? '' : 's'}` }) : null,
+      ]);
+    };
+    const total = levels.filter((l) => l.goal).reduce((s, l) => s + (records[l.id]?.stars ?? 0), 0);
+    const max = levels.filter((l) => l.goal).length * 3;
+    this.overlay.classList.remove('title');
+    this.overlay.replaceChildren(
+      h('div.panel.levels', {}, [
+        h('h2', { text: 'Choose a level' }),
+        h('p.small.levels-total', { text: `★ ${total} / ${max} stars · fewer words, more stars` }),
+        h('div.level-grid', {}, [...levels.filter((l) => l.goal), ...levels.filter((l) => !l.goal)].map(card)),
+        current ? h('div.panel-actions', {}, [h('button.btn.secondary', { text: 'Back', onClick: () => this.hideOverlay() })]) : null,
+      ]),
+    );
+    this.overlay.classList.remove('hidden');
+  }
+
+  get overlayOpen(): boolean {
+    return !this.overlay.classList.contains('hidden');
   }
 
   /** Hides the win panel if it's showing (leaves the intro alone). */
@@ -171,24 +231,31 @@ export class Hud {
 
   hideOverlay(): void {
     this.overlay.classList.add('hidden');
-    this.input.focus();
+    this.overlay.classList.remove('title');
+    if (this.autoFocus) this.input.focus();
   }
 
-  private showIntro(): void {
-    const start = () => {
-      this.hideOverlay();
+  /** Title screen. `logo` is an optional animated element shown above the name. */
+  showTitle(opts: { onPlay: () => void; onLevels: () => void; playLabel: string; logo?: HTMLElement }): void {
+    const go = (fn: () => void) => () => {
       this.cb.onStart();
+      this.hideOverlay();
+      fn();
     };
     this.overlay.replaceChildren(
       h('div.panel.intro', {}, [
-        h('div.intro-logo', { text: '▣' }),
+        opts.logo ?? h('div.intro-logo', { text: '▣' }),
         h('h1', { text: 'Blockspell' }),
         h('p.tagline', { text: 'Write a word. Make it real.' }),
         h('p', { text: 'Type the name of a thing — add adjectives like “big”, “blue” or “flaming” — and watch it appear. Use what you summon to solve each puzzle.' }),
-        h('button.btn.big', { text: 'Start writing ✦', onClick: start }),
+        h('div.panel-actions', {}, [
+          h('button.btn.big', { text: opts.playLabel, onClick: go(opts.onPlay) }),
+          h('button.btn.big.secondary', { text: '☰ Levels', onClick: () => { this.cb.onStart(); opts.onLevels(); } }),
+        ]),
         h('p.small', { text: 'Runs entirely offline. No network, no tracking.' }),
       ]),
     );
+    this.overlay.classList.add('title');
     this.overlay.classList.remove('hidden');
   }
 }

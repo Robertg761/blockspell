@@ -81,6 +81,14 @@ export class Effects {
     this.burst(at, { count, color, speed: 5, up: 2, gravity: 4, drag: 2.5, life: 0.7, size: 0.08, glow: true, spread: 0.3 });
   }
 
+  /** Level-complete celebration: confetti fountain + fanfare around `at`. */
+  celebrate(at: P3): void {
+    this.sound('win');
+    this.addShake(0.3);
+    for (let i = 0; i < 4; i++)
+      this.burst({ x: at.x, y: at.y + 2, z: at.z }, { count: 40, color: ['#ff5d6c', '#ffd84a', '#52b848', '#3d7fe0', '#9256d6'], speed: 8, up: 6, size: 0.12, life: 1.6, gravity: 6, glow: i % 2 === 0 });
+  }
+
   update(dt: number): void {
     this.particles.update(dt);
     this.tweens.update(dt);
