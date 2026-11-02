@@ -8,6 +8,7 @@ export interface HudCallbacks {
   onReset: () => void;
   onMute: (muted: boolean) => void;
   onStart: () => void;
+  onSpellbook: () => void;
 }
 
 /** All DOM UI: spell input, level card, toasts, overlays. */
@@ -26,6 +27,7 @@ export class Hud {
   private historyIdx = -1;
   private hint = '';
   private muted = false;
+  readonly bookBtn: HTMLButtonElement;
 
   constructor(root: HTMLElement, private cb: HudCallbacks, levels: LevelDef[]) {
     this.input = h('input.spell-input', {
@@ -60,6 +62,8 @@ export class Hud {
       },
     });
 
+    this.bookBtn = h('button.icon-btn', { title: 'Spellbook (Tab)', text: '📖', onClick: () => cb.onSpellbook() });
+
     root.append(
       h('div.hud-top-left', {}, [
         h('div.brand', {}, [h('span.brand-mark', { text: '▣' }), ' Blockspell']),
@@ -67,6 +71,7 @@ export class Hud {
       ]),
       h('div.hud-top-right', {}, [
         this.levelSelect,
+        this.bookBtn,
         h('button.icon-btn', { title: 'Restart level', text: '↺', onClick: () => cb.onReset() }),
         muteBtn,
       ]),

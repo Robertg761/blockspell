@@ -9,7 +9,9 @@ import { orderedLevels } from './levels';
 import type { LevelDef } from './levels/types';
 import { objects } from './objects';
 import { parseSpell, randomWords } from './parser/parser';
+import { adjectives } from './adjectives';
 import { Hud } from './ui/hud';
+import { Spellbook } from './ui/spellbook';
 
 /** Wires renderer, world, input, parser, levels and HUD together. */
 export class Game {
@@ -17,6 +19,7 @@ export class Game {
   readonly fx: Effects;
   readonly world: GameWorld;
   readonly hud: Hud;
+  readonly spellbook: Spellbook;
   private marker = new SpawnMarker();
   private level!: LevelDef;
   private won = false;
@@ -39,8 +42,14 @@ export class Game {
       onReset: () => this.loadLevel(this.level.id),
       onMute: (m) => this.fx.audio.setMuted(m),
       onStart: () => this.fx.audio.unlock(),
+      onSpellbook: () => {
+        this.spellbook.toggle();
+        this.hud.bookBtn.classList.remove('has-new');
+      },
     }, levels);
-    this.hud.setWordChips(objects.all().map((o) => o.name));
+    this.spellbook = new Spellbook(objects.all(), adjectives.all(), (w) => this.cast(w));
+    root.append(this.spellbook.el);
+    this.refreshChips();
 
     this.bindInput();
     this.loadLevel(levels[0]?.id ?? 'sandbox');
@@ -117,12 +126,33 @@ export class Game {
       });
     }
 
+    const fresh = this.spellbook.discover(res.def.id, res.adjectives.map((a) => a.id));
+    if (fresh.object || fresh.adjectives.length) {
+      if (!this.spellbook.isOpen) this.hud.bookBtn.classList.add('has-new');
+      this.fx.sound('chime', { volume: 0.5 });
+      this.refreshChips();
+    }
+
     const name = (count > 1 ? `${count} × ` : '') + res.label;
     if (res.correctedFrom) this.hud.toasts.show(`Guessing you meant “${res.def.name}”.`, { title: `✦ ${name}`, kind: 'success' });
+    else if (fresh.object && res.def.blurb)
+      this.hud.toasts.show(res.def.blurb, { title: `✦ New word: ${name}  (${this.spellbook.count}/${objects.all().length})`, kind: 'success' });
     else if (!this.seen.has(res.def.id) && res.def.blurb) this.hud.toasts.show(res.def.blurb, { title: `✦ ${name}`, kind: 'success' });
     this.seen.add(res.def.id);
     if (res.unknownAdjectives.length)
       this.hud.toasts.show(`I don't know “${res.unknownAdjectives.join('”, “')}” yet, so I left it out.`, { kind: 'info' });
+  }
+
+  /** Suggestion chips under the spell bar: a few words the player hasn't found yet. */
+  private refreshChips(): void {
+    const all = objects.all();
+    const unknown = all.filter((d) => !this.spellbook.has(d.id));
+    const pool = (unknown.length >= 6 ? unknown : all).map((d) => d.name);
+    for (let i = pool.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [pool[i], pool[j]] = [pool[j], pool[i]];
+    }
+    this.hud.setWordChips(pool.slice(0, 7));
   }
 
   // ------------------------------------------------------------ input
@@ -141,6 +171,16 @@ export class Game {
     });
     window.addEventListener('keydown', (e) => {
       const input = this.hud.input;
+      if (e.key === 'Tab') {
+        e.preventDefault();
+        this.spellbook.toggle();
+        this.hud.bookBtn.classList.remove('has-new');
+        return;
+      }
+      if (e.key === 'Escape' && this.spellbook.isOpen) {
+        this.spellbook.toggle(false);
+        return;
+      }
       if (document.activeElement === input || e.metaKey || e.ctrlKey || e.altKey) return;
       if (e.key.length === 1 && /\S/.test(e.key)) input.focus();
       else if (e.key === 'Enter') {
@@ -160,22 +200,30 @@ export class Game {
     const hitGround = this.raycaster.intersectObjects(this.world.pickables(), false)[0];
     if (hitEntity && (!hitGround || hitEntity.distance < hitGround.distance)) {
       const ent = this.world.entityFromObject(hitEntity.object);
+      // anchored things (walls, trees, pools) act like ground you can aim at
+      if (ent && ent.body.mass === 0 && hitEntity.face && hitEntity.face.normal.y > 0.5) {
+        this.setAim(hitEntity.point);
+        return;
+      }
       if (ent) {
         const b = ent.body;
         b.wakeUp();
         const m = b.mass;
         b.applyImpulse(new Vec3((Math.random() - 0.5) * 2 * m, 4.5 * m, (Math.random() - 0.5) * 2 * m));
         b.angularVelocity.set(Math.random() * 4 - 2, Math.random() * 4 - 2, Math.random() * 4 - 2);
-        this.fx.sound(ent.has('animal') ? 'bark' : 'squeak', { pitch: 1 / Math.sqrt(ent.scale) });
+        this.fx.sound(ent.def.voice ?? (ent.has('animal') ? 'bark' : 'squeak'), { pitch: 1 / Math.sqrt(ent.scale) });
         this.fx.sparkle(hitEntity.point, undefined, 10);
       }
       return;
     }
-    if (hitGround && hitGround.face && hitGround.face.normal.y > 0.5) {
-      this.marker.set(hitGround.point);
-      this.fx.sound('click');
-      this.fx.burst(hitGround.point, { count: 8, color: ['#ffd84a', '#fff6a8'], speed: 2, up: 1.5, size: 0.06, life: 0.4, glow: true });
-    }
+    if (hitGround && hitGround.face && hitGround.face.normal.y > 0.5) this.setAim(hitGround.point);
+  }
+
+  private setAim(p: Vector3): void {
+    this.marker.set(p);
+    this.world.aim = { x: p.x, y: p.y, z: p.z };
+    this.fx.sound('click');
+    this.fx.burst(p, { count: 8, color: ['#ffd84a', '#fff6a8'], speed: 2, up: 1.5, size: 0.06, life: 0.4, glow: true });
   }
 
   // ------------------------------------------------------------ loop

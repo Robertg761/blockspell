@@ -174,3 +174,31 @@ button, input, select { font: inherit; color: inherit; }
 .btn.big { font-size: 18px; padding: 14px 30px; margin-top: 8px; }
 .btn.secondary { background: #eef1f6; color: var(--ink); box-shadow: 0 3px 0 #c9d0dc; }
 .btn:active { transform: translateY(2px); }
+
+/* ---------- spellbook ---------- */
+.spellbook {
+  position: absolute; top: 68px; right: 16px; bottom: 120px; width: min(380px, calc(100vw - 32px));
+  display: flex; flex-direction: column; background: var(--panel-solid); border-radius: var(--radius);
+  box-shadow: 0 20px 60px rgba(10, 20, 50, 0.35); overflow: hidden; animation: sb-in 0.3s cubic-bezier(0.2, 1.4, 0.4, 1);
+}
+.spellbook.hidden { display: none; }
+@keyframes sb-in { from { opacity: 0; transform: translateX(24px) scale(0.97); } }
+.sb-header { display: flex; justify-content: space-between; align-items: center; padding: 14px 14px 8px 18px; }
+.sb-header h2 { margin: 0; font-size: 21px; letter-spacing: -0.02em; }
+.sb-header .icon-btn { box-shadow: none; background: #eef1f6; height: 34px; min-width: 34px; font-size: 14px; }
+.sb-total { font-size: 12.5px; opacity: 0.65; font-weight: 600; }
+.sb-progress { height: 6px; margin: 0 18px 8px; background: #eef1f6; border-radius: 99px; overflow: hidden; }
+.sb-bar { height: 100%; background: linear-gradient(90deg, #ffb340, var(--accent-dark)); border-radius: 99px; transition: width 0.4s; }
+.sb-body { overflow-y: auto; padding: 4px 18px 16px; }
+.sb-section h3 { display: flex; justify-content: space-between; font-size: 13.5px; margin: 12px 0 6px; }
+.sb-count { opacity: 0.5; font-weight: 700; }
+.sb-words { display: flex; flex-wrap: wrap; gap: 5px; }
+.sb-word {
+  border: 0; border-radius: 8px; padding: 4px 9px; font-size: 12.5px; font-weight: 650;
+  background: #fff1dc; cursor: pointer;
+}
+button.sb-word:hover { background: #ffe0b0; }
+.sb-word.adj { background: #e9e2ff; cursor: default; }
+.sb-word.unknown { background: #eef1f6; color: #a7adb9; cursor: default; min-width: 26px; text-align: center; }
+.sb-tip { font-size: 12px; opacity: 0.6; margin-top: 14px; }
+.icon-btn.has-new { box-shadow: var(--shadow), 0 0 0 3px rgba(255, 159, 28, 0.7); }
