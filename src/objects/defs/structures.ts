@@ -217,7 +217,7 @@ export default [
     burstColor: '#d93a3a',
     voxelSize: 0.08,
     physics: { mass: 4, shape: 'auto', maxBoxes: 5, friction: 0.6 },
-    props: { magnetRange: 7, magnetForce: 35 },
+    props: { magnetRange: 5, magnetForce: 30 },
     build(b) {
       const cx = 8, cy = 8, D = 4;
       for (let x = 0; x < 16; x++)

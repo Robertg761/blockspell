@@ -53,14 +53,36 @@ double-clicking `index.html`.)
 
 - **Type** a word in the spell bar and press **Enter**. Typing anywhere focuses it,
   and ↑/↓ recall earlier spells.
-- **Adjectives** stack: size (*tiny, small, big, huge*), color (*red, blue, golden*…),
-  and properties (*heavy, light, bouncy, wet, flaming, hot, flying, wooden, tasty*).
+- **Adjectives** stack (*giant flaming dog*, *tiny golden rocket*, *angry ghostly cow*):
+  size (*tiny, small, big, giant*), color (*red, blue, rainbow, golden*…), and magic
+  (*flaming, frozen, hot, wet, heavy, light, flying, bouncy, sticky, slippery, ghostly,
+  angry, fast, slow, metal, magnetic, explosive, glowing, alive, wooden, tasty*).
   *very* doubles an adjective.
+- **Spellbook** (📖 button or **Tab**) lists every word you've discovered, by category.
+  Click a word to cast it again. Discoveries are saved locally.
+- **The hero** (*hero*, *kid*, *explorer*…) walks to wherever you click and climbs
+  ladders, ropes, stairs and trees to reach higher ground.
 - **Counts**: *3 balls*, *two dogs* (up to 5).
 - **Click the ground** to choose where things appear. **Click an object** to poke it.
 - **Drag** to orbit the camera, **scroll** to zoom.
 - If Blockspell doesn't know a word, it suggests close matches and autocorrects
   small typos.
+
+## What's in the box
+
+99 objects across creatures, vehicles & flyers, building & gadgets, nature, food and
+everyday things, each with a few synonyms (*dog*: puppy, doggo, hound…). Interactions
+come from behavior tags (documented in `src/core/tags.ts`), for example:
+
+- fire ignites flammable things, which char and burn away; TNT and bombs explode with
+  impulse, shatter fragile things and set off chain reactions
+- ice and snowmen melt near heat into puddles; water puts out fires and makes ice slippery;
+  rain clouds soak whatever is below them
+- balloons carry light things on a string; rockets and jetpacks thrust; fans blow;
+  magnets pull metal; trampolines and springs launch; parachutes and umbrellas glide
+- animals wander and chase their food (dog → bone, cat → mouse/fish, mouse → cheese,
+  rabbit → carrot…), flee predators and fire, and swim or float in water
+- heavy things smash fragile ones; keys unlock doors; sharp things pop balloons
 
 ## Architecture
 
@@ -89,6 +111,10 @@ src/
   parser/            tokenize -> count -> adjectives + noun -> synonyms, fuzzy suggestions
   ui/                DOM HUD, toasts, styles
 ```
+
+Dev-only helpers live in `tools/` (served by `npm run dev`, not part of the build):
+`tools/gallery.html` renders object models in a grid, `tools/scenario.html` runs scripted
+interaction scenarios, and `tools/object-brief.md` describes how to write new objects.
 
 Objects, adjectives, behaviors and levels are discovered automatically: drop a file
 into the matching `defs/` folder that default-exports a definition (or an array of

@@ -127,4 +127,5 @@ const SCENARIOS: Record<string, () => void> = {
     ids.forEach((s, i) => put(s, ((i % 6) - 2.5) * 2, (Math.floor(i / 6) - 1) * 2.4));
   },
 };
+if (q.has('book')) at(0.5, () => { for (const sp of ['dog', 'giant flaming cat', 'rocket', 'golden key', 'cheese']) game.cast(sp); game.spellbook.toggle(true); });
 (SCENARIOS[q.get('s') ?? 'words'] ?? SCENARIOS.words)();
