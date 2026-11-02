@@ -63,7 +63,7 @@ export interface LevelDef {
   castRange?: number;
   /** Polled every frame: return a message when the attempt is lost (e.g. "The hut burned down!"). */
   fail?: (world: GameWorld) => string | null;
-  /** Words for 3 stars (2 stars up to 2×par). Each word in a spell counts: "giant balloon" = 2. Default 2. */
+  /** Spells for 3 stars (2 stars up to 2×par). Each successful cast counts once: "giant balloon" = 1. Default 2. */
   par?: number;
   setup: (world: GameWorld) => void;
   goal?: LevelGoal;
@@ -73,8 +73,11 @@ export interface LevelDef {
 
 export const defineLevel = (def: LevelDef) => def;
 
-/** Stars for a solve using `words` words. */
-export const starsFor = (level: LevelDef, words: number): number => {
-  const par = level.par ?? 2;
-  return words <= par ? 3 : words <= par * 2 ? 2 : 1;
-};
+/** Stars for a solve using `words` spells (successful casts). The HUD uses this too. */
+export const starsFor = (level: LevelDef, words: number): number => starsForPar(level.par ?? 2, words);
+
+/** Star thresholds: 3 stars up to `par` spells, 2 stars up to 2×par, else 1. */
+export const starsForPar = (par: number, words: number): number => (words <= par ? 3 : words <= par * 2 ? 2 : 1);
+
+/** "1 spell", "3 spells". */
+export const spellsText = (n: number): string => `${n} spell${n === 1 ? '' : 's'}`;

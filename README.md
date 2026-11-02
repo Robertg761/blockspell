@@ -15,7 +15,7 @@ Built for **Hackyard Yard #6: "Offline"**.
 
 Pick a level from the title screen (**▶ Play** continues where you left off, **☰ Levels**
 shows every level with your saved stars). Each level has a one-line goal. Summon things to
-reach it, using as few words as you can.
+reach it, using as few spells as you can.
 
 | Key / action | What it does |
 | --- | --- |
@@ -34,9 +34,11 @@ In **Free Play** there's no hero, so typing anywhere goes straight to the spell 
 touch screens, hero levels show a joystick with Jump and Climb buttons. Tips about the
 controls pop up the first time you need them.
 
-**Stars.** Every word you cast counts: "ladder" is 1 word, "giant plank" is 2. Solve a
-level within its *par* for ★★★, or within twice par for ★★. Your best result per level
-is saved in `localStorage`. Some levels limit how far from the hero you can cast, so you
+**Stars.** Every successful cast counts as one spell, however many words it has:
+"ladder", "giant plank" and "3 tiny balloons" are 1 spell each, and spells that fail to
+cast (unknown words, out of range) are free. Solve a level within its *par* for ★★★, or
+within twice par for ★★. The HUD counter, the end-of-level summary and the stars all use
+this same count. Your best result per level is saved in `localStorage`. Some levels limit how far from the hero you can cast, so you
 can't simply summon the answer next to the goal.
 
 ### Spells

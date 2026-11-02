@@ -29,7 +29,11 @@ export class Game {
   private marker = new SpawnMarker();
   level!: LevelDef;
   won = false;
-  /** Words cast so far in this attempt (each word of a spell counts). */
+  /**
+   * Spells cast so far in this attempt: one per successful cast, however many
+   * words it has ("giant flaming 3 dogs" is 1). Failed and post-win casts don't count.
+   * Drives the HUD counter, the win summary and the stars (see starsFor).
+   */
   words = 0;
   /** While set, a scripted solution drives the hero instead of the keyboard. */
   runner: SolutionRunner | null = null;
@@ -194,7 +198,7 @@ export class Game {
     }
     this.hud.pulseInput();
     if (!this.won) {
-      this.words += text.trim().split(/\s+/).length;
+      this.words++;
       this.hud.setWords(this.words, this.level.goal ? (this.level.par ?? 2) : null);
     }
     const count = Math.min(res.count, MAX_ENTITIES);

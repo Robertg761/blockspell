@@ -1,5 +1,5 @@
 import type { LevelRecord } from '../levels/progress';
-import type { LevelDef } from '../levels/types';
+import { spellsText, starsForPar, type LevelDef } from '../levels/types';
 import { Audio, loadMuted } from '../engine/audio';
 import { h } from './dom';
 import { Toasts } from './toast';
@@ -141,16 +141,16 @@ export class Hud {
     this.setWords(0, level.goal ? (level.par ?? 2) : null);
   }
 
-  /** Words-used counter under the goal. `par` null hides it (free play). */
+  /** Spells-cast counter under the goal (one per successful cast). `par` null hides it (free play). */
   setWords(words: number, par: number | null): void {
     if (par === null) {
       this.wordsLine.replaceChildren();
       return;
     }
-    const stars = words <= par ? 3 : words <= par * 2 ? 2 : 1;
+    const stars = starsForPar(par, words);
     this.wordsLine.replaceChildren(
-      h('span', { text: `Words used: ${words}` }),
-      h('span.words-stars', { text: starText(stars), title: `3 stars for ${par} word${par === 1 ? '' : 's'} or fewer` }),
+      h('span', { text: `Spells cast: ${words}` }),
+      h('span.words-stars', { text: starText(stars), title: `3 stars for ${spellsText(par)} or fewer` }),
     );
   }
 
@@ -176,8 +176,8 @@ export class Hud {
       h('div.panel.win', {}, [
         starsEl,
         h('h2', { text: 'Solved!' }),
-        h('p', { text: `“${info.level.name}” with ${info.words} word${info.words === 1 ? '' : 's'}${info.newBest ? ' — new best!' : '.'}` }),
-        info.stars < 3 ? h('p.small', { text: `Can you do it in ${info.par} word${info.par === 1 ? '' : 's'} or fewer for ★★★?` }) : null,
+        h('p', { text: `“${info.level.name}” with ${spellsText(info.words)}${info.newBest ? '. New best!' : '.'}` }),
+        info.stars < 3 ? h('p.small', { text: `Can you do it in ${spellsText(info.par)} or fewer for ★★★?` }) : null,
         h('div.panel-actions', {}, [
           h('button.btn.secondary', { text: '↺ Retry', onClick: () => { this.hideOverlay(); onRetry(); } }),
           h('button.btn.secondary', { text: '☰ Levels', onClick: () => this.cb.onLevels() }),
@@ -206,8 +206,8 @@ export class Hud {
         h('div.tile-num', { text: free ? '✦' : String(l.order) }),
         h('div.tile-name', { text: l.name }),
         h('div.tile-goal', { text: l.goal?.text ?? 'Sandbox: write anything' }),
-        free ? h('div.tile-stars.muted', { text: 'no goal' }) : h('div.tile-stars', { text: starText(rec?.stars ?? 0), title: rec ? `Best: ${rec.words} words` : 'Not solved yet' }),
-        rec ? h('div.tile-best', { text: `best: ${rec.words} word${rec.words === 1 ? '' : 's'}` }) : null,
+        free ? h('div.tile-stars.muted', { text: 'no goal' }) : h('div.tile-stars', { text: starText(rec?.stars ?? 0), title: rec ? `Best: ${spellsText(rec.words)}` : 'Not solved yet' }),
+        rec ? h('div.tile-best', { text: `best: ${spellsText(rec.words)}` }) : null,
       ]);
     };
     const total = levels.filter((l) => l.goal).reduce((s, l) => s + (records[l.id]?.stars ?? 0), 0);
@@ -216,7 +216,7 @@ export class Hud {
     this.overlay.replaceChildren(
       h('div.panel.levels', {}, [
         h('h2', { text: 'Choose a level' }),
-        h('p.small.levels-total', { text: `★ ${total} / ${max} stars · fewer words, more stars` }),
+        h('p.small.levels-total', { text: `★ ${total} / ${max} stars · fewer spells, more stars` }),
         h('div.level-grid', {}, [...levels.filter((l) => l.goal), ...levels.filter((l) => !l.goal)].map(card)),
         current ? h('div.panel-actions', {}, [h('button.btn.secondary', { text: 'Back', onClick: () => this.hideOverlay() })]) : null,
       ]),

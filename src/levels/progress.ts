@@ -1,4 +1,4 @@
-/** Level progress (best stars / fewest words) saved in localStorage. */
+/** Level progress (best stars / fewest spells) saved in localStorage. */
 export interface LevelRecord {
   stars: number;
   words: number;

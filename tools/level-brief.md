@@ -34,7 +34,7 @@ A level is one file in `src/levels/defs/NN-id.ts` default-exporting `defineLevel
 - `goal: { text: 'One-line goal', check: (w) => boolean }`. Helpers in `src/levels/goals.ts`:
   `heroTouches`, `heroInside`, `heroStandingAbove`, `restingBelow`, `fireOut`, `watchFed`/`fed`,
   `holdFor(seconds, cond)`, `withRole`.
-- `par`: words for 3 stars (every word in a spell counts: "giant balloon" = 2).
+- `par`: spells for 3 stars (each successful cast counts once: "giant balloon" = 1).
 - `fail: (w) => string | null` shows a "try again" toast (e.g. the hut burned down).
 
 ## Solutions (required)

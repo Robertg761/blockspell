@@ -37,7 +37,7 @@ if (key) {
 } else results.push(...api.solveAll());
 
 for (const r of results)
-  log(`${r.pass ? 'PASS' : 'FAIL'} ${r.level} :: ${r.solution} — ${r.time}s, ${r.words} words, ${r.stars}★${r.error ? ' ERROR ' + r.error : ''}${r.log.length ? ' | ' + r.log.join(' | ') : ''}`);
+  log(`${r.pass ? 'PASS' : 'FAIL'} ${r.level} :: ${r.solution} — ${r.time}s, ${r.words} spells, ${r.stars}★${r.error ? ' ERROR ' + r.error : ''}${r.log.length ? ' | ' + r.log.join(' | ') : ''}`);
 if (!r0()) log('STATE', JSON.stringify(api.state()));
 const failed = results.filter((r) => !r.pass).length;
 log(`SUMMARY ${results.length - failed}/${results.length} passed`);
