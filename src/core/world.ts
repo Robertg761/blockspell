@@ -37,6 +37,18 @@ export interface Link {
 
 type P3 = { x: number; y: number; z: number };
 
+/** Keyboard state for the controllable hero, in world space (set by the game each frame). */
+export interface HeroInput {
+  /** Desired horizontal direction (length 0..1), already camera-relative. */
+  move: { x: number; z: number };
+  /** Up / W held (also climbs). */
+  up: boolean;
+  /** Down / S held (also climbs down). */
+  down: boolean;
+  /** Space held. */
+  jump: boolean;
+}
+
 export interface SpawnOptions {
   position: P3;
   mods?: SpawnModifiers;
@@ -74,6 +86,9 @@ export class GameWorld {
   /** Where the player last clicked the ground (the hero walks there). */
   aim: P3 | null = null;
   readonly links: Link[] = [];
+  /** The keyboard-controlled hero of the current level (null in free play). */
+  hero: Entity | null = null;
+  readonly input: HeroInput = { move: { x: 0, z: 0 }, up: false, down: false, jump: false };
 
   private statics: { mesh: Mesh; body: Body }[] = [];
   private bodyMap = new Map<number, Entity>();
@@ -108,7 +123,7 @@ export class GameWorld {
     let alive = 0;
     for (const o of this.entities) if (o.alive) alive++;
     if (alive >= MAX_ENTITIES) {
-      const oldest = this.entities.find((o) => o.alive);
+      const oldest = this.entities.find((o) => o.alive && !o.state.pinned);
       if (oldest) this.remove(oldest, 'limit', 'poof');
     }
     const mods = opts.mods ?? (opts.adjectives ? buildModifiers(opts.adjectives, def) : emptyModifiers());
@@ -295,12 +310,15 @@ export class GameWorld {
   }
 
   // ---------------------------------------------------------------- level geometry
-  loadTerrain(opts: Partial<TerrainOptions> = {}): void {
+  /** Builds the island terrain, or removes it (null) for levels made only of static boxes. */
+  loadTerrain(opts: Partial<TerrainOptions> | null = {}): void {
     if (this.terrain) {
       this.scene.remove(this.terrain.group);
       for (const b of this.terrain.bodies) this.physics.removeBody(b);
       this.terrain.dispose();
+      this.terrain = null;
     }
+    if (!opts) return;
     this.terrain = buildTerrain(opts, this.groundMaterial);
     this.scene.add(this.terrain.group);
     for (const b of this.terrain.bodies) this.physics.addBody(b);
@@ -308,7 +326,7 @@ export class GameWorld {
 
   /** Ground height under a point, including static boxes. */
   groundAt(x: number, z: number): number {
-    let h = this.terrain ? this.terrain.heightAt(x, z) : 0;
+    let h = this.terrain ? this.terrain.heightAt(x, z) : -Infinity;
     for (const s of this.statics) {
       const b = s.body;
       const he = (b.shapes[0] as Box).halfExtents;
@@ -370,6 +388,9 @@ export class GameWorld {
     this.levelSubs.length = 0;
     this.flags = {};
     this.aim = null;
+    this.hero = null;
+    this.input.move.x = this.input.move.z = 0;
+    this.input.up = this.input.down = this.input.jump = false;
     this.waterLevel = null;
     this.fx.particles.clear();
     this.fx.tweens.clear();

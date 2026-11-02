@@ -41,7 +41,8 @@ export const KNOWN_TAGS = {
   rains: 'Rains on whatever is below, soaking it and putting out fires.',
   key: 'Unlocks `locked` things it touches.',
   locked: 'Opens when touched by a key.',
-  player: 'The hero: walks to where you click and climbs climbable things.',
+  player: 'A summoned hero: walks to where you click and climbs climbable things.',
+  controlled: 'The level hero: moved with WASD/arrows + Space, climbs climbables, stands on anything.',
 } as const;
 
 export type KnownTag = keyof typeof KNOWN_TAGS;

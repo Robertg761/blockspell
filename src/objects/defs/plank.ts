@@ -9,7 +9,8 @@ export default defineObject({
   tags: ['flammable', 'floats'],
   tintKeys: ['wood', 'woodDark', 'woodLight'],
   burstColor: '#b07a43',
-  physics: { mass: 2.5, shape: 'box', friction: 0.8 },
+  orient: 'span',
+    physics: { mass: 2.5, shape: 'box', friction: 0.8 },
   props: { burnTime: 9 },
   build(b, rng) {
     const L = 21;

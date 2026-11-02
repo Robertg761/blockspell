@@ -590,6 +590,7 @@ export default [
     burstColor: '#6e4a2e',
     spawnSound: 'thud',
     voxelSize: 0.05,
+    orient: 'span',
     physics: { mass: 12, shape: 'box', friction: 0.7 },
     props: { burnTime: 12 },
     debris: ['plank'],

@@ -9,7 +9,8 @@ export default defineObject({
   tags: ['climbable', 'flammable'],
   tintKeys: ['wood', 'woodDark'],
   burstColor: '#b07a43',
-  physics: { mass: 4, shape: 'auto', maxBoxes: 10, friction: 0.8 },
+  orient: 'face',
+    physics: { mass: 4, shape: 'auto', maxBoxes: 10, friction: 0.8 },
   props: { burnTime: 8 },
   build(b) {
     const H = 25, W = 8;

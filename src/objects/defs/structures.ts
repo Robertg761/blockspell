@@ -66,6 +66,7 @@ export default [
     tintKeys: ['wood', 'woodDark', 'woodLight'],
     burstColor: '#b07a43',
     voxelSize: 0.1,
+    orient: 'span',
     physics: { mass: 15, shape: 'auto', maxBoxes: 6, friction: 0.8 },
     props: { burnTime: 12 },
     build(b) {
@@ -498,6 +499,7 @@ export default [
     tintKeys: ['wood', 'woodLight', 'woodDark'],
     burstColor: '#b07a43',
     voxelSize: 0.1,
+    orient: 'span',
     physics: { mass: 25, shape: 'auto', maxBoxes: 10, friction: 0.7 },
     props: { burnTime: 8 },
     build(b) {
@@ -527,6 +529,7 @@ export default [
     tintKeys: ['stairStone', 'stairStoneDark', 'stairStoneLight'],
     burstColor: '#9a9ba3',
     voxelSize: 0.1,
+    orient: 'face',
     physics: { mass: 40, shape: 'auto', maxBoxes: 6, friction: 0.8 },
     build(b) {
       const N = 5, D = 5, R = 3, Wd = 14;

@@ -79,6 +79,13 @@ export interface ObjectDef {
   parts?: PartDef[];
   /** Object ids spawned when this breaks (fragile) or burns up (e.g. crate -> ['plank']). */
   debris?: string[];
+  /**
+   * How a cast lines it up (default: random yaw). Directions are from the caster
+   * (the hero, or the camera) toward where it's cast:
+   * 'span' points local +X that way (bridges, planks, ramps rising away);
+   * 'face' turns local +Z back toward the caster (stairs rise away, ladders face you).
+   */
+  orient?: 'span' | 'face';
   onSpawn?: (e: Entity, world: GameWorld) => void;
   /** Object-specific per-frame logic (cosmetic animation etc.). */
   update?: (e: Entity, world: GameWorld, dt: number) => void;
