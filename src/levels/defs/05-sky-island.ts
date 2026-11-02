@@ -32,7 +32,9 @@ export default defineLevel({
     check: holdFor(1, (w) => heroInside(w, [-2, 3.4, -6.5], [2, 5, -2.5]) && heroStandingAbove(w, 3.4), 'island'),
   },
   solutions: [
-    { name: 'trampoline', steps: [{ cast: 'trampoline', at: [0, -0.3] }, { wait: 1.5 }, { walkTo: [0, 1.1] }, { hold: { dir: [0, -1] }, for: 0.9 }, { hold: { dir: [0, 0] }, for: 0.7 }, { hold: { dir: [0, -1] }, for: 0.8 }, { walkTo: [0, -4.4], timeout: 3 }] },
+    // Let the trampoline stop bouncing, hop onto the middle of the mat from a standstill (walking into its
+    // side shoves it under the island), bounce straight up, and only steer over once above the island top.
+    { name: 'trampoline', steps: [{ cast: 'trampoline', at: [0, -0.9] }, { wait: 4 }, { walkTo: [0, 1] }, { hold: {}, for: 0.5 }, { hold: { dir: [0, -1], jump: true }, for: 0.12 }, { hold: {}, for: 1.45 }, { walkTo: [0, -4.4], timeout: 4 }] },
     { name: 'giant ramp', steps: [{ cast: 'giant ramp', at: [0, -0.1] }, { wait: 1.5 }, { walkTo: [0, -4.4], jump: true, timeout: 9 }] },
     { name: 'big ladder', steps: [{ cast: 'big ladder', at: [0, -2.3] }, { wait: 1.5 }, { walkTo: [0, -1.5] }, { hold: { dir: [0, -0.3] }, for: 0.4 }, { hold: { up: true }, for: 1.9 }, { hold: { dir: [0, -1], up: true }, for: 0.8 }, { walkTo: [0, -4.2], timeout: 3 }] },
     { name: 'giant stairs', steps: [{ cast: 'giant stairs', at: [0, 0.4] }, { wait: 1.5 }, { walkTo: [0, -4.4], up: true, timeout: 9 }] },
