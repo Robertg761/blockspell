@@ -1,0 +1,35 @@
+/* Title screen: animated backdrop + voxel logo */
+.overlay.title {
+  background:
+    radial-gradient(ellipse at 20% 20%, rgba(255, 196, 90, 0.28), transparent 55%),
+    radial-gradient(ellipse at 80% 85%, rgba(120, 90, 255, 0.28), transparent 55%),
+    linear-gradient(135deg, rgba(20, 40, 90, 0.35), rgba(20, 30, 70, 0.6), rgba(60, 30, 90, 0.5));
+  background-size: 100% 100%, 100% 100%, 300% 300%;
+  animation: fade-in 0.3s, title-drift 18s ease-in-out infinite alternate;
+  overflow: auto;
+}
+@keyframes title-drift { from { background-position: 0 0, 0 0, 0% 50%; } to { background-position: 0 0, 0 0, 100% 50%; } }
+.overlay.title .panel.intro { margin: auto; position: relative; overflow: hidden; }
+.overlay.title .panel.intro::before {
+  content: ''; position: absolute; top: 0; bottom: 0; width: 40%; left: -60%; pointer-events: none;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.35), transparent);
+  transform: skewX(-18deg); animation: panel-shine 6s ease-in-out 1.2s infinite;
+}
+@keyframes panel-shine { 0% { left: -60%; } 30%, 100% { left: 140%; } }
+.overlay.title .panel.intro > * { position: relative; }
+.overlay.title .panel.intro h1 { font-size: 0; height: 0; margin: 0; overflow: hidden; } /* the logo spells the name */
+
+.voxel-logo { width: min(400px, calc(100vw - 80px)); aspect-ratio: 400 / 170; margin: -6px auto 4px; position: relative; }
+.voxel-logo canvas { width: 100%; height: 100%; display: block; }
+.voxel-logo .logo-fallback { display: none; font-size: 40px; font-weight: 900; letter-spacing: -0.02em; color: var(--accent-dark); }
+.voxel-logo.nogl canvas { display: none; }
+.voxel-logo.nogl .logo-fallback { display: block; }
+
+@media (max-width: 480px), (max-height: 560px) {
+  .overlay.title .panel.intro { padding: 18px 18px; }
+  .overlay.title .panel .tagline { font-size: 16px; }
+  .overlay.title .btn.big { font-size: 16px; padding: 12px 22px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .overlay.title, .overlay.title .panel.intro::before { animation: none; }
+}

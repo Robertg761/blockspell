@@ -1,7 +1,11 @@
 import {
   ACESFilmicToneMapping, PMREMGenerator, Color, DirectionalLight, Fog, HemisphereLight, PCFShadowMap,
-  PerspectiveCamera, Scene, SRGBColorSpace, Vector3, WebGLRenderer,
+  HalfFloatType, PerspectiveCamera, Scene, SRGBColorSpace, Vector2, Vector3, WebGLRenderer, WebGLRenderTarget,
 } from 'three';
+import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { setEnvMap } from './env';
@@ -19,6 +23,8 @@ export class Renderer {
   readonly sun: DirectionalLight;
   readonly clouds: Clouds;
   private sky;
+  /** Null when bloom is disabled (?nobloom) or unsupported; then we render straight to screen. */
+  private composer: EffectComposer | null = null;
 
   constructor(readonly container: HTMLElement) {
     this.gl = new WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
@@ -66,8 +72,29 @@ export class Renderer {
     this.controls.maxDistance = 60;
     this.controls.target.set(0, 1, 0);
 
+    this.initBloom();
     window.addEventListener('resize', () => this.resize());
     this.resize();
+  }
+
+  private initBloom(): void {
+    if (new URLSearchParams(location.search).has('nobloom')) return;
+    try {
+      const gl = this.gl;
+      const floatOk = gl.capabilities.isWebGL2 && (gl.extensions.has('EXT_color_buffer_float') || gl.extensions.has('EXT_color_buffer_half_float'));
+      if (!floatOk) return;
+      const target = new WebGLRenderTarget(1, 1, { type: HalfFloatType, samples: 4 });
+      const composer = new EffectComposer(gl, target);
+      composer.addPass(new RenderPass(this.scene, this.camera));
+      // High threshold: only HDR-bright things (fire, glowing particles, stars, specular glints) bloom.
+      const bloom = new UnrealBloomPass(new Vector2(256, 256), 0.32, 0.55, 0.92);
+      composer.addPass(bloom);
+      composer.addPass(new OutputPass()); // applies renderer tone mapping + sRGB
+      this.composer = composer;
+    } catch (e) {
+      console.warn('Bloom unavailable, falling back to direct rendering', e);
+      this.composer = null;
+    }
   }
 
   setView(position: [number, number, number], target: [number, number, number]): void {
@@ -80,6 +107,10 @@ export class Renderer {
     const w = this.container.clientWidth || window.innerWidth;
     const h = this.container.clientHeight || window.innerHeight;
     this.gl.setSize(w, h);
+    if (this.composer) {
+      this.composer.setPixelRatio(this.gl.getPixelRatio());
+      this.composer.setSize(w, h);
+    }
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
   }
@@ -89,7 +120,8 @@ export class Renderer {
     this.clouds.update(dt);
     shake.apply(this.camera);
     this.sky.position.copy(this.camera.position);
-    this.gl.render(this.scene, this.camera);
+    if (this.composer) this.composer.render(dt);
+    else this.gl.render(this.scene, this.camera);
     shake.restore(this.camera);
   }
 }
