@@ -36,6 +36,7 @@ export class Game {
   /** True while the title screen is up (slow camera orbit, no hero input). */
   titleMode = false;
   private keys = new Set<string>();
+  private failed = false;
   private winTimer = 0;
   private terrainKey = '';
   private seen = new Set<string>();
@@ -99,6 +100,7 @@ export class Game {
     this.titleMode = false;
     this.level = level;
     this.won = false;
+    this.failed = false;
     this.words = 0;
     this.lastResult = null;
     clearTimeout(this.winTimer);
@@ -176,6 +178,14 @@ export class Game {
       this.fx.sound('error');
       this.hud.shakeInput();
       this.hud.toasts.show(`“${res.def.name}” won't work in this level.`, { kind: 'warn' });
+      return false;
+    }
+    const range = this.level.castRange;
+    const hero = this.world.hero;
+    if (range && hero?.alive && Math.hypot(this.marker.position.x - hero.x, this.marker.position.z - hero.z) > range) {
+      this.fx.sound('error');
+      this.hud.shakeInput();
+      this.hud.toasts.show(`Your magic only reaches ${range} m in this level. Walk closer, or click nearer to you.`, { kind: 'warn', title: 'Too far away' });
       return false;
     }
     this.hud.pulseInput();
@@ -377,6 +387,14 @@ export class Game {
     if (this.level.hero && (!hero?.alive || hero.y < (this.level.killY ?? -6))) this.respawnHero();
 
     if (this.level.goal && !this.won && this.level.goal.check(this.world)) this.win();
+    else if (this.level.fail && !this.won && !this.failed) {
+      const msg = this.level.fail(this.world);
+      if (msg) {
+        this.failed = true;
+        this.fx.sound('error');
+        this.hud.toasts.show('Press R (or ↺) to try again.', { kind: 'error', title: msg, duration: 8000, actions: [{ label: '↺ Retry', onClick: () => this.loadLevel(this.level.id) }] });
+      }
+    }
   }
 
   /** Runs the simulation for `seconds` without rendering (headless checks, screenshots). */

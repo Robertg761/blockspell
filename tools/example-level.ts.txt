@@ -1,0 +1,24 @@
+import { defineLevel } from '../types';
+import { heroTouches, place } from '../goals';
+
+export default defineLevel({
+  id: 'test',
+  name: 'Test',
+  order: 99,
+  description: 'test',
+  hero: [0, 0, 3],
+  camera: { position: [6, 6, 9], target: [0, 1.5, 0] },
+  spawnPoint: [0, 0, 0.6],
+  setup(world) {
+    world.addStaticBox({ position: [0, 1, -2], size: [4, 2, 4], color: 'stone', topColor: 'grass' });
+    const s = place(world, 'star', [0, 2.2, -2.5], 'star');
+    if (s) world.removeTag(s, 'flies');
+  },
+  goal: { text: 'touch star', check: (w) => heroTouches(w, 'star') },
+  solutions: [
+    { name: 'ladder', steps: [{ cast: 'ladder', at: [0, 0.4] }, { wait: 1.5 }, { walkTo: [0, 0.8] }, { hold: { dir: [0, -1], up: true }, for: 3 }, { walkTo: [0, -2.4], timeout: 4 }] },
+    { name: 'stairs', steps: [{ cast: 'stairs', at: [0, 1.4] }, { wait: 1.5 }, { hold: { dir: [0, -1], up: true }, for: 4 }, { walkTo: [0, -2.4], timeout: 6 }] },
+    { name: 'crate', steps: [{ cast: 'box', at: [0, 0.6] }, { wait: 1.5 }, { hold: { dir: [0, -1], jump: true }, for: 4 }, { walkTo: [0, -2.4], jump: true, timeout: 6 }] },
+    { name: 'stairs-walk', steps: [{ cast: 'stairs', at: [0, 1.4] }, { wait: 1.5 }, { walkTo: [0, -2.4], timeout: 6 }] },
+  ],
+});

@@ -56,6 +56,13 @@ export interface LevelDef {
   hero?: V3;
   /** Hero (and pinned things) falling below this height respawn / reset. Default -6. */
   killY?: number;
+  /**
+   * Max distance (m, horizontal) from the hero that spells may be cast. Stops
+   * "just summon it next to the goal" solutions. Omit for anywhere.
+   */
+  castRange?: number;
+  /** Polled every frame: return a message when the attempt is lost (e.g. "The hut burned down!"). */
+  fail?: (world: GameWorld) => string | null;
   /** Words for 3 stars (2 stars up to 2×par). Each word in a spell counts: "giant balloon" = 2. Default 2. */
   par?: number;
   setup: (world: GameWorld) => void;
