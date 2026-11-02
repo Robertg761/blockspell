@@ -4,7 +4,7 @@ export default defineObject({
   id: 'ball',
   name: 'ball',
   synonyms: ['beach ball', 'bouncy ball', 'sphere', 'orb', 'rubber ball'],
-  category: 'toys',
+  category: 'items',
   blurb: 'Boing! It bounces.',
   tags: ['bouncy'],
   tintKeys: ['red', 'redDark'],

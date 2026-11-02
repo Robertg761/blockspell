@@ -4,7 +4,7 @@ export default defineObject({
   id: 'plank',
   name: 'wood plank',
   synonyms: ['wood plank', 'wooden plank', 'board', 'wood', 'lumber', 'timber', 'plank of wood', 'wooden board'],
-  category: 'stuff',
+  category: 'structures',
   blurb: 'A long board. Bridges gaps, floats, burns.',
   tags: ['flammable', 'floats'],
   tintKeys: ['wood', 'woodDark', 'woodLight'],

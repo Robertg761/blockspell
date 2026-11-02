@@ -4,7 +4,7 @@ export default defineObject({
   id: 'box',
   name: 'box',
   synonyms: ['cardboard box', 'carton', 'package', 'parcel', 'cube'],
-  category: 'stuff',
+  category: 'structures',
   blurb: 'A sturdy cardboard box. Stackable, flammable.',
   tags: ['flammable'],
   tintKeys: ['cardboard', 'cardboardDark'],

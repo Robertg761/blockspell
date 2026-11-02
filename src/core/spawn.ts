@@ -17,10 +17,8 @@ export function createEntity(def: ObjectDef, mods: SpawnModifiers, label: string
   def.build(builder, rng);
   let model = builder.build();
 
-  if (mods.tint) {
-    const keys = def.tintKeys ?? model.keys.filter((k) => !resolveColor(k).emissive);
-    model = remapModel(model, makeTintMap(keys, mods.tint));
-  }
+  const tintMap = mods.tint ? makeTintMap(def.tintKeys ?? model.keys.filter((k) => !resolveColor(k).emissive), mods.tint) : null;
+  if (tintMap) model = remapModel(model, tintMap);
 
   const vs = (def.voxelSize ?? 0.1) * mods.scale;
   const { geometry, size } = meshVoxels(model, { voxelSize: vs });
@@ -35,6 +33,25 @@ export function createEntity(def: ObjectDef, mods: SpawnModifiers, label: string
   visual.add(mesh);
   const root = new Group();
   root.add(visual);
+
+  const partGroups: [string, Group][] = [];
+  const mainAt = (v: number, axis: 0 | 1 | 2) => (v - model.min[axis]) * vs - ([size.x, size.y, size.z][axis]) / 2;
+  for (const part of def.parts ?? []) {
+    const pb = new VoxelBuilder();
+    part.build(pb, rng);
+    let pm = pb.build();
+    if (tintMap) pm = remapModel(pm, tintMap);
+    const center: [number, number, number] = [pm.min[0] + pm.sx / 2, pm.min[1] + pm.sy / 2, pm.min[2] + pm.sz / 2];
+    const pivot = part.pivot ?? center;
+    const pMesh = new Mesh(meshVoxels(pm, { voxelSize: vs }).geometry, materials);
+    pMesh.castShadow = true;
+    pMesh.position.set((center[0] - pivot[0]) * vs, (center[1] - pivot[1]) * vs, (center[2] - pivot[2]) * vs);
+    const g = new Group();
+    g.position.set(mainAt(pivot[0], 0), mainAt(pivot[1], 1), mainAt(pivot[2], 2));
+    g.add(pMesh);
+    visual.add(g);
+    partGroups.push([part.name, g]);
+  }
 
   const phys = def.physics ?? {};
   const physMat = new PhysMaterial(def.id);
@@ -69,6 +86,7 @@ export function createEntity(def: ObjectDef, mods: SpawnModifiers, label: string
   if (phys.uprightOnly) body.angularFactor.set(0, 1, 0);
 
   const e = new Entity(def, body, { root, visual, mesh, materials }, size, mods.scale, label);
+  for (const [name, g] of partGroups) e.parts.set(name, g);
   for (const t of def.tags) e.tags.add(t);
   for (const t of mods.addTags) e.tags.add(t);
   for (const t of mods.removeTags) e.tags.delete(t);

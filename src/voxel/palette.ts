@@ -68,6 +68,18 @@ export const PALETTE: Record<string, PaletteEntry> = {
   goal: { color: '#ffd84a', emissive: true },
 };
 
+/**
+ * Adds palette entries from object modules (call at module top level).
+ * Prefix keys with your category to avoid clobbering, e.g. 'catFur'.
+ */
+export function definePalette(entries: Record<string, PaletteEntry | string>): void {
+  for (const [k, v] of Object.entries(entries)) {
+    if (PALETTE[k]) console.warn(`[blockspell] palette key "${k}" redefined`);
+    PALETTE[k] = typeof v === 'string' ? { color: v } : v;
+    cache.delete(k);
+  }
+}
+
 export interface ResolvedColor {
   color: Color;
   emissive: boolean;

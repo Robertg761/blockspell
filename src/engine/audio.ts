@@ -4,7 +4,9 @@
  */
 export type SoundName =
   | 'pop' | 'boing' | 'whoosh' | 'thud' | 'chomp' | 'sizzle' | 'bark'
-  | 'error' | 'win' | 'click' | 'balloonPop' | 'ignite' | 'magic' | 'poof' | 'squeak';
+  | 'error' | 'win' | 'click' | 'balloonPop' | 'ignite' | 'magic' | 'poof' | 'squeak'
+  | 'boom' | 'splash' | 'shatter' | 'clank' | 'meow' | 'tweet' | 'moo' | 'beep' | 'chime'
+  | 'rumble' | 'quack' | 'ribbit' | 'buzz' | 'freeze' | 'oink' | 'engine';
 
 interface PlayOpts {
   pitch?: number;
@@ -74,6 +76,65 @@ const SOUNDS: Record<SoundName, Voice> = {
   },
   squeak: (a, t, p, v) => {
     a.tone({ t, f0: 900 * p, f1: 1500 * p, dur: 0.1, type: 'sine', vol: 0.2 * v, vibrato: 30 });
+  },
+  boom: (a, t, p, v) => {
+    a.tone({ t, f0: 110 * p, f1: 28 * p, dur: 0.9, type: 'sine', vol: 0.9 * v });
+    a.noise({ t, dur: 1.1, freq: 900 * p, freqEnd: 120 * p, q: 0.5, vol: 0.8 * v, type: 'lowpass' });
+    a.noise({ t, dur: 0.15, freq: 3000, q: 0.6, vol: 0.35 * v });
+  },
+  splash: (a, t, p, v) => {
+    a.noise({ t, dur: 0.5, freq: 1800 * p, freqEnd: 500 * p, q: 0.9, vol: 0.4 * v, attack: 0.01 });
+    for (let i = 0; i < 3; i++) a.tone({ t: t + 0.05 + i * 0.06, f0: (700 + i * 230) * p, f1: (1100 + i * 200) * p, dur: 0.07, type: 'sine', vol: 0.08 * v });
+  },
+  shatter: (a, t, p, v) => {
+    a.noise({ t, dur: 0.35, freq: 5200 * p, q: 1.2, vol: 0.45 * v, type: 'highpass' });
+    for (let i = 0; i < 5; i++) a.tone({ t: t + i * 0.035, f0: (2400 + i * 520) * p, dur: 0.12, type: 'triangle', vol: 0.06 * v });
+  },
+  clank: (a, t, p, v) => {
+    a.tone({ t, f0: 620 * p, dur: 0.35, type: 'square', vol: 0.08 * v, filter: 2600 });
+    a.tone({ t, f0: 931 * p, dur: 0.3, type: 'triangle', vol: 0.12 * v });
+    a.noise({ t, dur: 0.05, freq: 2000, q: 2, vol: 0.2 * v });
+  },
+  meow: (a, t, p, v) => {
+    a.tone({ t, f0: 520 * p, f1: 760 * p, dur: 0.14, type: 'sawtooth', vol: 0.1 * v, filter: 1800 });
+    a.tone({ t: t + 0.13, f0: 760 * p, f1: 430 * p, dur: 0.28, type: 'sawtooth', vol: 0.1 * v, filter: 1600 });
+  },
+  tweet: (a, t, p, v) => {
+    for (let i = 0; i < 3; i++) a.tone({ t: t + i * 0.09, f0: 2600 * p, f1: 3600 * p, dur: 0.06, type: 'sine', vol: 0.12 * v });
+  },
+  moo: (a, t, p, v) => {
+    a.tone({ t, f0: 150 * p, f1: 115 * p, dur: 0.9, type: 'sawtooth', vol: 0.16 * v, filter: 700, vibrato: 5 });
+  },
+  beep: (a, t, p, v) => {
+    a.tone({ t, f0: 880 * p, dur: 0.08, type: 'square', vol: 0.07 * v, filter: 3000 });
+    a.tone({ t: t + 0.1, f0: 1320 * p, dur: 0.08, type: 'square', vol: 0.07 * v, filter: 3000 });
+  },
+  chime: (a, t, p, v) => {
+    [0, 7, 12, 19].forEach((semi, i) => a.tone({ t: t + i * 0.06, f0: 1046 * p * 2 ** (semi / 12), dur: 0.5, type: 'sine', vol: 0.1 * v }));
+  },
+  rumble: (a, t, p, v) => {
+    a.noise({ t, dur: 0.8, freq: 220 * p, q: 0.7, vol: 0.45 * v, type: 'lowpass', attack: 0.08 });
+    a.tone({ t, f0: 55 * p, f1: 70 * p, dur: 0.8, type: 'sawtooth', vol: 0.1 * v, filter: 300 });
+  },
+  quack: (a, t, p, v) => {
+    a.tone({ t, f0: 700 * p, f1: 420 * p, dur: 0.16, type: 'sawtooth', vol: 0.12 * v, filter: 1500 });
+  },
+  ribbit: (a, t, p, v) => {
+    for (let i = 0; i < 2; i++) a.tone({ t: t + i * 0.12, f0: 300 * p, f1: 180 * p, dur: 0.09, type: 'square', vol: 0.08 * v, filter: 1100, vibrato: 60 });
+  },
+  buzz: (a, t, p, v) => {
+    a.tone({ t, f0: 210 * p, f1: 230 * p, dur: 0.5, type: 'sawtooth', vol: 0.05 * v, filter: 1200, vibrato: 40 });
+  },
+  freeze: (a, t, p, v) => {
+    a.noise({ t, dur: 0.5, freq: 7000 * p, q: 3, vol: 0.2 * v, type: 'highpass' });
+    [0, 3, 7].forEach((semi, i) => a.tone({ t: t + i * 0.05, f0: 1760 * p * 2 ** (semi / 12), dur: 0.35, type: 'sine', vol: 0.07 * v }));
+  },
+  oink: (a, t, p, v) => {
+    for (let i = 0; i < 2; i++) a.tone({ t: t + i * 0.15, f0: 280 * p, f1: 220 * p, dur: 0.1, type: 'sawtooth', vol: 0.12 * v, filter: 900 });
+  },
+  engine: (a, t, p, v) => {
+    a.tone({ t, f0: 70 * p, f1: 110 * p, dur: 0.5, type: 'sawtooth', vol: 0.12 * v, filter: 500 });
+    a.noise({ t, dur: 0.5, freq: 300 * p, q: 1, vol: 0.15 * v });
   },
 };
 

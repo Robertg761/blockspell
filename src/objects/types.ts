@@ -18,6 +18,25 @@ export interface ObjectPhysics {
   angularDamping?: number;
   /** Only allow rotation around Y (animals, fire). */
   uprightOnly?: boolean;
+  /** Static: snaps onto the ground where it's cast and never moves (trees, walls, pools). */
+  anchored?: boolean;
+}
+
+/** Spellbook sections. */
+export type ObjectCategory = 'animals' | 'vehicles' | 'structures' | 'nature' | 'food' | 'items';
+
+/**
+ * A separately meshed sub-part (rotor, fan blade, wheel…) that can be animated
+ * in `update` via `e.parts.get(name)`. It is built in the same voxel
+ * coordinate space as the main model, so it lines up automatically. The part's
+ * Group origin sits at `pivot` (voxel coords, default: the part's own center),
+ * so rotating it spins it around that point. Parts are cosmetic: they have no
+ * collision shape, but they are tinted and scaled like the main model.
+ */
+export interface PartDef {
+  name: string;
+  build: (b: VoxelBuilder, rng: Rng) => void;
+  pivot?: [number, number, number];
 }
 
 /**
@@ -48,7 +67,18 @@ export interface ObjectDef {
   /** Short flavor text shown on spawn. */
   blurb?: string;
   /** Category for the spellbook UI. */
-  category?: string;
+  category?: ObjectCategory;
+  /**
+   * What this eater eats (needs the `eats` tag): object ids or tags,
+   * e.g. ['mouse', 'fish'] or ['edible']. Default: anything `edible`.
+   */
+  diet?: string[];
+  /** Call sound for animals (barks when poked / scared). */
+  voice?: SoundName;
+  /** Animated cosmetic sub-meshes; see PartDef. */
+  parts?: PartDef[];
+  /** Object ids spawned when this breaks (fragile) or burns up (e.g. crate -> ['plank']). */
+  debris?: string[];
   onSpawn?: (e: Entity, world: GameWorld) => void;
   /** Object-specific per-frame logic (cosmetic animation etc.). */
   update?: (e: Entity, world: GameWorld, dt: number) => void;

@@ -4,7 +4,7 @@ export default defineObject({
   id: 'balloon',
   name: 'balloon',
   synonyms: ['party balloon', 'helium balloon', 'baloon', 'ballon'],
-  category: 'toys',
+  category: 'items',
   blurb: 'Floats up, up, and away. Keep it away from fire!',
   tags: ['flies', 'poppable'],
   tintKeys: ['balloon', 'balloonShine'],

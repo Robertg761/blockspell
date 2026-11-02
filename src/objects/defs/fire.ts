@@ -5,7 +5,7 @@ export default defineObject({
   id: 'fire',
   name: 'fire',
   synonyms: ['flame', 'flames', 'campfire', 'bonfire', 'blaze', 'inferno'],
-  category: 'elements',
+  category: 'nature',
   blurb: 'Hot! Lights flammable things. Water puts it out.',
   tags: ['hot'],
   burstColor: '#ff8a2a',

@@ -4,7 +4,7 @@ export default defineObject({
   id: 'ladder',
   name: 'ladder',
   synonyms: ['stepladder', 'step ladder', 'wooden ladder', 'rope ladder'],
-  category: 'tools',
+  category: 'structures',
   blurb: 'Lean it on something and climb.',
   tags: ['climbable', 'flammable'],
   tintKeys: ['wood', 'woodDark'],

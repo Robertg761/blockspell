@@ -28,6 +28,8 @@ export class Entity {
   readonly visual: Group;
   readonly mesh: Mesh;
   readonly materials: Material[];
+  /** Animated sub-parts from ObjectDef.parts, keyed by name (origin = pivot). */
+  readonly parts = new Map<string, Group>();
   readonly tags = new Set<Tag>();
   /** Behaviors currently attached (derived from tags). */
   behaviors: BehaviorDef[] = [];
