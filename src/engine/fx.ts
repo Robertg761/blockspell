@@ -81,12 +81,31 @@ export class Effects {
     this.burst(at, { count, color, speed: 5, up: 2, gravity: 4, drag: 2.5, life: 0.7, size: 0.08, glow: true, spread: 0.3 });
   }
 
-  /** Level-complete celebration: confetti fountain + fanfare around `at`. */
+  /** Level-complete celebration: confetti, firework bursts, shake and fanfare. */
   celebrate(at: P3): void {
-    this.sound('win');
-    this.addShake(0.3);
-    for (let i = 0; i < 4; i++)
-      this.burst({ x: at.x, y: at.y + 2, z: at.z }, { count: 40, color: ['#ff5d6c', '#ffd84a', '#52b848', '#3d7fe0', '#9256d6'], speed: 8, up: 6, size: 0.12, life: 1.6, gravity: 6, glow: i % 2 === 0 });
+    this.sound('fanfare');
+    this.sound('confetti', { volume: 0.8 });
+    this.addShake(0.35);
+    const colors = ['#ff5d6c', '#ffd84a', '#52b848', '#3d7fe0', '#9256d6', '#ff9a3c', '#ffffff'];
+    // paper confetti: two pops from either side of the hero, then a lingering shower
+    for (const side of [-1, 1])
+      this.burst({ x: at.x + side * 0.8, y: at.y + 1.2, z: at.z }, { count: 70, color: colors, confetti: true, speed: 4.5, up: 7, spread: 0.3, size: 0.13, life: 4.5, gravity: 7, drag: 1.4 });
+    const later = (delay: number, fn: () => void) => this.tweens.add({ delay, duration: 0.01, update: () => {}, done: fn });
+    for (let i = 0; i < 3; i++)
+      later(0.3 + i * 0.35, () =>
+        this.burst({ x: at.x + (Math.random() - 0.5) * 5, y: at.y + 5 + Math.random(), z: at.z + (Math.random() - 0.5) * 5 }, { count: 40, color: colors, confetti: true, speed: 2.5, up: 0, spread: 1.5, size: 0.13, life: 4, gravity: 3, drag: 1.5 }));
+    // fireworks: radial bursts of glowing sparks with a white glitter core
+    const palettes = [['#ff5d6c', '#ffb0b8'], ['#ffd84a', '#fff6a8'], ['#6ec8ff', '#ffffff'], ['#b98cff', '#ffd0ff'], ['#7dff9a', '#eaffd0']];
+    for (let i = 0; i < 5; i++) {
+      const pal = palettes[(i + Math.floor(Math.random() * palettes.length)) % palettes.length];
+      later(0.15 + i * 0.32 + Math.random() * 0.15, () => {
+        const p = { x: at.x + (Math.random() - 0.5) * 8, y: at.y + 4 + Math.random() * 3.5, z: at.z + (Math.random() - 0.5) * 8 };
+        this.burst(p, { count: 60, color: pal, glow: true, speed: 5.5, up: 0, spread: 0.1, size: 0.1, life: 1.3, gravity: 3.5, drag: 2.2 });
+        this.burst(p, { count: 18, color: '#ffffff', glow: true, speed: 2, up: 0, spread: 0.1, size: 0.07, life: 0.9, gravity: 2, drag: 1.5 });
+        this.sound(i % 2 ? 'pop' : 'chime', { pitch: 0.8 + Math.random() * 0.6, volume: 0.45 });
+        this.addShake(0.06);
+      });
+    }
   }
 
   update(dt: number): void {

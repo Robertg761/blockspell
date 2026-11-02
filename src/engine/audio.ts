@@ -1,3 +1,5 @@
+import { Music } from './music';
+
 /**
  * All sound is synthesized with WebAudio at runtime — no audio files.
  * Add a new sound by adding a case to `SOUNDS`.
@@ -6,7 +8,8 @@ export type SoundName =
   | 'pop' | 'boing' | 'whoosh' | 'thud' | 'chomp' | 'sizzle' | 'bark'
   | 'error' | 'win' | 'click' | 'balloonPop' | 'ignite' | 'magic' | 'poof' | 'squeak'
   | 'boom' | 'splash' | 'shatter' | 'clank' | 'meow' | 'tweet' | 'moo' | 'beep' | 'chime'
-  | 'rumble' | 'quack' | 'ribbit' | 'buzz' | 'freeze' | 'oink' | 'engine';
+  | 'rumble' | 'quack' | 'ribbit' | 'buzz' | 'freeze' | 'oink' | 'engine'
+  | 'jump' | 'land' | 'step' | 'climb' | 'fanfare' | 'star' | 'confetti' | 'uiClick';
 
 interface PlayOpts {
   pitch?: number;
@@ -136,6 +139,47 @@ const SOUNDS: Record<SoundName, Voice> = {
     a.tone({ t, f0: 70 * p, f1: 110 * p, dur: 0.5, type: 'sawtooth', vol: 0.12 * v, filter: 500 });
     a.noise({ t, dur: 0.5, freq: 300 * p, q: 1, vol: 0.15 * v });
   },
+  jump: (a, t, p, v) => {
+    a.tone({ t, f0: 280 * p, f1: 560 * p, dur: 0.13, type: 'sine', vol: 0.3 * v });
+    a.noise({ t, dur: 0.06, freq: 1800 * p, q: 0.8, vol: 0.04 * v });
+  },
+  land: (a, t, p, v) => {
+    a.tone({ t, f0: 150 * p, f1: 60 * p, dur: 0.14, type: 'sine', vol: 0.4 * v });
+    a.noise({ t, dur: 0.08, freq: 500 * p, q: 0.7, vol: 0.14 * v });
+  },
+  step: (a, t, p, v) => {
+    a.noise({ t, dur: 0.05, freq: 600 * p, q: 0.9, vol: 0.05 * v });
+    a.tone({ t, f0: 110 * p, f1: 70 * p, dur: 0.05, type: 'sine', vol: 0.05 * v });
+  },
+  climb: (a, t, p, v) => {
+    a.tone({ t, f0: 720 * p, f1: 520 * p, dur: 0.05, type: 'triangle', vol: 0.18 * v, filter: 2500 });
+    a.noise({ t, dur: 0.03, freq: 1500 * p, q: 2, vol: 0.06 * v });
+  },
+  fanfare: (a, t, p, v) => {
+    const brass = (at: number, semis: number[], dur: number, vol: number) =>
+      semis.forEach((s) => a.tone({ t: at, f0: 392 * p * 2 ** (s / 12), dur, type: 'sawtooth', vol: vol * v, filter: 2200 }));
+    brass(t, [0], 0.14, 0.07);
+    brass(t + 0.14, [0], 0.14, 0.07);
+    brass(t + 0.28, [0], 0.14, 0.07);
+    brass(t + 0.44, [5, 9], 0.3, 0.07);
+    brass(t + 0.78, [4, 12, 16], 0.9, 0.08);
+    [12, 16, 19, 24, 28, 31].forEach((s, i) =>
+      a.tone({ t: t + 0.8 + i * 0.07, f0: 523 * p * 2 ** (s / 12), dur: 0.6, type: 'sine', vol: 0.09 * v }));
+    a.noise({ t: t + 0.78, dur: 0.5, freq: 6500, q: 1, vol: 0.06 * v, type: 'highpass' });
+  },
+  star: (a, t, p, v) => {
+    a.tone({ t, f0: 1320 * p, dur: 0.5, type: 'sine', vol: 0.2 * v });
+    a.tone({ t, f0: 2640 * p, dur: 0.3, type: 'triangle', vol: 0.08 * v });
+    a.tone({ t: t + 0.07, f0: 1980 * p, dur: 0.35, type: 'sine', vol: 0.1 * v });
+  },
+  confetti: (a, t, p, v) => {
+    a.noise({ t, dur: 0.12, freq: 3500 * p, q: 0.5, vol: 0.4 * v, type: 'highpass' });
+    a.tone({ t, f0: 240 * p, f1: 70 * p, dur: 0.08, type: 'sine', vol: 0.25 * v });
+    for (let i = 0; i < 8; i++) a.noise({ t: t + 0.1 + Math.random() * 0.6, dur: 0.03, freq: 5000 + Math.random() * 3000, q: 1, vol: 0.05 * v, type: 'highpass' });
+  },
+  uiClick: (a, t, p, v) => {
+    a.tone({ t, f0: 900 * p, f1: 700 * p, dur: 0.05, type: 'sine', vol: 0.12 * v });
+  },
 };
 
 interface ToneOpts {
@@ -216,11 +260,26 @@ class Synth {
   }
 }
 
+const MUTE_KEY = 'blockspell.muted';
+
+/** Saved mute preference (also used by the HUD to show the button state). */
+export function loadMuted(): boolean {
+  try { return localStorage.getItem(MUTE_KEY) === '1'; } catch { return false; }
+}
+
 export class Audio {
+  /** Most recently created instance, for UI code without an Effects handle. */
+  static instance: Audio | null = null;
   private synth: Synth | null = null;
   private master: GainNode | null = null;
   private lastPlayed = new Map<SoundName, number>();
-  muted = false;
+  /** Background music; available after `unlock()`. */
+  music: Music | null = null;
+  muted = loadMuted();
+
+  constructor() {
+    Audio.instance = this;
+  }
 
   /** Must be called from a user gesture (browsers block autoplay). */
   unlock(): void {
@@ -242,10 +301,13 @@ export class Audio {
     const d = buf.getChannelData(0);
     for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
     this.synth = new Synth(ctx, this.master, buf);
+    this.music = new Music(this.synth, this.master);
+    this.music.start();
   }
 
   setMuted(m: boolean): void {
     this.muted = m;
+    try { localStorage.setItem(MUTE_KEY, m ? '1' : '0'); } catch { /* private mode */ }
     if (this.master) this.master.gain.value = m ? 0 : 0.7;
   }
 
@@ -259,5 +321,6 @@ export class Audio {
     this.lastPlayed.set(name, now);
     const pitch = (opts.pitch ?? 1) * (0.95 + Math.random() * 0.1);
     SOUNDS[name](s, now + 0.005, pitch, opts.volume ?? 1);
+    if (name === 'fanfare') this.music?.duck(3);
   }
 }

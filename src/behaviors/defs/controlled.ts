@@ -91,6 +91,13 @@ export default defineBehavior({
     const bob = climbing ? Math.sin(world.time * 16) * 0.03 : sp > 0.4 && (e.state.airTime as number) < 0.1 ? Math.abs(Math.sin(world.time * 13)) * 0.06 : 0;
     e.visual.position.y += (bob - e.visual.position.y) * Math.min(1, dt * 20);
     // footstep dust
+    if (sp > 1.5 && (e.state.airTime as number) === 0 && !climbing) {
+      e.state.stepT = ((e.state.stepT as number) || 0) + dt * Math.min(1.4, sp / 3);
+      if ((e.state.stepT as number) > 0.32) {
+        e.state.stepT = 0;
+        world.fx.sound('step', { volume: 0.6 });
+      }
+    }
     if (sp > 1.5 && (e.state.airTime as number) === 0 && Math.random() < dt * 7)
       world.fx.burst({ x: e.x, y: feet(e) + 0.05, z: e.z }, { count: 3, color: ['#e8dcc0', '#cdbf9f'], speed: 0.8, up: 0.6, size: 0.07, life: 0.4, gravity: 1, grow: true });
   },
@@ -103,7 +110,7 @@ export default defineBehavior({
     e.state.airTime = grounded ? 0 : wasAir + h;
     if (grounded && wasAir > 0.35 && (e.state.lastVy as number) < -4) {
       world.fx.burst({ x: e.x, y: feet(e) + 0.05, z: e.z }, { count: 12, color: ['#e8dcc0', '#ffffff'], speed: 2.2, up: 0.8, size: 0.1, life: 0.5, gravity: 1, grow: true });
-      world.fx.sound('thud', { volume: 0.35, pitch: 1.4 });
+      world.fx.sound('land', { volume: 0.8 });
     }
     e.state.lastVy = b.velocity.y;
 
@@ -118,13 +125,13 @@ export default defineBehavior({
     const ladder = climbableAt(e, world);
     const wantsUp = inp.up || inp.jump;
     if (ladder && (wantsUp || (e.state.climbing && inp.down))) {
-      if (!e.state.climbing) world.fx.sound('click', { pitch: 0.7, volume: 0.5 });
+      if (!e.state.climbing) world.fx.sound('climb', { volume: 0.8 });
       e.state.climbing = true;
       b.collisionFilterMask = GROUP.STATIC; // don't shove the ladder away
       b.velocity.y = inp.down ? -HERO.climb : HERO.climb;
       b.velocity.x += (mx * HERO.speed * 0.5 - b.velocity.x) * HERO.groundAccel;
       b.velocity.z += (mz * HERO.speed * 0.5 - b.velocity.z) * HERO.groundAccel;
-      if (Math.random() < h * 5) world.fx.sound('click', { pitch: 0.6 + Math.random() * 0.2, volume: 0.35 });
+      if (Math.random() < h * 5) world.fx.sound('climb', { pitch: 0.9 + Math.random() * 0.2, volume: 0.5 });
       e.state.jumpBuf = 0;
       return;
     }
@@ -158,7 +165,7 @@ export default defineBehavior({
       b.velocity.y = HERO.jump;
       e.state.airTime = HERO.coyote; // no double jumps off coyote time
       e.state.jumpBuf = 0;
-      world.fx.sound('boing', { volume: 0.25, pitch: 1.5 });
+      world.fx.sound('jump', { volume: 0.7 });
       world.fx.burst({ x: e.x, y: feet(e) + 0.05, z: e.z }, { count: 8, color: ['#e8dcc0', '#ffffff'], speed: 1.6, up: 0.5, size: 0.08, life: 0.4, gravity: 1, grow: true });
     }
 

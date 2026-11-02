@@ -19,6 +19,8 @@ export interface BurstOptions {
   glow?: boolean;
   /** Particles grow instead of shrink (smoke). */
   grow?: boolean;
+  /** Flat paper bits that flutter and tumble down slowly (confetti). */
+  confetti?: boolean;
 }
 
 const colorCache = new Map<string, Color>();
@@ -39,6 +41,9 @@ interface Particle {
   gravity: number;
   drag: number;
   grow: boolean;
+  /** 0 = normal; otherwise flutter phase (confetti). */
+  flutter: number;
+  age: number;
   color: Color;
 }
 
@@ -75,7 +80,7 @@ class Pool {
     }
     const pt = this.free.pop() ?? {
       p: new Vector3(), v: new Vector3(), rot: new Euler(), spin: new Vector3(),
-      life: 0, max: 1, size: 0, gravity: 0, drag: 0, grow: false, color: new Color(),
+      life: 0, max: 1, size: 0, gravity: 0, drag: 0, grow: false, flutter: 0, age: 0, color: new Color(),
     };
     this.items.push(pt);
     return pt;
@@ -92,7 +97,15 @@ class Pool {
         this.free.push(pt);
         continue;
       }
+      pt.age += dt;
       pt.v.y -= pt.gravity * dt;
+      if (pt.flutter) {
+        // paper: terminal velocity, side-to-side sway, flapping tumble
+        if (pt.v.y < -1.1) pt.v.y = -1.1;
+        pt.p.x += Math.sin(pt.age * 3.1 + pt.flutter) * 0.7 * dt;
+        pt.p.z += Math.cos(pt.age * 2.3 + pt.flutter * 1.7) * 0.7 * dt;
+        pt.rot.x += Math.sin(pt.age * 5 + pt.flutter) * 6 * dt;
+      }
       pt.v.multiplyScalar(Math.max(0, 1 - pt.drag * dt));
       pt.p.addScaledVector(pt.v, dt);
       pt.rot.x += pt.spin.x * dt;
@@ -103,7 +116,8 @@ class Pool {
       const pt = items[i];
       const k = pt.life / pt.max;
       const sz = pt.size * (pt.grow ? 0.4 + (1 - k) * 1.2 : Math.min(1, k * 2.2));
-      this.s.set(sz, sz, sz);
+      if (pt.flutter) this.s.set(sz * 1.5, sz * 0.12, sz);
+      else this.s.set(sz, sz, sz);
       this.q.setFromEuler(pt.rot);
       this.m.compose(pt.p, this.q, this.s);
       this.mesh.setMatrixAt(i, this.m);
@@ -151,6 +165,8 @@ export class Particles {
       pt.gravity = o.gravity ?? 9;
       pt.drag = o.drag ?? 1;
       pt.grow = !!o.grow;
+      pt.age = 0;
+      pt.flutter = o.confetti ? 0.1 + Math.random() * 6 : 0;
       pt.color.copy(cachedColor(colors[Math.floor(Math.random() * colors.length)]));
     }
   }

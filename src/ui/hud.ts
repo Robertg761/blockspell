@@ -1,5 +1,6 @@
 import type { LevelRecord } from '../levels/progress';
 import type { LevelDef } from '../levels/types';
+import { Audio, loadMuted } from '../engine/audio';
 import { h } from './dom';
 import { Toasts } from './toast';
 
@@ -40,7 +41,7 @@ export class Hud {
   private history: string[] = [];
   private historyIdx = -1;
   private hint = '';
-  private muted = false;
+  private muted = loadMuted();
   readonly bookBtn: HTMLButtonElement;
   /** Focus the spell bar after closing overlays (off in hero levels, where keys move the hero). */
   autoFocus = true;
@@ -74,6 +75,7 @@ export class Hud {
       },
     });
 
+    muteBtn.classList.toggle('off', this.muted);
     this.bookBtn = h('button.icon-btn', { title: 'Spellbook (Tab)', text: '📖', onClick: () => cb.onSpellbook() });
 
     root.append(
@@ -184,6 +186,8 @@ export class Hud {
       ]),
     );
     this.overlay.classList.remove('hidden');
+    for (let i = 0; i < info.stars; i++)
+      setTimeout(() => Audio.instance?.play('star', { pitch: 2 ** ((i * 4) / 12) }), (0.25 + i * 0.22) * 1000 + 120);
     function next(n: LevelDef | null, go: () => void, hud: Hud) {
       return n
         ? h('button.btn', { text: `Next: ${n.name} →`, onClick: () => { hud.hideOverlay(); go(); } })
