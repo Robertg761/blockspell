@@ -7,7 +7,7 @@ A level is one file in `src/levels/defs/NN-id.ts` default-exporting `defineLevel
 - `terrain`: island overrides (`{ flatRadius, hilliness, trees, rocks, seed }`), or `null` for no
   island at all (build floating platforms from static boxes over the sky void).
   The default island is flat within ~9 m of the origin at y = 0, hilly beyond.
-- `world.addStaticBox({ position: [cx, cy, cz], size: [sx, sy, sz], color, topColor })` — static
+- `world.addStaticBox({ position: [cx, cy, cz], size: [sx, sy, sz], color, topColor })`: static
   voxel blocks (center + size, 0.25 m voxels). Palette keys: see `src/voxel/palette.ts`
   (e.g. 'stone', 'grass', 'dirt', 'wood', 'woodDark', 'sand', 'snow').
 - `place(world, 'dog', [x, y, z], 'pup')` (from `../goals`) spawns an object with its base at y,

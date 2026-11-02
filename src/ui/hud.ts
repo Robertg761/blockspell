@@ -257,7 +257,7 @@ export class Hud {
         opts.logo ?? h('div.intro-logo', { text: '▣' }),
         h('h1', { text: 'Blockspell' }),
         h('p.tagline', { text: 'Write a word. Make it real.' }),
-        h('p', { text: 'Type the name of a thing — add adjectives like “big”, “blue” or “flaming” — and watch it appear. Use what you summon to solve each puzzle.' }),
+        h('p', { text: 'Type the name of a thing (add adjectives like “big”, “blue” or “flaming”) and watch it appear. Use what you summon to solve each puzzle.' }),
         h('div.panel-actions', {}, [
           h('button.btn.big', { text: opts.playLabel, onClick: go(opts.onPlay) }),
           h('button.btn.big.secondary', { text: '☰ Levels', onClick: () => { this.cb.onStart(); opts.onLevels(); } }),

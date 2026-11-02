@@ -15,7 +15,7 @@ const SECTIONS: { id: ObjectCategory; title: string; icon: string }[] = [
 
 /**
  * Tracks which nouns and adjectives the player has discovered (saved in
- * localStorage, so it survives reloads — still fully offline) and renders the
+ * localStorage, so it survives reloads while staying fully offline) and renders the
  * spellbook side panel.
  */
 export class Spellbook {
@@ -117,7 +117,7 @@ export class Spellbook {
               : h('span.sb-word.unknown', { text: '?', title: 'Not discovered yet' }),
           )),
         ]),
-        h('p.sb-tip', { text: 'Tip: stack adjectives — “giant flaming dog”, “tiny golden rocket”, “angry ghostly cow”.' }),
+        h('p.sb-tip', { text: 'Tip: stack adjectives, like “giant flaming dog”, “tiny golden rocket” or “angry ghostly cow”.' }),
       ]),
     );
   }

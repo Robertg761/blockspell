@@ -137,7 +137,7 @@ export default [
     name: 'bucket',
     synonyms: ['pail', 'water bucket', 'bucket of water'],
     category: 'items',
-    blurb: 'A bucket of water — splashes out fires.',
+    blurb: 'A bucket of water. Splashes out fires.',
     tags: ['wet', 'metal'],
     tintKeys: ['bucketMetal', 'bucketDark'],
     burstColor: '#7cc8f2',

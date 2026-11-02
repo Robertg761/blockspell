@@ -5,7 +5,7 @@ export class Registry<T extends { id: string }> {
   constructor(readonly kind: string) {}
 
   register(item: T): T {
-    if (this.items.has(item.id)) console.warn(`[blockspell] duplicate ${this.kind} id "${item.id}" — overriding`);
+    if (this.items.has(item.id)) console.warn(`[blockspell] duplicate ${this.kind} id "${item.id}", overriding`);
     this.items.set(item.id, item);
     return item;
   }

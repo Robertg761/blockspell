@@ -3,17 +3,17 @@
 Blockspell is a browser voxel sandbox: the player types a word ("giant flaming dog")
 and a voxel object spawns into a cannon-es physics world. Objects are pure data +
 a procedural voxel model. Interactions come from **behavior tags**, which are
-implemented centrally in `src/behaviors/defs/` — you only choose tags and props.
+implemented centrally in `src/behaviors/defs/`; you only choose tags and props.
 
 Don't name or reference other games. Everything is offline: no URLs, no
 assets, no network. Models are built in code.
 
 ## Read first
 
-- `src/objects/types.ts` — `ObjectDef`, `PartDef`, `ObjectPhysics`, `ObjectCategory`
-- `src/core/tags.ts` — the tag vocabulary (`KNOWN_TAGS`) and the props each tag reads
-- `src/voxel/builder.ts` — the voxel DSL (`box`, `ellipsoid`, `sphere`, `cylinderY`, `layers`, `paint`, `mirrorX`)
-- `src/voxel/palette.ts` — shared color keys and `definePalette`
+- `src/objects/types.ts`: `ObjectDef`, `PartDef`, `ObjectPhysics`, `ObjectCategory`
+- `src/core/tags.ts`: the tag vocabulary (`KNOWN_TAGS`) and the props each tag reads
+- `src/voxel/builder.ts`: the voxel DSL (`box`, `ellipsoid`, `sphere`, `cylinderY`, `layers`, `paint`, `mirrorX`)
+- `src/voxel/palette.ts`: shared color keys and `definePalette`
 - Examples: `src/objects/defs/dog.ts`, `fire.ts`, `balloon.ts`, `ladder.ts`
 - Sound names: `SoundName` in `src/engine/audio.ts`
 
@@ -56,16 +56,16 @@ export default [
 
 - Y is up, the object's **front faces +Z**. Coordinates are integer voxels; `box` bounds are inclusive.
 - `voxelSize` (default 0.1 m) × voxel extents = world size. Aim for plausible game sizes:
-  small items 0.2–0.5 m, animals 0.4–1.5 m, vehicles 1.5–3 m, trees/structures up to ~4 m.
+  small items 0.2 to 0.5 m, animals 0.4 to 1.5 m, vehicles 1.5 to 3 m, trees/structures up to ~4 m.
   Keep models ≤ ~40 voxels on any axis and ≤ ~6000 voxels.
 - Make every object **instantly recognizable** from a 3/4 view: exaggerated silhouettes,
-  2–3 tones per material (base/dark/light), eyes on animals (`eye` + `eyeShine`), small details.
+  2 or 3 tones per material (base/dark/light), eyes on animals (`eye` + `eyeShine`), small details.
   Use `rng` for small per-spawn variation (spots, knots) if you like.
 - Prefer existing palette keys (wood, woodDark, metal, stone, leaf, bark, fur…); add new ones with
   `definePalette` (prefixed names) or use `'#rrggbb'` strings inline.
 - `tintKeys` = the "main color" keys (so "red car" repaints the body, not the tires/windows).
 - Physics: `mass` in kg (keep between 0.05 and 80 for solver stability; scale-adjusted automatically),
-  `shape: 'auto'` (box decomposition, `maxBoxes` 2–10), `'box'` or `'sphere'`. Animals:
+  `shape: 'auto'` (box decomposition, `maxBoxes` 2 to 10), `'box'` or `'sphere'`. Animals:
   `uprightOnly: true`. Things that must stay put (trees, walls, pools, doors): `anchored: true`.
 - Animated bits (rotors, fan blades, wheels, flags): use `parts` and spin them in `update`:
 
@@ -82,7 +82,7 @@ update(e, _world, dt) { e.parts.get('rotor')!.rotation.y += dt * 25; },
 
 Use only tags listed in `KNOWN_TAGS` (`src/core/tags.ts`). Numeric tuning goes in `props`
 with the names given there (e.g. `{ burnTime: 6 }`, `{ lift: 1.4, ceiling: 5 }`, `{ thrust: 2.5, fuel: 4 }`).
-Don't write behavior logic yourself — just tag. `debris: ['plank']` spawns objects when this breaks.
+Don't write behavior logic yourself, just tag. `debris: ['plank']` spawns objects when this breaks.
 
 ## Words
 
@@ -95,11 +95,11 @@ Don't write behavior logic yourself — just tag. `debris: ['plank']` spawns obj
 
 ## Verify
 
-1. `npx tsc --noEmit` — fix errors in **your** file; ignore errors in files you don't own.
-2. Screenshot your models (dev server on port 5199 — start it with
+1. `npx tsc --noEmit`, then fix errors in **your** file; ignore errors in files you don't own.
+2. Screenshot your models (dev server on port 5199; start it with
    `npx vite --port 5199 --strictPort &` if `curl -s localhost:5199 >/dev/null` fails):
    `tools/shot.sh "file=<yourfile>" /tmp/<yourfile>.png` then view the PNG.
    Also try `&view=front`, `&view=side`, `&ids=a,b`, and `&adj=red` to check tinting.
    Iterate until each object reads clearly at a glance.
 3. Don't run `git` commands and don't edit any other file.
-4. Reply with one line per object: `id — synonyms — tags — props` and anything notable.
+4. Reply with one line per object: `id: synonyms; tags; props` and anything notable.
