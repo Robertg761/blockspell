@@ -393,6 +393,7 @@ export class GameWorld {
     this.input.up = this.input.down = this.input.jump = false;
     this.waterLevel = null;
     this.fx.particles.clear();
+    this.fx.flames.clear();
     this.fx.tweens.clear();
   }
 

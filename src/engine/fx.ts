@@ -1,5 +1,6 @@
 import { Color, PointLight, type Scene } from 'three';
 import { Audio, type SoundName } from './audio';
+import { FlameFx } from './flames';
 import { Particles, type BurstOptions } from './particles';
 import { CameraShake } from './shake';
 import { Tweens } from './tween';
@@ -52,10 +53,12 @@ export class Effects {
   readonly audio = new Audio();
   readonly tweens = new Tweens();
   readonly glow: GlowLights;
+  readonly flames: FlameFx;
 
   constructor(scene: Scene) {
     this.particles = new Particles(scene);
     this.glow = new GlowLights(scene);
+    this.flames = new FlameFx(scene);
   }
 
   burst(at: P3, o?: BurstOptions): void {
@@ -113,6 +116,7 @@ export class Effects {
     this.tweens.update(dt);
     this.shake.update(dt);
     this.glow.update(dt);
+    this.flames.update(dt);
   }
 }
 

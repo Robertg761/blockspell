@@ -5,24 +5,16 @@ import type { GameWorld } from '../../core/world';
 const FLAME_COLORS = ['#fff1a0', '#ffc247', '#ff8a2a', '#ff5a1c'];
 type P3 = { x: number; y: number; z: number };
 
-/** Emits rising flame + smoke particles and requests a flickering glow light. */
+/** Emits animated flame sprites, embers, smoke and a glow halo (scaled to the entity) and requests a flickering light. */
 export function emitFlames(world: GameWorld, e: Entity, dt: number, strength = 1): void {
-  const rate = 30 * strength * Math.max(0.6, e.radius);
-  let acc = ((e.state.flameAcc as number) ?? 0) + dt * rate;
-  const n = Math.floor(acc);
-  acc -= n;
-  e.state.flameAcc = acc;
+  let acc = e.state.flameAcc as { f: number; e: number } | undefined;
+  if (!acc || typeof acc !== 'object') e.state.flameAcc = acc = { f: 0, e: 0 };
   const p = e.body.position;
+  const w = (e.size.x + e.size.z) * 0.5;
+  world.fx.flames.emit({ x: p.x, y: p.y - e.size.y * 0.5, z: p.z }, w, e.size.y, dt, strength, acc);
   const top = p.y + e.size.y * 0.15;
-  const sx = e.size.x * 0.35, sz = e.size.z * 0.35;
-  for (let i = 0; i < n; i++) {
-    world.fx.burst(
-      { x: p.x + (Math.random() * 2 - 1) * sx, y: top + Math.random() * e.size.y * 0.2, z: p.z + (Math.random() * 2 - 1) * sz },
-      { count: 1, color: FLAME_COLORS, speed: 0.5, up: 1.8 + strength, gravity: -2.5, drag: 1.6, life: 0.55, size: 0.13 * Math.sqrt(strength), glow: true, spread: 0.05 },
-    );
-    if (Math.random() < 0.12)
-      world.fx.burst({ x: p.x, y: top + e.size.y * 0.4, z: p.z }, { count: 1, color: ['#555', '#777', '#666'], speed: 0.3, up: 1.4, gravity: -1, drag: 0.8, life: 1.6, size: 0.18, grow: true });
-  }
+  if (Math.random() < dt * 4 * Math.min(2, Math.max(0.6, e.radius)))
+    world.fx.burst({ x: p.x, y: top + e.size.y * 0.4, z: p.z }, { count: 1, color: ['#555', '#777', '#666'], speed: 0.3, up: 1.4, gravity: -1, drag: 0.8, life: 1.6, size: 0.18, grow: true });
   world.fx.glow.request({ x: p.x, y: top + 0.4, z: p.z }, '#ff8a3a', 5 * strength * Math.min(2, Math.max(0.8, e.radius)));
 }
 
