@@ -44,14 +44,13 @@ function onGround(e: Entity, world: GameWorld): boolean {
 }
 
 /** The climbable thing the hero is overlapping (ladder, rope, tree, stairs), if any. */
-function climbableAt(e: Entity, world: GameWorld): Entity | null {
+function climbableAt(e: Entity, world: GameWorld, pad = 0.3): Entity | null {
   const p = e.body.position;
   const f = feet(e);
   for (const o of world.entities) {
     if (!o.alive || o === e || !o.has('climbable') || o.has('ghost') || o.has('frozen')) continue;
     if (o.body.aabbNeedsUpdate) o.body.updateAABB();
     const { lowerBound: lo, upperBound: hi } = o.body.aabb;
-    const pad = 0.3;
     if (p.x < lo.x - pad || p.x > hi.x + pad || p.z < lo.z - pad || p.z > hi.z + pad) continue;
     if (f > hi.y + 0.02 || f + e.size.y < lo.y) continue;
     return o;
@@ -122,15 +121,21 @@ export default defineBehavior({
     if (ml > 1) { mx /= ml; mz /= ml; }
 
     // ---- climbing
-    const ladder = climbableAt(e, world);
+    // once on a ladder, hold on a little more generously so sideways input doesn't drop you
+    const ladder = climbableAt(e, world, e.state.climbing ? 0.5 : 0.4);
     const wantsUp = inp.up || inp.jump;
     if (ladder && (wantsUp || (e.state.climbing && inp.down))) {
       if (!e.state.climbing) world.fx.sound('climb', { volume: 0.8 });
       e.state.climbing = true;
       b.collisionFilterMask = GROUP.STATIC; // don't shove the ladder away
       b.velocity.y = inp.down ? -HERO.climb : HERO.climb;
-      b.velocity.x += (mx * HERO.speed * 0.5 - b.velocity.x) * HERO.groundAccel;
-      b.velocity.z += (mz * HERO.speed * 0.5 - b.velocity.z) * HERO.groundAccel;
+      // gentle sideways shuffle, but stay over the ladder's footprint
+      if (ladder.body.aabbNeedsUpdate) ladder.body.updateAABB();
+      const { lowerBound: lo, upperBound: hi } = ladder.body.aabb;
+      const cx = Math.min(Math.max(b.position.x, lo.x - 0.15), hi.x + 0.15) - b.position.x;
+      const cz = Math.min(Math.max(b.position.z, lo.z - 0.15), hi.z + 0.15) - b.position.z;
+      b.velocity.x += (mx * HERO.speed * 0.3 + cx * 4 - b.velocity.x) * HERO.groundAccel;
+      b.velocity.z += (mz * HERO.speed * 0.3 + cz * 4 - b.velocity.z) * HERO.groundAccel;
       if (Math.random() < h * 5) world.fx.sound('climb', { pitch: 0.9 + Math.random() * 0.2, volume: 0.5 });
       e.state.jumpBuf = 0;
       return;

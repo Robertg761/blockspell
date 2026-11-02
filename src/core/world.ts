@@ -430,6 +430,11 @@ export class GameWorld {
 
     for (const e of this.entities) {
       if (!e.alive) continue;
+      // freshly cast things that overlap geometry get pushed out gently, not flung across the map
+      if (e.age < 0.6 && e.body.mass > 0) {
+        const v = e.body.velocity, sp = v.length();
+        if (sp > 7) v.scale(7 / sp, v);
+      }
       this.syncEntity(e);
       if (e.body.position.y < -30) this.remove(e, 'fell');
     }
