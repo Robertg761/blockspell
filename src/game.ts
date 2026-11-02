@@ -11,7 +11,7 @@ import { progress } from './levels/progress';
 import { SolutionRunner } from './levels/solve';
 import { starsFor, type LevelDef, type V3 } from './levels/types';
 import type { Entity } from './core/entity';
-import { objects } from './objects';
+import { spellbookObjects } from './objects';
 import { parseSpell, randomWords } from './parser/parser';
 import { adjectives } from './adjectives';
 import { Hud } from './ui/hud';
@@ -68,7 +68,7 @@ export class Game {
         this.hud.bookBtn.classList.remove('has-new');
       },
     }, levels);
-    this.spellbook = new Spellbook(objects.all(), adjectives.all(), (w) => this.cast(w));
+    this.spellbook = new Spellbook(spellbookObjects(), adjectives.all(), (w) => this.cast(w));
     root.append(this.spellbook.el);
     this.tutorial = new Tutorial(root);
     this.refreshChips();
@@ -237,7 +237,7 @@ export class Game {
     const name = (count > 1 ? `${count} × ` : '') + res.label;
     if (res.correctedFrom) this.hud.toasts.show(`Guessing you meant “${res.def.name}”.`, { title: `✦ ${name}`, kind: 'success' });
     else if (fresh.object && res.def.blurb)
-      this.hud.toasts.show(res.def.blurb, { title: `✦ New word: ${name}  (${this.spellbook.count}/${objects.all().length})`, kind: 'success' });
+      this.hud.toasts.show(res.def.blurb, { title: `✦ New word: ${name}  (${this.spellbook.count}/${this.spellbook.total})`, kind: 'success' });
     else if (!this.seen.has(res.def.id) && res.def.blurb) this.hud.toasts.show(res.def.blurb, { title: `✦ ${name}`, kind: 'success' });
     this.seen.add(res.def.id);
     if (res.unknownAdjectives.length)
@@ -257,7 +257,7 @@ export class Game {
 
   /** Suggestion chips under the spell bar: a few words the player hasn't found yet. */
   private refreshChips(): void {
-    const all = objects.all();
+    const all = spellbookObjects();
     const unknown = all.filter((d) => !this.spellbook.has(d.id));
     const pool = (unknown.length >= 6 ? unknown : all).map((d) => d.name);
     for (let i = pool.length - 1; i > 0; i--) {

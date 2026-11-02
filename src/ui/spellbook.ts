@@ -37,8 +37,14 @@ export class Spellbook {
     }
   }
 
+  /** Discovered words that are in the book (ignores stale saved ids). */
   get count(): number {
-    return this.objects.size;
+    return this.allObjects.filter((d) => this.objects.has(d.id)).length;
+  }
+
+  /** Total words in the book. */
+  get total(): number {
+    return this.allObjects.length;
   }
 
   has(id: string): boolean {
@@ -47,8 +53,8 @@ export class Spellbook {
 
   /** Records a cast; returns what was new so the game can celebrate. */
   discover(objectId: string, adjectiveIds: string[]): { object: boolean; adjectives: string[] } {
-    const object = !this.objects.has(objectId);
-    this.objects.add(objectId);
+    const object = !this.objects.has(objectId) && this.allObjects.some((d) => d.id === objectId);
+    if (object) this.objects.add(objectId);
     const fresh = [...new Set(adjectiveIds)].filter((a) => !this.adjectives.has(a));
     fresh.forEach((a) => this.adjectives.add(a));
     if (object || fresh.length) {
@@ -72,7 +78,8 @@ export class Spellbook {
   }
 
   private render(): void {
-    const total = this.allObjects.length;
+    const total = this.total;
+    const count = this.count;
     const sections = SECTIONS.map((s) => {
       const defs = this.allObjects.filter((d) => (d.category ?? 'items') === s.id).sort((a, b) => a.name.localeCompare(b.name));
       if (!defs.length) return null;
@@ -96,10 +103,10 @@ export class Spellbook {
     const adjFound = adjs.filter((a) => this.adjectives.has(a.id));
     this.el.replaceChildren(
       h('header.sb-header', {}, [
-        h('div', {}, [h('h2', { text: 'Spellbook' }), h('div.sb-total', { text: `${this.objects.size} of ${total} words discovered` })]),
+        h('div', {}, [h('h2', { text: 'Spellbook' }), h('div.sb-total', { text: `${count} of ${total} words discovered` })]),
         h('button.icon-btn', { title: 'Close (Esc)', text: '✕', onClick: () => this.toggle(false) }),
       ]),
-      h('div.sb-progress', {}, [h('div.sb-bar', { style: `width:${(100 * this.objects.size) / Math.max(1, total)}%` })]),
+      h('div.sb-progress', {}, [h('div.sb-bar', { style: `width:${(100 * count) / Math.max(1, total)}%` })]),
       h('div.sb-body', {}, [
         ...sections,
         h('section.sb-section', {}, [
