@@ -250,7 +250,7 @@ export class Game {
 
   /** Failed-spell feedback: a small grey puff at the cast point, the error buzz and a shake. */
   private fizzle(): void {
-    this.fx.poof(this.marker.position, ['#cfc8e8', '#a9a3c4', '#ffffff'], 0.5);
+    this.fx.poof(this.marker.position, ['#cfc8e8', '#a9a3c4', '#ffffff'], 0.8);
     this.fx.sound('error');
     this.hud.shakeInput();
   }
