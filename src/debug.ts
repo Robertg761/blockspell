@@ -18,6 +18,7 @@ import { wayKey } from './tasks/save';
  *   __blockspell.run([{ walkTo: [27, 0] }])     run solution steps on the current level, no reload
  *   __blockspell.teleport([x, y, z])          move the hero (feet position; y omitted = ground there)
  *   __blockspell.solve('sky-island', 0)       replay a level's scripted solution headlessly -> result
+ *   __blockspell.solve('chasm', 3, 120, 1)    ... with the game's randomness seeded (1)
  *   __blockspell.solveTask('feed-pup', 0)     replay an open-world task's solution from its start -> result
  *   __blockspell.solveTask('feed-pup', 0, 120, 7)  ... with the game's randomness seeded (7)
  *   __blockspell.playTask('feed-pup', 0)      like solveTask, but the completion is saved for real
@@ -65,6 +66,9 @@ export interface SolveAllOptions {
 
 /** Seconds each zone is left alone in the idle check. */
 const IDLE_SECONDS = 30;
+
+/** Seed for the old puzzle levels' solutions in solveAll. */
+const LEVEL_SEED = 1;
 
 /** Distinct ways a task needs (sets of cast object ids). */
 const MIN_WAYS = 3;
@@ -339,7 +343,16 @@ export function installDebug(game: Game) {
       return { time: +t.toFixed(1), log: runner.log, error: runner.error, state: api.state() };
     },
     /** Replays a solution synchronously. Leaves the level in its end state (the save is left untouched). */
-    solve: (key: string | number, index = 0, maxSeconds = 120): SolveResult => keepingSave(() => solveLevel(key, index, maxSeconds)),
+    solve: (key: string | number, index = 0, maxSeconds = 120, seed?: number): SolveResult =>
+      keepingSave(() => {
+        if (seed === undefined) return solveLevel(key, index, maxSeconds);
+        seedRandom(seed);
+        try {
+          return { ...solveLevel(key, index, maxSeconds), seed };
+        } finally {
+          seedRandom(null);
+        }
+      }),
     /** `index` may also be a solution object (world space) to try one out. */
     solveTask: (id: string, index: number | LevelSolution = 0, maxSeconds = 120, seed?: number): SolveResult =>
       keepingSave(() => solveTask(id, index, maxSeconds, seed)),
@@ -356,7 +369,9 @@ export function installDebug(game: Game) {
       const seeds: (number | undefined)[] = opts.seeds?.length ? opts.seeds : [undefined];
       return keepingSave(() => {
         const out: SolveResult[] = [];
-        for (const l of orderedLevels()) l.solutions?.forEach((_, i) => out.push(api.solve(l.id, i)));
+        // The old puzzle levels are a regression baseline; their solutions run seeded (seed 1) so a
+        // rare unlucky bounce can't fail the run. Their world task versions run plain and with every seed.
+        for (const l of orderedLevels()) l.solutions?.forEach((_, i) => out.push(api.solve(l.id, i, 120, LEVEL_SEED)));
         for (const task of orderedTasks()) {
           const ways = new Set<string>();
           task.solutions.forEach((sol, i) => {
