@@ -63,19 +63,25 @@ MEASURE = """async (secs) => {
 
 SPAWN = """(spells) => {
   const g = window.blockspell, api = window.__blockspell, w = g.world, h = w.hero;
-  const render = () => { const t = performance.now(); api.render(); return performance.now() - t; };
-  const base = [render(), render(), render()].sort((a, b) => a - b)[1];
+  const ctx = g.renderer.gl.getContext(), px = new Uint8Array(4);
+  // readPixels waits for the GPU process, so the render time is real
+  const render = () => { const t = performance.now(); api.render(); ctx.readPixels(0, 0, 1, 1, ctx.RGBA, ctx.UNSIGNED_BYTE, px); return performance.now() - t; };
+  const step = () => { const t = performance.now(); g.step(1 / 60); return performance.now() - t; };
+  const med = (a) => a.sort((x, y) => x - y)[a.length >> 1];
+  const baseRender = med([render(), render(), render()]);
+  const baseStep = med([step(), step(), step(), step(), step()]);
   const out = [];
   spells.forEach((s, i) => {
     const a = (i / spells.length) * Math.PI * 2, r = 3 + (i % 3) * 1.2;
+    const before = w.living().length;
     const t0 = performance.now();
     api.cast(s, [h.x + Math.cos(a) * r, h.z + Math.sin(a) * r]);
-    const js = performance.now() - t0;
-    g.step(1 / 60);
+    g.step(1 / 60); // the cast spawns on the next tick
+    const js = performance.now() - t0 - baseStep;
     const rd = render();
-    out.push({ spell: s, jsMs: +js.toFixed(1), renderMs: +rd.toFixed(1), extraRenderMs: +(rd - base).toFixed(1) });
+    out.push({ spell: s, spawned: w.living().length - before, jsMs: +js.toFixed(1), renderMs: +rd.toFixed(1), extraRenderMs: +(rd - baseRender).toFixed(1) });
   });
-  return { baseRenderMs: +base.toFixed(1), spawns: out, worstJsMs: Math.max(...out.map((o) => o.jsMs)), worstExtraRenderMs: Math.max(...out.map((o) => o.extraRenderMs)) };
+  return { baseRenderMs: +baseRender.toFixed(1), baseStepMs: +baseStep.toFixed(1), spawns: out, worstJsMs: Math.max(...out.map((o) => o.jsMs)), worstExtraRenderMs: Math.max(...out.map((o) => o.extraRenderMs)) };
 }"""
 
 HUB = ([0, 0, 2], [10, 9, 14])
@@ -115,6 +121,8 @@ def run(p, base, hd, shots=False):
             page.screenshot(path='/workspace/bs-hd2-hub.png')
     page.evaluate(VIEW, [HUB[0], [6, 5, 9]])
     page.evaluate('window.blockspell.step(0.5)')
+    # warm up the cast path (parser, first spawn) with a word that is not in the list
+    page.evaluate("() => { window.__blockspell.cast('mug', [0, 6]); window.blockspell.step(0.3); }")
     res['spawn'] = page.evaluate(SPAWN, SPELLS)
     # the same again: now every mesh is in the cache (and the GPU has seen the materials)
     page.evaluate("() => { window.__blockspell.resetZone(); window.blockspell.step(0.5); }")
@@ -139,17 +147,20 @@ def main():
     out_path = sys.argv[1] if len(sys.argv) > 1 and not sys.argv[1].startswith('--') else None
     proto = sys.argv[sys.argv.index('--proto') + 1] if '--proto' in sys.argv else None
     shots = '--shots' in sys.argv
+    modes = sys.argv[sys.argv.index('--modes') + 1].split(',') if '--modes' in sys.argv else ['proto-off', 'proto-on', 'off', 'on']
     procs = [serve(5310)]
     if proto:
         procs.append(serve(5312, proto))
     out = {}
     try:
         with sync_playwright() as p:
-            if proto:
-                out['proto-off'] = run(p, 'http://localhost:5312', 0)
-                out['proto-on'] = run(p, 'http://localhost:5312', 1)
-            out['off'] = run(p, 'http://localhost:5310', 0)
-            out['on'] = run(p, 'http://localhost:5310', 1, shots)
+            for m in modes:
+                proto_mode = m.startswith('proto-')
+                if proto_mode and not proto:
+                    continue
+                base = 'http://localhost:5312' if proto_mode else 'http://localhost:5310'
+                out[m] = run(p, base, 1 if m.endswith('on') else 0, shots and m == 'on')
+                print(m, 'done', file=sys.stderr, flush=True)
     finally:
         import os
         import signal
