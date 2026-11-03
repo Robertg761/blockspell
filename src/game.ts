@@ -360,6 +360,8 @@ export class Game {
     // nudge repeat casts so things don't land in a perfect tower
     const jitter = this.world.nearby(base, 1.5, (e) => e !== this.world.hero).length > 0 ? 0.5 : 0;
     const yaw = this.castYaw(res.def.orient, base);
+    // aimed at the floor under an overhang (an arch, a ledge): spawn under it, not on top of it
+    const covered = this.world.groundAt(base.x, base.z) > base.y + 1;
     const castZone = this.level.tasks ? this.zone?.id ?? null : null;
     const pending = { zone: castZone, x: base.x, y: base.y, z: base.z, left: count, cancelled: false };
     this.pendingCasts.add(pending);
@@ -374,7 +376,7 @@ export class Game {
         done: () => {
           if (--pending.left <= 0) this.pendingCasts.delete(pending);
           if (pending.cancelled) return;
-          const ground = Math.max(this.world.groundAt(x, z), base.y);
+          const ground = covered ? base.y : Math.max(this.world.groundAt(x, z), base.y);
           const scaleGuess = res.adjectives.reduce((s, a) => s * (a.category === 'size' ? (a.id === 'tiny' ? 0.4 : a.id === 'small' ? 0.65 : a.id === 'big' ? 1.6 : 2.4) : 1), 1);
           const e = this.world.spawn(res.def, {
             position: { x, y: ground + 1.2 + scaleGuess * 0.9, z },
