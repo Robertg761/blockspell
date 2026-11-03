@@ -1,6 +1,7 @@
 import type { GameWorld } from '../core/world';
 import type { V3 } from '../levels/types';
 import { VoxelBuilder } from '../voxel/builder';
+import { ROOF } from '../voxel/hd';
 
 /** Voxel size of baked scenery (the same as static boxes). */
 const V = 0.25;
@@ -129,9 +130,11 @@ export class Decor {
   /** A small decorative cottage with a pitched roof, solid. `roof` is a palette key. */
   cottage(x: number, z: number, roof = 'red', wall = 'wood'): this {
     this.box(x, 0.75, z, 2, 1.5, 2, wall, true);
-    this.box(x, 1.625, z, 2.5, 0.25, 2.5, roof);
-    this.box(x, 1.875, z, 2, 0.25, 2, roof);
-    this.box(x, 2.125, z, 1.25, 0.25, 1.25, roof);
+    // the roof key carries a hint so HD voxels slope it (the classic look ignores it)
+    const r = ROOF + roof;
+    this.box(x, 1.625, z, 2.5, 0.25, 2.5, r);
+    this.box(x, 1.875, z, 2, 0.25, 2, r);
+    this.box(x, 2.125, z, 1.25, 0.25, 1.25, r);
     this.box(x, 0.5, z + 1, 0.5, 1, 0.1, 'woodDark');
     return this;
   }
@@ -146,7 +149,7 @@ export class Decor {
     this.box(x, 0.4, z, 1.25, 0.75, 1.25, 'stone', true);
     this.box(x, 0.7, z, 0.75, 0.25, 0.75, 'black');
     for (const dx of [-0.5, 0.5]) this.box(x + dx, 1.25, z, 0.25, 1, 0.25, 'woodDark');
-    this.box(x, 1.875, z, 1.5, 0.25, 1, 'redDark');
+    this.box(x, 1.875, z, 1.5, 0.25, 1, ROOF + 'redDark');
     return this;
   }
 

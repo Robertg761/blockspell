@@ -91,6 +91,9 @@ const cache = new Map<string, ResolvedColor>();
 export function resolveColor(key: string): ResolvedColor {
   let hit = cache.get(key);
   if (!hit) {
+    // a material hint prefix ('roof:red', see src/voxel/hd.ts) keeps the color of the key after it
+    const colon = key.indexOf(':');
+    if (colon > 0 && !PALETTE[key]) return resolveColor(key.slice(colon + 1));
     const entry = PALETTE[key];
     hit = entry
       ? { color: new Color(entry.color), emissive: !!entry.emissive }

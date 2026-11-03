@@ -2,6 +2,7 @@ import { Body, Box, Vec3, type Material as PhysMaterial } from 'cannon-es';
 import { Group, Mesh, MeshStandardMaterial } from 'three';
 import { makeRng, randRange } from '../core/rng';
 import { VoxelBuilder } from '../voxel/builder';
+import { hdAt, meshVoxelsHD } from '../voxel/hd';
 import { meshVoxels } from '../voxel/mesher';
 import { makeNoise2D } from './noise';
 
@@ -94,7 +95,12 @@ export function buildTerrain(opts: Partial<TerrainOptions>, physMat: PhysMateria
 
   const group = new Group();
   const mat = new MeshStandardMaterial({ vertexColors: true, roughness: 0.95, metalness: 0 });
-  const terrainMesh = new Mesh(meshVoxels(b.build(), { voxelSize: T, origin: 'model', jitter: 0.05 }).geometry, mat);
+  const hdIsland = hdAt(o.cx, o.cz);
+  const terrainModel = b.build();
+  const terrainGeo = hdIsland
+    ? meshVoxelsHD(terrainModel, { voxelSize: T, origin: 'model', style: 'terrain' }).geometry
+    : meshVoxels(terrainModel, { voxelSize: T, origin: 'model', jitter: 0.05 }).geometry;
+  const terrainMesh = new Mesh(terrainGeo, mat);
   terrainMesh.receiveShadow = true;
   terrainMesh.castShadow = true;
   terrainMesh.name = 'terrain';
@@ -166,7 +172,9 @@ export function buildTerrain(opts: Partial<TerrainOptions>, physMat: PhysMateria
     decor.ellipsoid(cx, cy, cz, s * 1.3, s, s, rng() > 0.5 ? 'stone' : 'stoneDark');
   }
   if (decor.size > 0) {
-    const dm = new Mesh(meshVoxels(decor.build(), { voxelSize: DV, origin: 'model' }).geometry, mat);
+    const dmodel = decor.build();
+    const dm = new Mesh((hdIsland ? meshVoxelsHD(dmodel, { voxelSize: DV, origin: 'model', style: 'decor' }) : meshVoxels(dmodel, { voxelSize: DV, origin: 'model' })).geometry, mat);
+    dm.name = 'terrain-decor';
     dm.castShadow = true;
     dm.receiveShadow = true;
     group.add(dm);

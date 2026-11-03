@@ -4,7 +4,9 @@ import type { SpawnModifiers } from '../adjectives/types';
 import type { ObjectDef } from '../objects/types';
 import { VoxelBuilder } from '../voxel/builder';
 import { decomposeBoxes } from '../voxel/decompose';
-import { meshVoxels } from '../voxel/mesher';
+import { hdObject, meshVoxelsHD } from '../voxel/hd';
+import { meshVoxels, type VoxelMeshData } from '../voxel/mesher';
+import type { VoxelModel } from '../voxel/model';
 import { remapModel } from '../voxel/model';
 import { makeTintMap, resolveColor } from '../voxel/palette';
 import { Entity } from './entity';
@@ -19,12 +21,17 @@ export function createEntity(def: ObjectDef, mods: SpawnModifiers, label: string
   const props = { ...def.props, ...propOverrides };
   def.build(builder, rng, props);
   let model = builder.build();
+  const classKeys = model.keys;
 
   const tintMap = mods.tint ? makeTintMap(def.tintKeys ?? model.keys.filter((k) => !resolveColor(k).emissive), mods.tint) : null;
   if (tintMap) model = remapModel(model, tintMap);
 
   const vs = (def.voxelSize ?? 0.1) * mods.scale;
-  const { geometry, size } = meshVoxels(model, { voxelSize: vs });
+  // HD only swaps the render mesh; size and colliders below still come from the coarse model
+  const hdKeys = hdObject(def.id);
+  const mesh3 = (m: VoxelModel, keys: string[]): VoxelMeshData =>
+    hdKeys ? meshVoxelsHD(m, { voxelSize: vs, style: 'object', classKeys: keys, overrides: hdKeys }) : meshVoxels(m, { voxelSize: vs });
+  const { geometry, size } = mesh3(model, classKeys);
   const materials: Material[] = [
     new MeshStandardMaterial({
       vertexColors: true,
@@ -52,10 +59,11 @@ export function createEntity(def: ObjectDef, mods: SpawnModifiers, label: string
     const pb = new VoxelBuilder();
     part.build(pb, rng);
     let pm = pb.build();
+    const partKeys = pm.keys;
     if (tintMap) pm = remapModel(pm, tintMap);
     const center: [number, number, number] = [pm.min[0] + pm.sx / 2, pm.min[1] + pm.sy / 2, pm.min[2] + pm.sz / 2];
     const pivot = part.pivot ?? center;
-    const pMesh = new Mesh(meshVoxels(pm, { voxelSize: vs }).geometry, materials);
+    const pMesh = new Mesh(mesh3(pm, partKeys).geometry, materials);
     pMesh.castShadow = true;
     pMesh.position.set((center[0] - pivot[0]) * vs, (center[1] - pivot[1]) * vs, (center[2] - pivot[2]) * vs);
     const g = new Group();

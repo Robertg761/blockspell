@@ -11,6 +11,7 @@ import { buildTerrain, type Terrain, type TerrainOptions } from '../engine/terra
 import { objects } from '../objects';
 import type { ObjectDef } from '../objects/types';
 import { VoxelBuilder } from '../voxel/builder';
+import { hdAt, meshVoxelsHD } from '../voxel/hd';
 import { meshVoxels } from '../voxel/mesher';
 import type { Entity } from './entity';
 import { EventBus, type GameEvents } from './events';
@@ -402,7 +403,9 @@ export class GameWorld {
     const side = o.color ?? 'stone';
     b.box(0, 0, 0, sx - 1, sy - 1, sz - 1, side);
     if (o.topColor) b.box(0, sy - 1, 0, sx - 1, sy - 1, sz - 1, o.topColor);
-    const mesh = new Mesh(meshVoxels(b.build(), { voxelSize: V }).geometry, this.staticMat);
+    const model = b.build();
+    const hdBox = hdAt(o.position[0], o.position[2]);
+    const mesh = new Mesh((hdBox ? meshVoxelsHD(model, { voxelSize: V, style: 'decor' }) : meshVoxels(model, { voxelSize: V })).geometry, this.staticMat);
     mesh.position.set(...o.position);
     const yaw = o.yaw ?? 0;
     mesh.rotation.y = yaw;
@@ -434,7 +437,8 @@ export class GameWorld {
    */
   addDecorMesh(model: ReturnType<VoxelBuilder['build']>, at: [number, number, number]): Mesh | null {
     if (this.skipStatics) return null;
-    const mesh = new Mesh(meshVoxels(model, { voxelSize: 0.25, origin: 'model' }).geometry, this.staticMat);
+    const opts = { voxelSize: 0.25, origin: 'model' as const };
+    const mesh = new Mesh((hdAt(at[0], at[2]) ? meshVoxelsHD(model, { ...opts, style: 'decor' }) : meshVoxels(model, opts)).geometry, this.staticMat);
     mesh.position.set(...at);
     mesh.castShadow = mesh.receiveShadow = true;
     mesh.name = 'decor';
