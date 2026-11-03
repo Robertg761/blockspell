@@ -111,17 +111,20 @@ export function latch<K extends EventName>(event: K, match: (p: GameEvents[K], w
   return p;
 }
 
-/** At least `n` different entities inside the box have eaten something since the world was set up. */
-export function distinctEaters(b: Box, n: number): Pred {
+/**
+ * At least `n` different eaters inside the box have eaten something since the world was set up.
+ * `by: 'kind'` counts different kinds of eater (object ids: a rabbit, a duck and a monkey) instead of entities.
+ */
+export function distinctEaters(b: Box, n: number, by: 'entity' | 'kind' = 'entity'): Pred {
   let flag = '';
-  const p: Pred = (w) => ((w.flags[flag] as Set<number> | undefined)?.size ?? 0) >= n;
+  const p: Pred = (w) => ((w.flags[flag] as Set<number | string> | undefined)?.size ?? 0) >= n;
   p.arm = (w, task) => {
     flag = `task:${task}:eaters`;
     const f = flag;
-    const seen = new Set<number>();
+    const seen = new Set<number | string>();
     w.flags[f] = seen;
     w.on('ate', ({ eater }) => {
-      if (eater !== w.hero && inBox(b, eater.x, eater.y, eater.z)) seen.add(eater.id);
+      if (eater !== w.hero && inBox(b, eater.x, eater.y, eater.z)) seen.add(by === 'kind' ? eater.def.id : eater.id);
     });
   };
   return p;
