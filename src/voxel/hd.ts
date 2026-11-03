@@ -344,7 +344,7 @@ function startWorkers(): Slot[] {
         slot.job = null;
         if (ev.data.r) finish(e, ev.data.r, false);
         else fail(e, ev.data.error ?? 'unknown error');
-        pump();
+        pumpNow();
       };
       worker.onerror = (ev) => {
         // a worker that can't start (or crashed): drop it, put its job back, carry on without it
@@ -396,7 +396,19 @@ function takeJob(): HDEntry | null {
   return queue.splice(best, 1)[0];
 }
 
+let pumpQueued = false;
+
+/** Starts jobs on idle workers, after the current task: a level load binds everything first, so the nearest go first. */
 function pump(): void {
+  if (pumpQueued) return;
+  pumpQueued = true;
+  setTimeout(() => {
+    pumpQueued = false;
+    pumpNow();
+  }, 0);
+}
+
+function pumpNow(): void {
   slots ??= startWorkers();
   if (slots.length) {
     for (const s of slots) {

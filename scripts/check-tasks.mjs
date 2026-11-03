@@ -13,7 +13,10 @@
 // Every non-localhost request is blocked and reported. Any FAIL, console error, page error, blocked or
 // failed request exits non-zero. The preview server is always stopped.
 //
-// Usage: npm run build && npm run check-tasks   (or: node scripts/check-tasks.mjs [--no-seeds])
+// HD voxels: headless Chrome renders in software, so the game picks the coarse look on its own. Force a
+// mode with BLOCKSPELL_HD=1 (or 0) or --hd=1 (or --hd=0); it is passed to the page as ?hd=.
+//
+// Usage: npm run build && npm run check-tasks   (or: node scripts/check-tasks.mjs [--no-seeds] [--hd=1])
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import net from 'node:net';
@@ -25,6 +28,8 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const args = process.argv.slice(2);
 const CHROME = process.env.CHROME ?? '/usr/bin/google-chrome';
 const CHROME_ARGS = ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'];
+const HD = args.find((a) => a.startsWith('--hd='))?.slice(5) ?? process.env.BLOCKSPELL_HD;
+const HDQ = HD !== undefined && HD !== '' ? `&hd=${encodeURIComponent(HD)}` : '';
 const TASK = 'cross-gap'; // completed for real in the offline and reload steps
 
 const problems = [];
@@ -129,9 +134,12 @@ async function main() {
     page.on('pageerror', (e) => problems.push(`page error: ${e.message}`));
     page.on('requestfailed', (r) => problems.push(`request failed: ${r.url()} (${r.failure()?.errorText})`));
 
-    await page.goto(origin + '/?mute');
+    await page.goto(origin + '/?mute' + HDQ);
     await page.waitForFunction(() => !!window.__blockspell);
     await page.waitForTimeout(1000);
+    const hd = await page.evaluate(() => window.__blockspell.hd());
+    console.log(`HD voxels: ${hd.enabled ? 'on' : 'off'} (${hd.reason}; ${hd.gpu || 'unknown GPU'})`);
+    if (HD !== undefined && HD !== '' && hd.enabled !== (HD !== '0' && HD !== 'off')) fail(`HD voxels should be ${HD === '0' ? 'off' : 'on'} here`);
 
     // 1 and 2: every scripted solution and check
     let t = Date.now();
@@ -163,7 +171,7 @@ async function main() {
     offline = false;
 
     // 4: reload, Explore, Journal shows it done
-    await page.goto(origin + '/?mute');
+    await page.goto(origin + '/?mute' + HDQ);
     await page.waitForFunction(() => !!window.__blockspell);
     await page.click('.explore-btn');
     await page.waitForTimeout(500);

@@ -144,7 +144,16 @@ URL flags for screenshots:
 - `&solve=0` plays solution #0 live.
 - `&cam=x,y,z,tx,ty,tz` sets the camera position and target.
 - `&mute`, `&nobloom` and `&notips` turn off sound, bloom and the control tips.
+- `&hd=1` / `&hd=0` forces HD voxels on or off (see below).
 - `?levels` opens level select.
+
+HD voxels: every voxel model is drawn with 4x finer, detailed voxels (bevels, mortar,
+wood grain, grass blades...) while physics keeps the coarse model. It is on by default
+and turns itself off on software rendering or a weak GPU; the HD button (top right) or
+the Journal's Graphics button switches it, and the choice is saved. Headless Chrome
+renders in software, so automation that wants HD must force it with `&hd=1`
+(`BLOCKSPELL_HD=1 npm run check-tasks` does). `__blockspell.hd()` shows the setting,
+the geometry cache and the build workers.
 
 Dev-only pages (served by `npm run dev`, not part of the build):
 
@@ -194,7 +203,8 @@ src/
     audio.ts         WebAudio synth sound effects
     music.ts         generative music loop on a lookahead scheduler
     fx.ts shake.ts tween.ts marker.ts      juice helpers
-  voxel/             voxel DSL (builder), palette, face-culled AO mesher, box decomposition
+  voxel/             voxel DSL (builder), palette, face-culled AO mesher, box decomposition,
+                     HD voxels (hd-core.ts meshing in a worker, hd.ts cache, LOD and setting)
   objects/defs/      one file per spawnable object      <- add objects here
   adjectives/defs/   adjective modifiers                <- add adjectives here
   behaviors/defs/    per-tag behaviors                  <- add behaviors here

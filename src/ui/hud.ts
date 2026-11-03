@@ -120,6 +120,16 @@ export class Hud {
     );
   }
 
+  /** A menu button that flips the voxel detail (HD / classic). */
+  private hdToggle(): HTMLButtonElement {
+    const label = () => (this.hdBtn.classList.contains('off') ? 'Graphics: Classic' : 'Graphics: HD');
+    const btn = h('button.btn.secondary.hd-toggle', { text: label(), title: 'HD voxels or the classic, faster look', onClick: () => {
+      this.setHD(this.cb.onHD());
+      btn.textContent = label();
+    } });
+    return btn;
+  }
+
   /** Shows the voxel detail setting on its button. */
   setHD(on: boolean): void {
     this.hdBtn.classList.toggle('off', !on);
@@ -310,6 +320,7 @@ export class Hud {
           h('button.btn', { text: 'Back to the world', onClick: () => this.hideOverlay() }),
           h('button.btn.secondary', { text: '✦ Free Play', onClick: () => { this.hideOverlay(); info.onFreePlay(); } }),
           h('button.btn.secondary', { text: 'Title screen', onClick: () => info.onTitle() }),
+          this.hdToggle(),
         ]),
       ]),
     );
