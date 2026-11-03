@@ -483,6 +483,8 @@ export class VoxelAnims {
     if (n < 4) return;
     const u = a.e.anim!;
     const tint = (a.e.materials[0] as MeshStandardMaterial).color ?? WHITE;
+    // the rainbow behavior repaints the mesh itself, so the model's colors would be wrong
+    const rainbow = a.e.has('rainbow');
     const cell = new Float32Array(n * 3), col = new Float32Array(n * 3), rnd = new Float32Array(n * 4), p0 = new Float32Array(n * 4), p1 = new Float32Array(n * 4), up = new Float32Array(n * 3);
     // world up in the entity's space (it may be lying on its side)
     a.e.visual.updateWorldMatrix(true, false);
@@ -494,7 +496,9 @@ export class VoxelAnims {
       const k = pick[j];
       pick[j] = pick[i];
       cell.set([s.cells[k * 3], s.cells[k * 3 + 1], s.cells[k * 3 + 2]], i * 3);
-      col.set([s.colors[k * 3] * tint.r, s.colors[k * 3 + 1] * tint.g, s.colors[k * 3 + 2] * tint.b], i * 3);
+      if (rainbow) _c.setHSL(Math.random(), 0.85, 0.55);
+      else _c.setRGB(s.colors[k * 3] * tint.r, s.colors[k * 3 + 1] * tint.g, s.colors[k * 3 + 2] * tint.b);
+      col.set([_c.r, _c.g, _c.b], i * 3);
       rnd.set([Math.random(), Math.random(), Math.random(), Math.random()], i * 4);
       p0.set([mode, a.start, a.dur, u.uBsB.value.w], i * 4);
       p1.set([u.uBsB.value.x, u.uBsB.value.y, u.uBsB.value.z, 0], i * 4);
@@ -649,7 +653,7 @@ export class VoxelAnims {
     const e = a.e;
     if (T < 1) {
       e.root.getWorldPosition(_v);
-      this.fx.glow.request(_v, '#ffd98a', 10 * (1 - T) * Math.min(2, Math.max(0.7, e.radius)));
+      this.fx.glow.request(_v, '#ffd98a', 6 * (1 - T) * Math.min(2, Math.max(0.7, e.radius)));
       // a fine glitter rising off the dissolving edge
       if (!a.lite && Math.random() < 0.6) this.fx.burst({ x: _v.x + (Math.random() - 0.5) * e.size.x, y: _v.y + (Math.random() - 0.3) * e.size.y, z: _v.z + (Math.random() - 0.5) * e.size.z }, { count: 1, color: ['#fff6a8', '#ffffff'], speed: 0.4, up: 1.2, gravity: -0.5, life: 0.6, size: 0.05, glow: true });
     }
