@@ -1,5 +1,6 @@
 import { emitFlames } from '../../behaviors/lib/fire';
 import { defineObject } from '../types';
+import { setMeshScale } from '../../voxel/hd';
 
 export default defineObject({
   id: 'fire',
@@ -33,7 +34,7 @@ export default defineObject({
   },
   update(e, world, dt) {
     const t = world.time * 9 + e.id;
-    e.mesh.scale.set(1 + Math.sin(t * 1.3) * 0.04, 1 + Math.sin(t) * 0.08 + Math.sin(t * 2.7) * 0.04, 1 + Math.cos(t * 1.1) * 0.04);
+    setMeshScale(e.mesh, 1 + Math.sin(t * 1.3) * 0.04, 1 + Math.sin(t) * 0.08 + Math.sin(t * 2.7) * 0.04, 1 + Math.cos(t * 1.1) * 0.04);
     emitFlames(world, e, dt, 1);
   },
 });

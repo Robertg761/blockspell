@@ -1,4 +1,4 @@
-import { Raycaster, Vector2, Vector3 } from 'three';
+import { Raycaster, Vector2, Vector3, type Fog } from 'three';
 import { Vec3 } from 'cannon-es';
 import { MAX_ENTITIES, GameWorld } from './core/world';
 import { random } from './core/rng';
@@ -16,7 +16,9 @@ import { buildZone, castLimitAt, zoneAt, zoneEntry, zones } from './tasks';
 import { worldSave } from './tasks/save';
 import { TaskTracker } from './tasks/tracker';
 import type { ZoneDef } from './tasks/types';
-import { spellbookObjects } from './objects';
+import { objects, spellbookObjects } from './objects';
+import { prewarmObjects } from './core/spawn';
+import { hd, onHDChange, setHDEnabled, updateVoxelLOD } from './voxel/hd';
 import { parseSpell, randomWords, suggestAdjectives } from './parser/parser';
 import { adjectives } from './adjectives';
 import { Hud } from './ui/hud';
@@ -78,6 +80,10 @@ export class Game {
       onLevels: () => this.showLevels(),
       onMute: (m) => this.fx.audio.setMuted(m),
       onStart: () => this.fx.audio.unlock(),
+      onHD: () => {
+        setHDEnabled(!hd.enabled);
+        return hd.enabled;
+      },
       onSpellbook: () => {
         this.spellbook.toggle();
         this.hud.bookBtn.classList.remove('has-new');
@@ -90,6 +96,14 @@ export class Game {
 
     this.bindInput();
     this.loadLevel(levels.find((l) => !l.goal)?.id ?? levels[0].id);
+    this.hud.setHD(hd.enabled);
+    // HD meshes for the hero and every castable object, built in the background so spawns don't wait
+    const prewarm = () => prewarmObjects([...objects.all().filter((d) => d.tags.includes('player')), ...spellbookObjects(), ...objects.all().filter((d) => d.levelOnly)]);
+    if (hd.enabled) prewarm();
+    onHDChange((on) => {
+      this.hud.setHD(on);
+      if (on) prewarm();
+    });
     requestAnimationFrame(this.frame);
   }
 
@@ -689,6 +703,7 @@ export class Game {
     this.tick(dt);
     this.followCamera(dt);
     this.tutorial.update(this, dt);
+    updateVoxelLOD(this.renderer.camera.position, (this.renderer.scene.fog as Fog).far);
     this.renderer.render(dt, this.fx.shake);
     requestAnimationFrame(this.frame);
   };

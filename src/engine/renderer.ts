@@ -65,7 +65,7 @@ export class Renderer {
     this.sun.castShadow = true;
     this.sun.shadow.mapSize.set(2048, 2048);
     const sc = this.sun.shadow.camera;
-    sc.left = -26; sc.right = 26; sc.top = 26; sc.bottom = -26; sc.near = 1; sc.far = 100;
+    sc.left = -26; sc.right = 26; sc.top = 26; sc.bottom = -26; sc.near = 10; sc.far = 75;
     this.sun.shadow.bias = -0.0004;
     this.sun.shadow.normalBias = 0.03;
     this.sun.shadow.radius = 4;
@@ -125,6 +125,14 @@ export class Renderer {
   private followSun(): void {
     const t = this.controls.target;
     const sc = this.sun.shadow.camera;
+    // the shadow box hugs the area around the player: about the camera distance plus a margin, in 2 m steps
+    // (a tighter box means sharper shadows for the same map size)
+    const ext = Math.min(26, Math.max(12, Math.ceil((this.camera.position.distanceTo(t) * 0.9 + 6) / 2) * 2));
+    if (sc.right !== ext) {
+      sc.left = sc.bottom = -ext;
+      sc.right = sc.top = ext;
+      sc.updateProjectionMatrix();
+    }
     const texel = (sc.right - sc.left) / this.sun.shadow.mapSize.x;
     const d = this.sunDir;
     const right = _right.set(d.z, 0, -d.x).normalize(); // up × d

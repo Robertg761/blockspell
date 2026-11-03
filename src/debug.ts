@@ -7,7 +7,7 @@ import { seedRandom } from './core/rng';
 import { orderedTasks, tasks, zoneEntry } from './tasks';
 import { wayKey } from './tasks/save';
 import { Mesh } from 'three';
-import { geometryBytes, hd, HD_OBJECTS, HD_REGION, hdTotals, saveHDSetting } from './voxel/hd';
+import { clearHDSetting, geometryBytes, hdPending, hdStats, hdTop, setHDEnabled } from './voxel/hd';
 
 /**
  * Debug / automation hook, available as `window.__blockspell` in every build.
@@ -24,8 +24,10 @@ import { geometryBytes, hd, HD_OBJECTS, HD_REGION, hdTotals, saveHDSetting } fro
  *   __blockspell.solveTask('feed-pup', 0)     replay an open-world task's solution from its start -> result
  *   __blockspell.solveTask('feed-pup', 0, 120, 7)  ... with the game's randomness seeded (7)
  *   __blockspell.playTask('feed-pup', 0)      like solveTask, but the completion is saved for real
- *   __blockspell.hd()                         HD voxels prototype: setting and build totals
- *   __blockspell.setHD(true)                  turn HD voxels on (saved; reloads the page). Also ?hd=1 / ?hd=0
+ *   __blockspell.hd()                         HD voxels: setting (and why), cache, workers and build totals
+ *   __blockspell.setHD(true)                  turn HD voxels on or off right away (saved). Also ?hd=1 / ?hd=0;
+ *                                             setHD(null) forgets the saved choice (auto detection next load)
+ *   __blockspell.hdPending()                  HD meshes still being built (0 = everything in view is final)
  *   __blockspell.renderStats()                last frame's draw calls/triangles, scene triangles and bytes (HD vs classic)
  *   __blockspell.resetZone()                  reset the hero's zone (like pressing R in the world)
  *   __blockspell.leakCheck()                  cast things and reset each zone a few times; counts must match
@@ -319,15 +321,16 @@ export function installDebug(game: Game) {
       return game.castAt(text, p);
     },
     step: (seconds: number) => game.step(seconds),
-    /** HD voxels prototype: current setting and what HD meshing built so far (see src/voxel/hd.ts). */
-    hd: () => ({ enabled: hd.enabled, factor: hd.factor, region: HD_REGION, objects: Object.keys(HD_OBJECTS), built: { ...hdTotals } }),
-    /** Turns HD voxels on or off (saved) and reloads the page, keeping the query string except `hd`. */
-    setHD(on: boolean) {
-      saveHDSetting(on);
-      const q = new URLSearchParams(location.search);
-      q.delete('hd');
-      location.search = q.toString();
+    /** HD voxels: current setting (and why), cache, workers and build totals (see src/voxel/hd.ts). */
+    hd: () => hdStats(),
+    /** Turns HD voxels on or off right away (saved); null forgets the saved choice. */
+    setHD(on: boolean | null) {
+      if (on === null) clearHDSetting();
+      else setHDEnabled(on);
+      return hdStats();
     },
+    hdPending: () => hdPending(),
+    hdTop: (n?: number) => hdTop(n),
     /** Draw calls and triangles of the last frame, plus mesh triangles and buffer bytes in the scene, split HD / classic. */
     renderStats() {
       const info = game.renderer.gl.info;

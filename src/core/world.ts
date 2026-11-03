@@ -11,8 +11,7 @@ import { buildTerrain, type Terrain, type TerrainOptions } from '../engine/terra
 import { objects } from '../objects';
 import type { ObjectDef } from '../objects/types';
 import { VoxelBuilder } from '../voxel/builder';
-import { hdAt, meshVoxelsHD } from '../voxel/hd';
-import { meshVoxels } from '../voxel/mesher';
+import { bindVoxelMesh, releaseVoxelMesh } from '../voxel/hd';
 import type { Entity } from './entity';
 import { EventBus, type GameEvents } from './events';
 import { createEntity } from './spawn';
@@ -403,9 +402,7 @@ export class GameWorld {
     const side = o.color ?? 'stone';
     b.box(0, 0, 0, sx - 1, sy - 1, sz - 1, side);
     if (o.topColor) b.box(0, sy - 1, 0, sx - 1, sy - 1, sz - 1, o.topColor);
-    const model = b.build();
-    const hdBox = hdAt(o.position[0], o.position[2]);
-    const mesh = new Mesh((hdBox ? meshVoxelsHD(model, { voxelSize: V, style: 'decor' }) : meshVoxels(model, { voxelSize: V })).geometry, this.staticMat);
+    const mesh = bindVoxelMesh(new Mesh(undefined, this.staticMat), { model: b.build(), voxelSize: V, style: 'decor', lod: true, label: 'static' });
     mesh.position.set(...o.position);
     const yaw = o.yaw ?? 0;
     mesh.rotation.y = yaw;
@@ -437,8 +434,7 @@ export class GameWorld {
    */
   addDecorMesh(model: ReturnType<VoxelBuilder['build']>, at: [number, number, number]): Mesh | null {
     if (this.skipStatics) return null;
-    const opts = { voxelSize: 0.25, origin: 'model' as const };
-    const mesh = new Mesh((hdAt(at[0], at[2]) ? meshVoxelsHD(model, { ...opts, style: 'decor' }) : meshVoxels(model, opts)).geometry, this.staticMat);
+    const mesh = bindVoxelMesh(new Mesh(undefined, this.staticMat), { model, voxelSize: 0.25, origin: 'model', style: 'decor', lod: true, label: 'decor' });
     mesh.position.set(...at);
     mesh.castShadow = mesh.receiveShadow = true;
     mesh.name = 'decor';
@@ -474,7 +470,7 @@ export class GameWorld {
     for (const s of this.statics) {
       if (s.mesh) {
         this.scene.remove(s.mesh);
-        s.mesh.geometry.dispose();
+        releaseVoxelMesh(s.mesh);
       }
       if (s.body) this.physics.removeBody(s.body);
     }
@@ -565,10 +561,10 @@ export class GameWorld {
     this.scene.remove(e.root);
     this.physics.removeBody(e.body);
     this.bodyMap.delete(e.body.id);
-    e.mesh.geometry.dispose();
     for (const m of e.materials) m.dispose();
+    // voxel geometry is shared through the cache: release it rather than dispose it
     e.root.traverse((c) => {
-      if (c !== e.mesh && c instanceof Mesh) c.geometry.dispose();
+      if (c instanceof Mesh) releaseVoxelMesh(c);
     });
   }
 }

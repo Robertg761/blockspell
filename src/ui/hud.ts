@@ -11,6 +11,8 @@ export interface HudCallbacks {
   onStart: () => void;
   onSpellbook: () => void;
   onLevels: () => void;
+  /** Flips the voxel detail (HD / classic); returns the new state. */
+  onHD: () => boolean;
 }
 
 /** One task row in the Journal. */
@@ -60,6 +62,7 @@ export class Hud {
   private hint = '';
   private muted = loadMuted();
   readonly bookBtn: HTMLButtonElement;
+  private hdBtn: HTMLButtonElement;
   /** Focus the spell bar after closing overlays (off in hero levels, where keys move the hero). */
   autoFocus = true;
 
@@ -93,6 +96,7 @@ export class Hud {
     });
 
     muteBtn.classList.toggle('off', this.muted);
+    this.hdBtn = h('button.icon-btn.hd-btn', { text: 'HD', onClick: () => this.setHD(cb.onHD()) });
     this.bookBtn = h('button.icon-btn', { title: 'Spellbook (Tab)', text: '📖', onClick: () => cb.onSpellbook() });
     this.menuBtn = h('button.icon-btn.levels-btn', { title: 'Menu', text: '☰ Menu', 'data-icon': '☰', onClick: () => cb.onLevels() });
 
@@ -106,6 +110,7 @@ export class Hud {
         this.bookBtn,
         h('button.icon-btn.reset-btn', { title: 'Restart (R)', text: '↺', onClick: () => cb.onReset() }),
         muteBtn,
+        this.hdBtn,
       ]),
       this.toasts.el,
       h('div.hud-bottom', {}, [this.chips, this.form]),
@@ -113,6 +118,12 @@ export class Hud {
       this.banner,
       this.overlay,
     );
+  }
+
+  /** Shows the voxel detail setting on its button. */
+  setHD(on: boolean): void {
+    this.hdBtn.classList.toggle('off', !on);
+    this.hdBtn.title = on ? 'Graphics: HD voxels (click for the classic look)' : 'Graphics: classic voxels (click for HD)';
   }
 
   private submit(ev: Event): void {

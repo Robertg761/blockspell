@@ -1,5 +1,6 @@
 import { ease } from '../../engine/tween';
 import { defineBehavior } from '../types';
+import { setMeshScale } from '../../voxel/hd';
 
 /** High restitution, a boing, and a squash-and-stretch on impact. */
 export default defineBehavior({
@@ -18,9 +19,9 @@ export default defineBehavior({
       duration: 0.35,
       update: (t) => {
         const k = 1 - amt * (1 - ease.outElastic(t));
-        mesh.scale.set(1 / Math.sqrt(k), k, 1 / Math.sqrt(k));
+        setMeshScale(mesh, 1 / Math.sqrt(k), k, 1 / Math.sqrt(k));
       },
-      done: () => mesh.scale.set(1, 1, 1),
+      done: () => setMeshScale(mesh, 1),
     });
   },
 });

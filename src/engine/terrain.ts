@@ -2,8 +2,7 @@ import { Body, Box, Vec3, type Material as PhysMaterial } from 'cannon-es';
 import { Group, Mesh, MeshStandardMaterial } from 'three';
 import { makeRng, randRange } from '../core/rng';
 import { VoxelBuilder } from '../voxel/builder';
-import { hdAt, meshVoxelsHD } from '../voxel/hd';
-import { meshVoxels } from '../voxel/mesher';
+import { bindVoxelMesh, releaseVoxelMesh } from '../voxel/hd';
 import { makeNoise2D } from './noise';
 
 export interface TerrainOptions {
@@ -95,12 +94,7 @@ export function buildTerrain(opts: Partial<TerrainOptions>, physMat: PhysMateria
 
   const group = new Group();
   const mat = new MeshStandardMaterial({ vertexColors: true, roughness: 0.95, metalness: 0 });
-  const hdIsland = hdAt(o.cx, o.cz);
-  const terrainModel = b.build();
-  const terrainGeo = hdIsland
-    ? meshVoxelsHD(terrainModel, { voxelSize: T, origin: 'model', style: 'terrain' }).geometry
-    : meshVoxels(terrainModel, { voxelSize: T, origin: 'model', jitter: 0.05 }).geometry;
-  const terrainMesh = new Mesh(terrainGeo, mat);
+  const terrainMesh = bindVoxelMesh(new Mesh(undefined, mat), { model: b.build(), voxelSize: T, origin: 'model', style: 'terrain', jitter: 0.05, lod: true, label: 'terrain' });
   terrainMesh.receiveShadow = true;
   terrainMesh.castShadow = true;
   terrainMesh.name = 'terrain';
@@ -172,8 +166,7 @@ export function buildTerrain(opts: Partial<TerrainOptions>, physMat: PhysMateria
     decor.ellipsoid(cx, cy, cz, s * 1.3, s, s, rng() > 0.5 ? 'stone' : 'stoneDark');
   }
   if (decor.size > 0) {
-    const dmodel = decor.build();
-    const dm = new Mesh((hdIsland ? meshVoxelsHD(dmodel, { voxelSize: DV, origin: 'model', style: 'decor' }) : meshVoxels(dmodel, { voxelSize: DV, origin: 'model' })).geometry, mat);
+    const dm = bindVoxelMesh(new Mesh(undefined, mat), { model: decor.build(), voxelSize: DV, origin: 'model', style: 'decor', lod: true, label: 'terrain-decor' });
     dm.name = 'terrain-decor';
     dm.castShadow = true;
     dm.receiveShadow = true;
@@ -187,7 +180,7 @@ export function buildTerrain(opts: Partial<TerrainOptions>, physMat: PhysMateria
     heightAt: (x, z) => localHeight(x - o.cx, z - o.cz),
     dispose() {
       group.traverse((c) => {
-        if (c instanceof Mesh) c.geometry.dispose();
+        if (c instanceof Mesh) releaseVoxelMesh(c);
       });
       mat.dispose();
     },

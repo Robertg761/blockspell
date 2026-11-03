@@ -1,5 +1,6 @@
 import { explode, lightFuse } from '../lib/blast';
 import { defineBehavior } from '../types';
+import { setMeshScale } from '../../voxel/hd';
 
 /** Fuse timer (from props or when lit by heat/fire), impact detonation, and the big boom. */
 export default defineBehavior({
@@ -16,7 +17,7 @@ export default defineBehavior({
     if (e.has('wet') || e.has('frozen')) {
       // doused: fuse fizzles out
       e.state.fuseLeft = undefined;
-      e.mesh.scale.setScalar(1);
+      setMeshScale(e.mesh, 1);
       world.fx.sound('sizzle', { volume: 0.5 });
       return;
     }
@@ -28,7 +29,7 @@ export default defineBehavior({
     world.fx.glow.request(top, '#ffb050', 2);
     const urgency = Math.max(0, 1 - left / 2);
     const pulse = 1 + Math.max(0, Math.sin(world.time * (8 + urgency * 30))) * (0.04 + urgency * 0.12);
-    e.mesh.scale.setScalar(pulse);
+    setMeshScale(e.mesh, pulse);
     if (Math.random() < dt * (2 + urgency * 10)) world.fx.sound('click', { pitch: 1 + urgency, volume: 2 });
     if (left <= 0) {
       const s = Math.sqrt(e.scale);

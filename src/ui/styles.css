@@ -74,6 +74,7 @@ button, input, select { font: inherit; color: inherit; }
 .level-select { font-size: 14px; padding: 0 10px; font-weight: 600; }
 .icon-btn:hover, .level-select:hover { background: #fff; }
 .icon-btn.off { opacity: 0.45; text-decoration: line-through; }
+.icon-btn.hd-btn { font-size: 13px; font-weight: 800; letter-spacing: 0.02em; }
 
 /* ---------- bottom spell bar ---------- */
 .hud-bottom {

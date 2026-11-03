@@ -1,4 +1,5 @@
-import { BufferAttribute, Color, Mesh } from 'three';
+import { BufferAttribute, Color, Mesh, type BufferGeometry } from 'three';
+import { isSharedGeometry, refreshVoxelMesh } from '../../voxel/hd';
 import type { Entity } from '../../core/entity';
 import { defineBehavior } from '../types';
 
@@ -13,17 +14,42 @@ function meshes(e: Entity): Mesh[] {
   return out;
 }
 
+/**
+ * The mesh's own copy of its geometry to repaint (voxel geometry is shared through a cache), with
+ * the original colors. A new copy is made if the mesh's geometry changed (HD arriving, quality toggle).
+ */
+function paintable(m: Mesh): { geo: BufferGeometry; orig: Float32Array } {
+  let own = m.userData.rainbow as { geo: BufferGeometry; src: BufferGeometry; orig: Float32Array } | undefined;
+  if (own && m.geometry === own.geo) return own;
+  if (own) own.geo.dispose();
+  const src = m.geometry;
+  const geo = isSharedGeometry(src) ? src.clone() : src;
+  geo.userData = { ...src.userData, voxelCache: false };
+  const col = geo.getAttribute('color') as BufferAttribute;
+  const orig = new Float32Array(col.count * 3);
+  for (let i = 0; i < col.count; i++) {
+    orig[i * 3] = col.getX(i);
+    orig[i * 3 + 1] = col.getY(i);
+    orig[i * 3 + 2] = col.getZ(i);
+  }
+  own = { geo, src, orig };
+  m.userData.rainbow = own;
+  m.geometry = geo;
+  return own;
+}
+
 /** Repaints vertex colors as shifting rainbow bands (keeping shading), and sheds colorful sparkles. */
 function paint(e: Entity, t: number): void {
   for (const m of meshes(e)) {
-    const col = m.geometry.getAttribute('color') as BufferAttribute;
-    const pos = m.geometry.getAttribute('position') as BufferAttribute;
-    let orig = m.userData.origColors as Float32Array | undefined;
-    if (!orig) orig = m.userData.origColors = (col.array as Float32Array).slice();
+    const { geo, orig } = paintable(m);
+    const col = geo.getAttribute('color') as BufferAttribute;
+    const pos = geo.getAttribute('position') as BufferAttribute;
+    // positions may be in packed units: the mesh's own scale brings them back to meters
+    const unit = (m.userData.unit as number | undefined) ?? 1;
     const span = Math.max(0.3, e.size.y);
     for (let i = 0; i < col.count; i++) {
       c.setRGB(orig[i * 3], orig[i * 3 + 1], orig[i * 3 + 2]).getHSL(hsl);
-      const h = ((pos.getY(i) / span) * 0.8 + pos.getX(i) * 0.15 + t) % 1;
+      const h = (((pos.getY(i) * unit) / span) * 0.8 + pos.getX(i) * unit * 0.15 + t) % 1;
       c.setHSL((h + 1) % 1, 0.85, Math.min(0.62, Math.max(0.3, hsl.l * 0.6 + 0.2)));
       col.setXYZ(i, c.r, c.g, c.b);
     }
@@ -39,10 +65,19 @@ export default defineBehavior({
   },
   detach(e) {
     for (const m of meshes(e)) {
-      const orig = m.userData.origColors as Float32Array | undefined;
-      if (!orig) continue;
-      (m.geometry.getAttribute('color').array as Float32Array).set(orig);
-      m.geometry.getAttribute('color').needsUpdate = true;
+      const own = m.userData.rainbow as { geo: BufferGeometry; src: BufferGeometry; orig: Float32Array } | undefined;
+      if (!own) continue;
+      delete m.userData.rainbow;
+      if (own.geo !== own.src) {
+        // back to the shared geometry
+        if (m.geometry === own.geo) m.geometry = own.src;
+        own.geo.dispose();
+        refreshVoxelMesh(m);
+      } else {
+        const col = own.geo.getAttribute('color') as BufferAttribute;
+        for (let i = 0; i < col.count; i++) col.setXYZ(i, own.orig[i * 3], own.orig[i * 3 + 1], own.orig[i * 3 + 2]);
+        col.needsUpdate = true;
+      }
     }
   },
   update(e, world, dt) {

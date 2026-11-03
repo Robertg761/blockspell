@@ -3,6 +3,7 @@ import { objects } from '../../objects';
 import { extinguish, steam } from '../lib/fire';
 import { splash } from '../lib/water';
 import { defineBehavior } from '../types';
+import { setMeshScale } from '../../voxel/hd';
 
 /**
  * Cold things melt near heat (the `hot` behavior raises state.melt), shrinking
@@ -16,7 +17,7 @@ export default defineBehavior({
     const melt = (e.state.melt as number) ?? 0;
     if (melt > 0) {
       const k = 1 - melt * 0.65;
-      e.mesh.scale.set(k, k * (1 - melt * 0.15), k);
+      setMeshScale(e.mesh, k, k * (1 - melt * 0.15), k);
       e.mesh.position.y = -e.size.y * (1 - k) * 0.5;
       if (Math.random() < dt * 14) {
         const p = e.body.position;
