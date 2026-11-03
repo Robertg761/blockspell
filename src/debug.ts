@@ -7,6 +7,7 @@ import { seedRandom } from './core/rng';
 import { orderedTasks, tasks, zoneEntry } from './tasks';
 import { wayKey } from './tasks/save';
 import { Mesh } from 'three';
+import { setAnimLevel, type AnimLevel } from './engine/voxanim';
 import { clearHDSetting, geometryBytes, hdPending, hdStats, hdTop, setHDEnabled } from './voxel/hd';
 
 /**
@@ -28,6 +29,10 @@ import { clearHDSetting, geometryBytes, hdPending, hdStats, hdTop, setHDEnabled 
  *   __blockspell.setHD(true)                  turn HD voxels on or off right away (saved). Also ?hd=1 / ?hd=0;
  *                                             setHD(null) forgets the saved choice (auto detection next load)
  *   __blockspell.hdPending()                  HD meshes still being built (0 = everything in view is final)
+ *   __blockspell.anim()                       voxel spawn/change/despawn animations: quality (and why), what is running
+ *   __blockspell.setAnim('lite')              'full' | 'lite' | 'off' (null: automatic again). Also ?anim=full|lite|off
+ *   __blockspell.retag('ball', 'frozen')      add a tag to the newest living 'ball' (false as 3rd arg removes it)
+ *   __blockspell.despawn('ball')              remove the newest living 'ball' the way a used-up thing goes (dissolve)
  *   __blockspell.renderStats()                last frame's draw calls/triangles, scene triangles and bytes (HD vs classic)
  *   __blockspell.resetZone()                  reset the hero's zone (like pressing R in the world)
  *   __blockspell.leakCheck()                  cast things and reset each zone a few times; counts must match
@@ -330,6 +335,24 @@ export function installDebug(game: Game) {
       return hdStats();
     },
     hdPending: () => hdPending(),
+    anim: () => game.fx.anims.stats(),
+    retag(id: string, tag: string, on = true) {
+      const e = game.world.living((o) => o.def.id === id).pop();
+      if (!e) return false;
+      if (on) game.world.addTag(e, tag as never);
+      else game.world.removeTag(e, tag as never);
+      return true;
+    },
+    despawn(id: string, reason = 'used') {
+      const e = game.world.living((o) => o.def.id === id).pop();
+      if (!e) return false;
+      game.world.remove(e, reason);
+      return true;
+    },
+    setAnim: (level: AnimLevel | null) => {
+      setAnimLevel(level);
+      return game.fx.anims.stats();
+    },
     hdTop: (n?: number) => hdTop(n),
     /** Draw calls and triangles of the last frame, plus mesh triangles and buffer bytes in the scene, split HD / classic. */
     renderStats() {

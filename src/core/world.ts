@@ -5,6 +5,7 @@ import type { AdjectiveDef, SpawnModifiers } from '../adjectives/types';
 import { emptyModifiers } from '../adjectives/types';
 import { behaviorsFor } from '../behaviors';
 import type { BehaviorDef } from '../behaviors/types';
+import type { Color } from 'three';
 import type { Effects } from '../engine/fx';
 import { ease } from '../engine/tween';
 import { buildTerrain, type Terrain, type TerrainOptions } from '../engine/terrain';
@@ -19,6 +20,19 @@ import type { Tag } from './tags';
 
 const STEP = 1 / 60;
 const MAX_STEPS = 4;
+/** Removal reasons that play the voxel dissolve (others vanish at once: falls, resets, pops, blasts). */
+const DISSOLVE_REASONS = new Set(['limit', 'used', 'burned', 'melted', 'extinguished', 'eaten']);
+
+/** Tags whose arrival (or departure) sweeps a change across the object, with the wave's glow color. */
+const MORPH_TAGS: Record<string, [on: string, off: string]> = {
+  frozen: ['#bfe8ff', '#ffb070'],
+  wet: ['#7cc4ff', '#fff0c0'],
+  rainbow: ['#ff7ad9', '#ffffff'],
+  glows: ['#fff3b0', '#d8d0ff'],
+  ghost: ['#e8f0ff', '#e8f0ff'],
+  metal: ['#d8e0ea', '#d8e0ea'],
+};
+
 /** Hard cap on live objects; the oldest is poofed away to make room. */
 export const MAX_ENTITIES = 80;
 
@@ -108,6 +122,8 @@ export class GameWorld {
   private bodyMap = new Map<number, Entity>();
   private pendingContacts: { e: Entity; other: Entity | null; speed: number }[] = [];
   private pendingRemoval: Entity[] = [];
+  /** Removed entities whose visuals play the dissolve (handed to fx.anims when disposed). */
+  private ghosted = new Set<Entity>();
   private levelSubs: { off: () => void; scope: string | null }[] = [];
   private acc = 0;
   private staticMat = new MeshStandardMaterial({ vertexColors: true, roughness: 0.9 });
@@ -124,6 +140,9 @@ export class GameWorld {
     this.groundMaterial.restitution = 1;
     const solver = this.physics.solver as unknown as { iterations: number };
     solver.iterations = 12;
+    // state changes without a tag: a warm wave for catching fire, a cool one for being put out
+    this.events.on('ignite', ({ entity }) => this.morphJuice(entity, '#ff9a3c', null));
+    this.events.on('extinguish', ({ entity }) => this.morphJuice(entity, '#cfe6ff', null));
   }
 
   // ---------------------------------------------------------------- events
@@ -202,8 +221,10 @@ export class GameWorld {
   private spawnJuice(e: Entity): void {
     const s = e.scale;
     const v = e.visual;
-    v.scale.setScalar(0.001);
-    this.fx.tweens.add({
+    // the voxel assembly (engine/voxanim.ts) when it plays, else the plain pop
+    if (!this.fx.anims.spawn(e)) {
+      v.scale.setScalar(0.001);
+      this.fx.tweens.add({
       duration: 0.5,
       update: (t) => {
         const k = ease.outBack(t, 2.6);
@@ -211,7 +232,8 @@ export class GameWorld {
         v.scale.set(k / Math.sqrt(squash), k * squash, k / Math.sqrt(squash));
       },
       done: () => v.scale.setScalar(1),
-    });
+      });
+    }
     const p = e.body.position;
     const color = e.def.burstColor ?? '#ffffff';
     this.fx.sparkle(p, ['#fff6a8', '#ffd84a', '#ffffff', color], 26);
@@ -226,6 +248,9 @@ export class GameWorld {
     if (!e.alive) return;
     e.alive = false;
     if (effect === 'poof') this.fx.poof(e.body.position, undefined, Math.max(0.6, Math.min(2, e.radius * 1.5)));
+    // visual only: the body still leaves the world at the end of this update, as always
+    if ((effect === 'poof' || DISSOLVE_REASONS.has(reason)) && e !== this.hero)
+      this.ghosted.add(e);
     this.pendingRemoval.push(e);
     this.unlinkAll(e);
     this.events.emit('remove', { entity: e, reason });
@@ -292,16 +317,28 @@ export class GameWorld {
   // ---------------------------------------------------------------- tags
   addTag(e: Entity, tag: Tag): void {
     if (e.tags.has(tag)) return;
+    const before = MORPH_TAGS[tag] ? this.fx.anims.snapshot(e) : null;
     e.tags.add(tag);
     this.refreshBehaviors(e);
+    if (MORPH_TAGS[tag]) this.morphJuice(e, MORPH_TAGS[tag][0], before);
     this.events.emit('tagAdded', { entity: e, tag });
   }
 
   removeTag(e: Entity, tag: Tag): void {
     if (!e.tags.has(tag)) return;
+    const before = MORPH_TAGS[tag] ? this.fx.anims.snapshot(e) : null;
     e.tags.delete(tag);
     this.refreshBehaviors(e);
+    if (MORPH_TAGS[tag]) this.morphJuice(e, MORPH_TAGS[tag][1], before);
     this.events.emit('tagRemoved', { entity: e, tag });
+  }
+
+  /** The change sweep on an entity that has been around a moment (not part of its own spawn). */
+  private morphJuice(e: Entity, color: string, before: { color: Color; emissive: Color } | null): void {
+    if (!e.alive || e.age < 0.3) return;
+    const after = before && this.fx.anims.snapshot(e);
+    const changed = !!before && !!after && (!before.color.equals(after.color) || !before.emissive.equals(after.emissive));
+    this.fx.anims.morph(e, { color, from: changed ? before : null });
   }
 
   private refreshBehaviors(e: Entity): void {
@@ -461,6 +498,8 @@ export class GameWorld {
 
   /** Removes all entities, statics and level subscriptions. Keeps terrain. */
   clear(): void {
+    // a level change disposes everything at once: no dissolves
+    this.ghosted.clear();
     for (const l of [...this.links]) this.unlink(l);
     for (const e of this.entities) this.disposeEntity(e);
     this.entities.length = 0;
@@ -486,6 +525,7 @@ export class GameWorld {
     this.input.up = this.input.down = this.input.jump = false;
     this.waterLevel = null;
     this.acc = 0;
+    this.fx.anims.clear();
     this.fx.particles.clear();
     this.fx.flames.clear();
     this.fx.tweens.clear();
@@ -558,13 +598,18 @@ export class GameWorld {
 
   private disposeEntity(e: Entity): void {
     e.alive = false;
-    this.scene.remove(e.root);
     this.physics.removeBody(e.body);
     this.bodyMap.delete(e.body.id);
-    for (const m of e.materials) m.dispose();
-    // voxel geometry is shared through the cache: release it rather than dispose it
-    e.root.traverse((c) => {
-      if (c instanceof Mesh) releaseVoxelMesh(c);
-    });
+    const visuals = () => {
+      e.root.removeFromParent();
+      for (const m of e.materials) m.dispose();
+      // voxel geometry is shared through the cache: release it rather than dispose it
+      e.root.traverse((c) => {
+        if (c instanceof Mesh) releaseVoxelMesh(c);
+      });
+    };
+    // a dissolving entity's visuals outlive it for a moment (fx.anims disposes them)
+    const ghost = this.ghosted.delete(e) && this.fx.anims.dissolve(e, visuals);
+    if (!ghost) visuals();
   }
 }

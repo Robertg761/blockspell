@@ -3,6 +3,8 @@ import type { Group, Material, Mesh, Vector3 } from 'three';
 import type { ObjectDef } from '../objects/types';
 import type { BehaviorDef } from '../behaviors/types';
 import type { Tag } from './tags';
+import type { EntityAnim } from '../engine/voxanim';
+import type { VoxelModel } from '../voxel/model';
 
 /**
  * Mutable per-entity state shared between behaviors. Add fields freely —
@@ -40,6 +42,10 @@ export class Entity {
   readonly radius: number;
   /** ObjectDef.props with this spawn's overrides (SpawnOptions.props), when it has any. */
   props: Record<string, number> | null = null;
+  /** Uniforms of the voxel spawn/change/despawn animations (see engine/voxanim.ts); visual only. */
+  anim: EntityAnim | null = null;
+  /** The coarse model (after tinting) and its voxel size: the cells those animations work on. */
+  voxel: { model: VoxelModel; vs: number } | null = null;
 
   constructor(
     readonly def: ObjectDef,

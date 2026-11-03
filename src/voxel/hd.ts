@@ -22,6 +22,9 @@ export { ROOF, type Cls, type HDStyle };
  */
 export const hd = { enabled: false, source: 'auto' as 'url' | 'saved' | 'auto', reason: '', gpu: '' };
 
+/** What detectGPU found (also read by the voxel animations to pick their quality). */
+export const gpuTier = { software: false, weak: false };
+
 const STORAGE_KEY = 'blockspell.hd';
 
 /** WebGL renderer string and whether it looks like software rendering or a weak GPU. */
@@ -56,6 +59,8 @@ function readSetting(): void {
   }
   const g = detectGPU();
   hd.gpu = g.gpu;
+  gpuTier.software = g.software;
+  gpuTier.weak = g.weak;
   if (q !== null) {
     hd.enabled = q !== '0' && q !== 'off';
     hd.source = 'url';

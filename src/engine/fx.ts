@@ -4,6 +4,7 @@ import { FlameFx } from './flames';
 import { Particles, type BurstOptions } from './particles';
 import { CameraShake } from './shake';
 import { Tweens } from './tween';
+import { VoxelAnims } from './voxanim';
 
 type P3 = { x: number; y: number; z: number };
 
@@ -54,11 +55,14 @@ export class Effects {
   readonly tweens = new Tweens();
   readonly glow: GlowLights;
   readonly flames: FlameFx;
+  /** Voxel spawn / change / despawn animations. */
+  readonly anims: VoxelAnims;
 
   constructor(scene: Scene) {
     this.particles = new Particles(scene);
     this.glow = new GlowLights(scene);
     this.flames = new FlameFx(scene);
+    this.anims = new VoxelAnims(scene, this);
   }
 
   burst(at: P3, o?: BurstOptions): void {
@@ -114,6 +118,8 @@ export class Effects {
   update(dt: number): void {
     this.particles.update(dt);
     this.tweens.update(dt);
+    // after the tweens: casts spawn from them, and their first frame needs the animation set up
+    this.anims.update(dt);
     this.shake.update(dt);
     this.glow.update(dt);
     this.flames.update(dt);

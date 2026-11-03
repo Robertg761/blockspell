@@ -10,6 +10,7 @@ import { makeTintMap, resolveColor } from '../voxel/palette';
 import { Entity } from './entity';
 import { GROUP } from './groups';
 import { envMap } from '../engine/env';
+import { makeEntityAnim, patchEntityMaterials } from '../engine/voxanim';
 import { makeRng, random } from './rng';
 
 /** The coarse voxel models of one object: the main one and its animated parts (same rng order as always). */
@@ -57,6 +58,8 @@ export function createEntity(def: ObjectDef, mods: SpawnModifiers, label: string
     m.envMap = envMap;
     m.envMapIntensity = 1.1;
   }
+  const anim = makeEntityAnim();
+  patchEntityMaterials(materials, anim);
   const mesh = bindVoxelMesh(new Mesh(undefined, materials), { model, voxelSize: vs, style: 'object', classKeys, overrides, label: def.id });
   mesh.castShadow = true;
   mesh.receiveShadow = true;
@@ -133,6 +136,8 @@ export function createEntity(def: ObjectDef, mods: SpawnModifiers, label: string
 
   const e = new Entity(def, body, { root, visual, mesh, materials }, size, mods.scale, label);
   if (propOverrides) e.props = props;
+  e.anim = anim;
+  e.voxel = { model, vs };
   for (const [name, g] of partGroups) e.parts.set(name, g);
   for (const t of def.tags) e.tags.add(t);
   for (const t of mods.addTags) e.tags.add(t);

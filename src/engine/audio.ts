@@ -9,7 +9,8 @@ export type SoundName =
   | 'error' | 'win' | 'click' | 'balloonPop' | 'ignite' | 'magic' | 'poof' | 'squeak'
   | 'boom' | 'splash' | 'shatter' | 'clank' | 'meow' | 'tweet' | 'moo' | 'beep' | 'chime'
   | 'rumble' | 'quack' | 'ribbit' | 'buzz' | 'freeze' | 'oink' | 'engine'
-  | 'jump' | 'land' | 'step' | 'climb' | 'fanfare' | 'star' | 'confetti' | 'uiClick';
+  | 'jump' | 'land' | 'step' | 'climb' | 'fanfare' | 'star' | 'confetti' | 'uiClick'
+  | 'assemble' | 'snap' | 'shimmer' | 'dissolve';
 
 interface PlayOpts {
   pitch?: number;
@@ -179,6 +180,24 @@ const SOUNDS: Record<SoundName, Voice> = {
   },
   uiClick: (a, t, p, v) => {
     a.tone({ t, f0: 900 * p, f1: 700 * p, dur: 0.05, type: 'sine', vol: 0.12 * v });
+  },
+  // voxel animations: a glittery rising sweep with soft ticks as voxels click into place
+  assemble: (a, t, p, v) => {
+    a.noise({ t, dur: 0.55, freq: 1800 * p, freqEnd: 6000 * p, q: 2.5, vol: 0.12 * v, attack: 0.2 });
+    for (let i = 0; i < 6; i++) a.tone({ t: t + 0.18 + i * 0.07 + Math.random() * 0.03, f0: (1400 + i * 180) * p, dur: 0.04, type: 'triangle', vol: 0.05 * v });
+  },
+  snap: (a, t, p, v) => {
+    a.tone({ t, f0: 520 * p, f1: 1040 * p, dur: 0.09, type: 'sine', vol: 0.3 * v });
+    a.noise({ t, dur: 0.03, freq: 2600 * p, q: 1.5, vol: 0.12 * v });
+    a.tone({ t: t + 0.05, f0: 1568 * p, dur: 0.25, type: 'sine', vol: 0.06 * v });
+  },
+  shimmer: (a, t, p, v) => {
+    a.noise({ t, dur: 0.7, freq: 3000 * p, freqEnd: 7500 * p, q: 4, vol: 0.1 * v, attack: 0.15 });
+    [0, 5, 9, 12, 17].forEach((semi, i) => a.tone({ t: t + i * 0.08, f0: 1046 * p * 2 ** (semi / 12), dur: 0.3, type: 'sine', vol: 0.045 * v }));
+  },
+  dissolve: (a, t, p, v) => {
+    a.noise({ t, dur: 0.6, freq: 5000 * p, freqEnd: 900 * p, q: 1.2, vol: 0.16 * v, attack: 0.03 });
+    [12, 7, 3, 0].forEach((semi, i) => a.tone({ t: t + i * 0.06, f0: 880 * p * 2 ** (semi / 12), dur: 0.16, type: 'triangle', vol: 0.05 * v }));
   },
 };
 
