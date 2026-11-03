@@ -99,7 +99,8 @@ export class GameWorld {
   /** While set, `on()` subscriptions are filed under this scope so `offScope` can drop them early (a task's latches). */
   subScope: string | null = null;
 
-  private statics: { mesh: Mesh; body: Body; yaw: number }[] = [];
+  /** Static boxes (mesh plus collider), invisible colliders (mesh null) and baked decor meshes (body null). */
+  private statics: { mesh: Mesh | null; body: Body | null; yaw: number }[] = [];
   private bodyMap = new Map<number, Entity>();
   private pendingContacts: { e: Entity; other: Entity | null; speed: number }[] = [];
   private pendingRemoval: Entity[] = [];
@@ -377,6 +378,7 @@ export class GameWorld {
     for (const t of this.terrains) h = Math.max(h, t.heightAt(x, z));
     for (const s of this.statics) {
       const b = s.body;
+      if (!b) continue;
       const he = (b.shapes[0] as Box).halfExtents;
       // into the box's own frame (yaw only)
       const dx = x - b.position.x, dz = z - b.position.z;
@@ -412,9 +414,35 @@ export class GameWorld {
     return mesh;
   }
 
+  /** A static collider with no mesh of its own (its look is part of a baked decor mesh). Counts as ground. */
+  addStaticCollider(position: [number, number, number], size: [number, number, number]): void {
+    if (this.skipStatics) return;
+    const body = new Body({ mass: 0, type: Body.STATIC, material: this.groundMaterial });
+    body.addShape(new Box(new Vec3(size[0] / 2, size[1] / 2, size[2] / 2)));
+    body.position.set(...position);
+    this.physics.addBody(body);
+    this.statics.push({ mesh: null, body, yaw: 0 });
+  }
+
+  /**
+   * Bakes a voxel model (voxel size 0.25, voxel (0,0,0) at `at`) into one static mesh with no
+   * collider: a zone's scenery in a single draw call. Pair it with `addStaticCollider` for solid parts.
+   */
+  addDecorMesh(model: ReturnType<VoxelBuilder['build']>, at: [number, number, number]): Mesh | null {
+    if (this.skipStatics) return null;
+    const mesh = new Mesh(meshVoxels(model, { voxelSize: 0.25, origin: 'model' }).geometry, this.staticMat);
+    mesh.position.set(...at);
+    mesh.castShadow = mesh.receiveShadow = true;
+    mesh.name = 'decor';
+    this.scene.add(mesh);
+    this.statics.push({ mesh, body: null, yaw: 0 });
+    return mesh;
+  }
+
   /** Meshes the player can click to place the spawn marker. */
   pickables(): Mesh[] {
-    const list: Mesh[] = this.statics.map((s) => s.mesh);
+    const list: Mesh[] = [];
+    for (const s of this.statics) if (s.mesh) list.push(s.mesh);
     for (const t of this.terrains)
       t.group.traverse((c) => {
         if (c instanceof Mesh) list.push(c);
@@ -436,9 +464,11 @@ export class GameWorld {
     this.pendingContacts.length = 0;
     this.pendingRemoval.length = 0;
     for (const s of this.statics) {
-      this.scene.remove(s.mesh);
-      s.mesh.geometry.dispose();
-      this.physics.removeBody(s.body);
+      if (s.mesh) {
+        this.scene.remove(s.mesh);
+        s.mesh.geometry.dispose();
+      }
+      if (s.body) this.physics.removeBody(s.body);
     }
     this.statics.length = 0;
     for (const s of this.levelSubs) s.off();

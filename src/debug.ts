@@ -28,6 +28,7 @@ import { wayKey } from './tasks/save';
  *                                             task, an idle check per zone and the leak check (the save is
  *                                             restored after)
  *   __blockspell.solveAll({ seeds: [1, 2, 3] })  the same, with every task solution run once per seed
+ *                                             (every task solve also fails if a task in another zone completes)
  *
  * Query flags (handy for screenshots):
  *   ?level=2               skip the title and load level 2 (order number or id; `world` is the open world)
@@ -171,7 +172,7 @@ export function installDebug(game: Game) {
     let t = 0;
     let wrongZone: string | null = null;
     const off = game.world.events.on('taskComplete', ({ taskId, zone }) => {
-      if (zone !== task.zone && zone !== 'hub' && task.zone !== 'hub') wrongZone ??= taskId;
+      if (zone !== task.zone) wrongZone ??= taskId; // negative check: a solve never completes another zone's task
     });
     try {
       game.hud.hideOverlay();
