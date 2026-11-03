@@ -23,7 +23,8 @@ export function ignite(e: Entity, world: GameWorld): boolean {
   if (!e.alive || e.state.burning || e.state.charred || e.has('wet') || e.has('frozen') || e.has('metal')) return false;
   e.state.burning = true;
   e.state.heat = 1;
-  const total = e.prop('burnTime', 7) * Math.sqrt(e.scale);
+  // state.burnTime overrides the object's burnTime for one entity (level props that burn longer)
+  const total = ((e.state.burnTime as number | undefined) ?? e.prop('burnTime', 7)) * Math.sqrt(e.scale);
   e.state.burnLeft = total;
   e.state.burnTotal = total;
   if (!e.has('hot')) {
