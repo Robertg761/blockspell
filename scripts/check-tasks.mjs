@@ -14,7 +14,8 @@
 // failed request exits non-zero. The preview server is always stopped.
 //
 // HD voxels: headless Chrome renders in software, so the game picks the coarse look on its own. Force a
-// mode with BLOCKSPELL_HD=1 (or 0) or --hd=1 (or --hd=0); it is passed to the page as ?hd=.
+// mode with BLOCKSPELL_HD=1 (or 0) or --hd=1 (or --hd=0); it is passed to the page as ?hd=. Likewise
+// BLOCKSPELL_ANIM=full|lite|off (or --anim=) is passed as ?anim= (the voxel animations' quality).
 //
 // Usage: npm run build && npm run check-tasks   (or: node scripts/check-tasks.mjs [--no-seeds] [--hd=1])
 import { spawn } from 'node:child_process';
@@ -30,6 +31,9 @@ const CHROME = process.env.CHROME ?? '/usr/bin/google-chrome';
 const CHROME_ARGS = ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'];
 const HD = args.find((a) => a.startsWith('--hd='))?.slice(5) ?? process.env.BLOCKSPELL_HD;
 const HDQ = HD !== undefined && HD !== '' ? `&hd=${encodeURIComponent(HD)}` : '';
+// Voxel animations: software rendering picks 'lite' on its own; BLOCKSPELL_ANIM=full (or --anim=full|lite|off) forces one.
+const ANIM = args.find((a) => a.startsWith('--anim='))?.slice(7) ?? process.env.BLOCKSPELL_ANIM;
+const ANIMQ = ANIM ? `&anim=${encodeURIComponent(ANIM)}` : '';
 const TASK = 'cross-gap'; // completed for real in the offline and reload steps
 
 const problems = [];
@@ -134,7 +138,7 @@ async function main() {
     page.on('pageerror', (e) => problems.push(`page error: ${e.message}`));
     page.on('requestfailed', (r) => problems.push(`request failed: ${r.url()} (${r.failure()?.errorText})`));
 
-    await page.goto(origin + '/?mute' + HDQ);
+    await page.goto(origin + '/?mute' + HDQ + ANIMQ);
     await page.waitForFunction(() => !!window.__blockspell);
     await page.waitForTimeout(1000);
     const hd = await page.evaluate(() => window.__blockspell.hd());
@@ -171,7 +175,7 @@ async function main() {
     offline = false;
 
     // 4: reload, Explore, Journal shows it done
-    await page.goto(origin + '/?mute' + HDQ);
+    await page.goto(origin + '/?mute' + HDQ + ANIMQ);
     await page.waitForFunction(() => !!window.__blockspell);
     await page.click('.explore-btn');
     await page.waitForTimeout(500);

@@ -181,7 +181,11 @@ if (uBsA.x > 0.5) {
     bsGlow = uBsColor * bsBand * bsTw * uBsD.y;
   }
 }
+#ifdef STANDARD
 vec4 diffuseColor = vec4( bsAhead ? uBsFrom : diffuse, opacity );
+#else
+vec4 diffuseColor = vec4( diffuse, opacity );
+#endif
 `;
 
 const ENTITY_EMISSIVE = /* glsl */ `
@@ -224,6 +228,7 @@ attribute vec3 aCell;
 attribute vec4 aRand;
 attribute vec4 aP0;
 attribute vec4 aP1;
+attribute vec3 aUp;
 varying float vCubeGlow;
 mat3 bsRot(vec3 a, float t) {
   float s = sin(t), c = cos(t), oc = 1.0 - c;
@@ -237,7 +242,7 @@ const CUBE_NORMAL = /* glsl */ `
 float cT = (uBsTime - aP0.y) / aP0.z;
 float cVs = aP0.w;
 vec3 cHs = aP1.xyz;
-vec3 cUp = vec3(0.0, 1.0, 0.0);
+vec3 cUp = aUp;
 vec3 cN = max(floor(2.0 * cHs / cVs + 0.5), vec3(1.0));
 vec3 cTarget = (aCell + 0.5) * cVs - cHs;
 float cScale = 0.0;
@@ -300,6 +305,31 @@ function getCubeMaterial(): MeshStandardMaterial {
 }
 
 const box = new BoxGeometry(1, 1, 1);
+
+/** Instanced cube geometry with the per-voxel attributes (own copies of the tiny cube: disposing it frees nothing shared). */
+function cubeGeometry(n: number, cell: Float32Array, color: Float32Array, rnd: Float32Array, p0: Float32Array, p1: Float32Array, up: Float32Array): InstancedBufferGeometry {
+  const g = new InstancedBufferGeometry();
+  g.setIndex(box.index!.clone());
+  g.setAttribute('position', (box.getAttribute('position') as BufferAttribute).clone());
+  g.setAttribute('normal', (box.getAttribute('normal') as BufferAttribute).clone());
+  g.setAttribute('aCell', new InstancedBufferAttribute(cell, 3));
+  g.setAttribute('color', new InstancedBufferAttribute(color, 3));
+  g.setAttribute('aRand', new InstancedBufferAttribute(rnd, 4));
+  g.setAttribute('aP0', new InstancedBufferAttribute(p0, 4));
+  g.setAttribute('aP1', new InstancedBufferAttribute(p1, 4));
+  g.setAttribute('aUp', new InstancedBufferAttribute(up, 3));
+  g.instanceCount = n;
+  return g;
+}
+
+/** One long-finished (invisible) cube, always in the scene, so the cube shader compiles with the level, not on the first cast. */
+function warmupCubes(): Mesh {
+  const g = cubeGeometry(1, new Float32Array(3), new Float32Array(3), new Float32Array(4), new Float32Array([1, -1e6, 1, 0.1]), new Float32Array([0.5, 0.5, 0.5, 0]), new Float32Array([0, 1, 0]));
+  const m = new Mesh(g, getCubeMaterial());
+  m.frustumCulled = false;
+  m.name = 'voxel-cubes-warmup';
+  return m;
+}
 
 /** Surface cells of a model (filled, with an empty neighbour) and their colors: cached per model. */
 const surfaceCache = new WeakMap<VoxelModel, { cells: Uint8Array; colors: Float32Array; n: number }>();
@@ -376,6 +406,7 @@ export class VoxelAnims {
   constructor(scene: Scene, private fx: Effects) {
     this.ghosts.name = 'voxel-anims';
     scene.add(this.ghosts);
+    this.ghosts.add(warmupCubes());
   }
 
   get time(): number {
@@ -452,7 +483,10 @@ export class VoxelAnims {
     if (n < 4) return;
     const u = a.e.anim!;
     const tint = (a.e.materials[0] as MeshStandardMaterial).color ?? WHITE;
-    const cell = new Float32Array(n * 3), col = new Float32Array(n * 3), rnd = new Float32Array(n * 4), p0 = new Float32Array(n * 4), p1 = new Float32Array(n * 4);
+    const cell = new Float32Array(n * 3), col = new Float32Array(n * 3), rnd = new Float32Array(n * 4), p0 = new Float32Array(n * 4), p1 = new Float32Array(n * 4), up = new Float32Array(n * 3);
+    // world up in the entity's space (it may be lying on its side)
+    a.e.visual.updateWorldMatrix(true, false);
+    const wUp = _v.set(0, 1, 0).applyQuaternion(a.e.visual.getWorldQuaternion(_q).invert());
     // a random subset when there are more surface voxels than cubes
     const pick = Array.from({ length: s.n }, (_, i) => i);
     for (let i = 0; i < n; i++) {
@@ -464,18 +498,9 @@ export class VoxelAnims {
       rnd.set([Math.random(), Math.random(), Math.random(), Math.random()], i * 4);
       p0.set([mode, a.start, a.dur, u.uBsB.value.w], i * 4);
       p1.set([u.uBsB.value.x, u.uBsB.value.y, u.uBsB.value.z, 0], i * 4);
+      up.set([wUp.x, wUp.y, wUp.z], i * 3);
     }
-    const g = new InstancedBufferGeometry();
-    // own copies of the (tiny) cube: disposing this geometry must not free buffers others use
-    g.setIndex(box.index!.clone());
-    g.setAttribute('position', (box.getAttribute('position') as BufferAttribute).clone());
-    g.setAttribute('normal', (box.getAttribute('normal') as BufferAttribute).clone());
-    g.setAttribute('aCell', new InstancedBufferAttribute(cell, 3));
-    g.setAttribute('color', new InstancedBufferAttribute(col, 3));
-    g.setAttribute('aRand', new InstancedBufferAttribute(rnd, 4));
-    g.setAttribute('aP0', new InstancedBufferAttribute(p0, 4));
-    g.setAttribute('aP1', new InstancedBufferAttribute(p1, 4));
-    g.instanceCount = n;
+    const g = cubeGeometry(n, cell, col, rnd, p0, p1, up);
     const mesh = new Mesh(g, getCubeMaterial());
     mesh.frustumCulled = false;
     mesh.castShadow = false;
@@ -587,7 +612,7 @@ export class VoxelAnims {
       if (a.kind === 'spawn') this.updateSpawn(a, T, u);
       else if (a.kind === 'dissolve') this.updateDissolve(a, T);
       else this.updateMorph(a, T);
-      if (a.kind !== 'dissolve') this.syncMatrix(a);
+      this.syncMatrix(a);
     }
   }
 

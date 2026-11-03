@@ -145,6 +145,7 @@ URL flags for screenshots:
 - `&cam=x,y,z,tx,ty,tz` sets the camera position and target.
 - `&mute`, `&nobloom` and `&notips` turn off sound, bloom and the control tips.
 - `&hd=1` / `&hd=0` forces HD voxels on or off (see below).
+- `&anim=full`, `&anim=lite` or `&anim=off` sets the voxel animations' quality (see below).
 - `?levels` opens level select.
 
 HD voxels: every voxel model is drawn with 4x finer, detailed voxels (bevels, mortar,
@@ -154,6 +155,18 @@ the Journal's Graphics button switches it, and the choice is saved. Headless Chr
 renders in software, so automation that wants HD must force it with `&hd=1`
 (`BLOCKSPELL_HD=1 npm run check-tasks` does). `__blockspell.hd()` shows the setting,
 the geometry cache and the build workers.
+
+Voxel animations: a cast object assembles itself, with its voxels flying in and snapping
+into place bottom-up, then a rim flash, sparkle ring, light pulse and squash-and-stretch pop.
+A change to an existing object (freezing, thawing, getting wet, catching fire, rainbow,
+glowing...) sweeps across it voxel by voxel: a shimmering wave with the new look behind it
+and a small bounce. Things that get used up, burn away, melt or are eaten dissolve: their
+voxels break off, scatter and shrink away in a puff. It all runs on the GPU (a per-cell
+shader patch on every object's materials, plus instanced cubes moved in the vertex shader),
+looks the same with HD on or off, and is visual only: physics and game state change at
+once, as before. Software rendering, weak GPUs, `prefers-reduced-motion` and a slow frame
+rate get a shorter `lite` version without the flying voxels. `__blockspell.anim()` shows
+the setting; `BLOCKSPELL_ANIM=full npm run check-tasks` runs the checks with the full version.
 
 Dev-only pages (served by `npm run dev`, not part of the build):
 
@@ -203,6 +216,7 @@ src/
     audio.ts         WebAudio synth sound effects
     music.ts         generative music loop on a lookahead scheduler
     fx.ts shake.ts tween.ts marker.ts      juice helpers
+    voxanim.ts       GPU voxel animations: spawn assembly, change sweep, dissolve
   voxel/             voxel DSL (builder), palette, face-culled AO mesher, box decomposition,
                      HD voxels (hd-core.ts meshing in a worker, hd.ts cache, LOD and setting)
   objects/defs/      one file per spawnable object      <- add objects here
