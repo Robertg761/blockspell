@@ -34,11 +34,11 @@ export const HERO = {
 
 const feet = (e: Entity) => e.body.position.y - e.size.y / 2;
 
-/** True if the last physics step left the hero resting on something (terrain, static or entity). */
+/** True if the last physics step left the hero resting on something solid (terrain, static or entity; not water). */
 function onGround(e: Entity, world: GameWorld): boolean {
   for (const c of world.physics.contacts) {
-    if (c.bi === e.body && c.ni.y < -0.5) return true;
-    if (c.bj === e.body && c.ni.y > 0.5) return true;
+    if (c.bi === e.body && c.ni.y < -0.5 && c.bj.collisionResponse) return true;
+    if (c.bj === e.body && c.ni.y > 0.5 && c.bi.collisionResponse) return true;
   }
   return false;
 }

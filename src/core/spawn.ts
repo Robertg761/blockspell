@@ -13,10 +13,11 @@ import { envMap } from '../engine/env';
 import { makeRng, random } from './rng';
 
 /** Builds the mesh + physics body for an object definition with modifiers applied. */
-export function createEntity(def: ObjectDef, mods: SpawnModifiers, label: string, seed = random() * 1e9): Entity {
+export function createEntity(def: ObjectDef, mods: SpawnModifiers, label: string, seed = random() * 1e9, propOverrides?: Record<string, number>): Entity {
   const rng = makeRng(seed);
   const builder = new VoxelBuilder();
-  def.build(builder, rng);
+  const props = { ...def.props, ...propOverrides };
+  def.build(builder, rng, props);
   let model = builder.build();
 
   const tintMap = mods.tint ? makeTintMap(def.tintKeys ?? model.keys.filter((k) => !resolveColor(k).emissive), mods.tint) : null;
@@ -113,6 +114,7 @@ export function createEntity(def: ObjectDef, mods: SpawnModifiers, label: string
   if (phys.uprightOnly) body.angularFactor.set(0, 1, 0);
 
   const e = new Entity(def, body, { root, visual, mesh, materials }, size, mods.scale, label);
+  if (propOverrides) e.props = props;
   for (const [name, g] of partGroups) e.parts.set(name, g);
   for (const t of def.tags) e.tags.add(t);
   for (const t of mods.addTags) e.tags.add(t);

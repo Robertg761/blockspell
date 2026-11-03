@@ -57,15 +57,20 @@ export interface ObjectDef {
   /** Extra words/phrases that summon this object (lowercase, singular). */
   synonyms?: string[];
   tags: Tag[];
-  /** Voxel model builder. Use `rng` for per-spawn variation. Y is up, front faces +Z. */
-  build: (b: VoxelBuilder, rng: Rng) => void;
+  /**
+   * Voxel model builder. Use `rng` for per-spawn variation. Y is up, front faces +Z.
+   * `props` is `props` merged with the spawn's own overrides (a level pool sized by props).
+   */
+  build: (b: VoxelBuilder, rng: Rng, props: Record<string, number>) => void;
   /** World size of one voxel at scale 1. Default 0.1. */
   voxelSize?: number;
   physics?: ObjectPhysics;
   /** Palette keys considered the "main color"; color adjectives retint these. */
   tintKeys?: string[];
-  /** Free-form numeric tuning used by behaviors (e.g. burnTime, lift, speed). */
+  /** Free-form numeric tuning used by behaviors (e.g. burnTime, lift, speed). A spawn may override them (SpawnOptions.props). */
   props?: Record<string, number>;
+  /** Only placed by levels: no spell word summons it and it stays out of the spellbook (the lake's pool). */
+  levelOnly?: boolean;
   /** Sound played on spawn (default 'pop'). */
   spawnSound?: SoundName;
   /** Particle color for the spawn burst (default: first tint key / white). */
@@ -89,9 +94,10 @@ export interface ObjectDef {
    * How a cast lines it up (default: random yaw). Directions are from the caster
    * (the hero, or the camera) toward where it's cast:
    * 'span' points local +X that way (bridges, planks, ramps rising away);
-   * 'face' turns local +Z back toward the caster (stairs rise away, ladders face you).
+   * 'face' turns local +Z back toward the caster (stairs rise away, ladders face you);
+   * 'away' points local +Z away from the caster (fans blow and boats sail away from you).
    */
-  orient?: 'span' | 'face';
+  orient?: 'span' | 'face' | 'away';
   onSpawn?: (e: Entity, world: GameWorld) => void;
   /** Object-specific per-frame logic (cosmetic animation etc.). */
   update?: (e: Entity, world: GameWorld, dt: number) => void;

@@ -3,12 +3,12 @@ import type { GameWorld } from '../../core/world';
 
 /**
  * Water surface height at (x, z) if `y` is below it, else null. Considers the
- * level's global `waterLevel` and every `liquid` entity's box.
+ * level's global `waterLevel` and every `liquid` entity's box (with `only`, just the matching ones).
  */
-export function waterSurfaceAt(world: GameWorld, x: number, y: number, z: number): number | null {
+export function waterSurfaceAt(world: GameWorld, x: number, y: number, z: number, only?: (w: Entity) => boolean): number | null {
   let best: number | null = world.waterLevel !== null && y < world.waterLevel ? world.waterLevel : null;
   for (const w of world.entities) {
-    if (!w.alive || !w.has('liquid')) continue;
+    if (!w.alive || !w.has('liquid') || (only && !only(w))) continue;
     const p = w.body.position;
     const top = p.y + w.size.y / 2;
     if (y > top + 0.05 || y < p.y - w.size.y / 2 - 0.6) continue;

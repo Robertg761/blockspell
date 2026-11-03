@@ -59,6 +59,10 @@ export interface SpawnOptions {
   /** Spawn already sitting on its base at `position.y` instead of centered there. */
   grounded?: boolean;
   yaw?: number;
+  /** Overrides some of ObjectDef.props for this spawn (passed to `build` too, e.g. a pool's size). */
+  props?: Record<string, number>;
+  /** Anchored objects normally snap onto the ground below them; with `exact` they keep `position.y` (a pool set into a basin). */
+  exact?: boolean;
 }
 
 export interface StaticBoxOptions {
@@ -159,9 +163,9 @@ export class GameWorld {
       if (oldest) this.remove(oldest, 'limit', 'poof');
     }
     const mods = opts.mods ?? (opts.adjectives ? buildModifiers(opts.adjectives, def) : emptyModifiers());
-    const e = createEntity(def, mods, opts.label ?? def.name);
+    const e = createEntity(def, mods, opts.label ?? def.name, undefined, opts.props);
     let y = opts.grounded ? opts.position.y + e.size.y / 2 + 0.01 : opts.position.y;
-    if (def.physics?.anchored) {
+    if (def.physics?.anchored && !opts.exact) {
       const g = this.groundAt(opts.position.x, opts.position.z);
       y = (Number.isFinite(g) ? g : opts.position.y) + e.size.y / 2;
     }

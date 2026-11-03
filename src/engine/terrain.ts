@@ -21,6 +21,12 @@ export interface TerrainOptions {
   cx: number;
   /** World z of the island center. */
   cz: number;
+  /**
+   * Reshapes the ground (a lake basin, an islet): given a point in island-local meters, returns the
+   * ground height there (m, snapped to tiles) and optionally the color of its top voxel, or null to
+   * leave it alone.
+   */
+  carve?: (x: number, z: number) => { h: number; top?: string } | null;
 }
 
 export const DEFAULT_TERRAIN: TerrainOptions = {
@@ -71,12 +77,15 @@ export function buildTerrain(opts: Partial<TerrainOptions>, physMat: PhysMateria
         h = Math.round(s * (fbm(i * 0.06, j * 0.06) * 9 - 1.5) * o.hilliness);
         h = Math.max(0, h);
       }
+      const cut = o.carve?.((i + 0.5) * T, (j + 0.5) * T) ?? null;
+      if (cut) h = Math.round(cut.h / T);
       heights[hIdx(i, j)] = h;
       const depth = Math.round(4 + (1 - d / edge) * 14 + fbm(i * 0.15 + 9, j * 0.15, 2) * 6);
       const grassTone = fbm(i * 0.12 + 20, j * 0.12, 2);
       for (let y = -depth; y < h; y++) {
         let c: string;
-        if (y === h - 1) c = grassTone > 0.62 ? 'grassLight' : grassTone < 0.38 ? 'grassDark' : 'grass';
+        if (y === h - 1 && cut?.top) c = cut.top;
+        else if (y === h - 1) c = grassTone > 0.62 ? 'grassLight' : grassTone < 0.38 ? 'grassDark' : 'grass';
         else if (y >= h - 3) c = (i * 7 + y * 13 + j * 3) % 11 === 0 ? 'dirtDark' : 'dirt';
         else c = (i * 5 + y * 11 + j * 17) % 7 === 0 ? 'stoneDark' : 'stone';
         b.set(i, y, j, c);

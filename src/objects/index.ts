@@ -11,6 +11,6 @@ objects.registerModules(import.meta.glob<{ default: ObjectDef | ObjectDef[] }>('
  * hero is you, not something to discover). Totals are derived from this, so
  * adding a noun keeps every counter right.
  */
-export const spellbookObjects = (): ObjectDef[] => objects.all().filter((d) => !d.tags.includes('player'));
+export const spellbookObjects = (): ObjectDef[] => objects.all().filter((d) => !d.tags.includes('player') && !d.levelOnly);
 
 export type { ObjectDef } from './types';

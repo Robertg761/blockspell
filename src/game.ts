@@ -20,6 +20,7 @@ import { spellbookObjects } from './objects';
 import { parseSpell, randomWords, suggestAdjectives } from './parser/parser';
 import { adjectives } from './adjectives';
 import { Hud } from './ui/hud';
+import { waterSurfaceAt } from './behaviors/lib/water';
 import { Spellbook } from './ui/spellbook';
 import { Tutorial } from './ui/tutorial';
 
@@ -298,8 +299,20 @@ export class Game {
     this.zone = zone;
   }
 
+  /**
+   * The hero can't swim: waist deep in a lake (a level's pool, not water they cast) for half a second,
+   * they are fished out and put back at the zone entry.
+   */
+  private swimming(hero: Entity, dt: number): boolean {
+    const feet = hero.y - hero.size.y / 2;
+    const surface = waterSurfaceAt(this.world, hero.x, feet + 0.05, hero.z, (w) => !!w.def.levelOnly);
+    const t = surface !== null && surface - feet > 0.5 ? ((hero.state.swimT as number) ?? 0) + dt : 0;
+    hero.state.swimT = t;
+    return t > 0.5;
+  }
+
   /** Puts a fallen (or lost) hero back at the start of the level, or at the entry of the zone they were last in. */
-  private respawnHero(): void {
+  private respawnHero(swam = false): void {
     const start = this.zone ? zoneEntry(this.zone) : this.level.hero;
     if (!start) return;
     const old = this.world.hero;
@@ -308,7 +321,8 @@ export class Game {
     if (e) {
       this.fx.poof(e.body.position, ['#fff6a8', '#ffffff'], 1);
       this.fx.sparkle(e.body.position);
-      this.hud.toasts.show(this.zone ? `Back to ${this.zone.name}!` : 'Back to the start!', { kind: 'info', duration: 1600 });
+      const back = this.zone ? `Back to ${this.zone.name}!` : 'Back to the start!';
+      this.hud.toasts.show(swam ? `Splash! You can't swim. ${back}` : back, { kind: 'info', duration: swam ? 2400 : 1600 });
     }
   }
 
@@ -423,13 +437,13 @@ export class Game {
   }
 
   /** Yaw for objects with an `orient` hint, based on the caster → aim direction. */
-  private castYaw(orient: 'span' | 'face' | undefined, at: Vector3): number | null {
+  private castYaw(orient: 'span' | 'face' | 'away' | undefined, at: Vector3): number | null {
     if (!orient) return null;
     const h = this.world.hero;
     let from = h?.alive ? { x: h.x, z: h.z } : this.renderer.camera.position;
     if (Math.hypot(at.x - from.x, at.z - from.z) < 0.3) from = this.renderer.camera.position;
     const facing = Math.atan2(at.x - from.x, at.z - from.z);
-    return orient === 'span' ? facing - Math.PI / 2 : facing + Math.PI;
+    return orient === 'span' ? facing - Math.PI / 2 : orient === 'away' ? facing : facing + Math.PI;
   }
 
   /** Suggestion chips under the spell bar: a few words the player hasn't found yet. */
@@ -578,6 +592,7 @@ export class Game {
     const hero = this.world.hero;
     if (this.level.zones && hero?.alive) this.trackZone(hero);
     if (this.level.hero && (!hero?.alive || hero.y < (this.level.killY ?? -6))) this.respawnHero();
+    else if (hero?.alive && this.level.hero && this.swimming(hero, dt)) this.respawnHero(true);
 
     if (this.level.tasks) {
       this.tracker.update(dt, this.zone);

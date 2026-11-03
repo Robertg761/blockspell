@@ -19,6 +19,7 @@ export function getLexicon(): Lexicon {
   const adjs = new Map<string, AdjectiveDef>();
   let maxNounWords = 1, maxAdjWords = 1;
   for (const def of objects.all()) {
+    if (def.levelOnly) continue;
     for (const w of [def.id, def.name, ...(def.synonyms ?? [])]) {
       const k = w.toLowerCase().trim();
       if (nouns.has(k) && nouns.get(k) !== def) console.warn(`[blockspell] noun "${k}" claimed by ${nouns.get(k)!.id} and ${def.id}`);

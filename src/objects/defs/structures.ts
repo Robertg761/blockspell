@@ -343,11 +343,12 @@ export default [
     name: 'fan',
     synonyms: ['electric fan', 'blower', 'ventilator', 'desk fan'],
     category: 'structures',
-    blurb: 'Blows light things away from its face.',
+    blurb: 'Blows light things away from you, the way you cast it.',
     tags: ['wind', 'metal'],
     tintKeys: ['fanBody', 'fanBodyDark'],
     burstColor: '#4aa3d8',
     voxelSize: 0.06,
+    orient: 'away',
     physics: { mass: 6, shape: 'auto', maxBoxes: 5, friction: 0.6 },
     props: { windForce: 16, windRange: 7 },
     parts: [

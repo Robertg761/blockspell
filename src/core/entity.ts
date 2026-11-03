@@ -38,6 +38,8 @@ export class Entity {
   alive = true;
   /** Rough bounding radius (world units). */
   readonly radius: number;
+  /** ObjectDef.props with this spawn's overrides (SpawnOptions.props), when it has any. */
+  props: Record<string, number> | null = null;
 
   constructor(
     readonly def: ObjectDef,
@@ -60,9 +62,9 @@ export class Entity {
     return this.tags.has(tag);
   }
 
-  /** Numeric object property with fallback (from ObjectDef.props). */
+  /** Numeric object property with fallback (from ObjectDef.props and the spawn's overrides). */
   prop(name: string, fallback: number): number {
-    return this.def.props?.[name] ?? fallback;
+    return (this.props ?? this.def.props)?.[name] ?? fallback;
   }
 
   get x() { return this.body.position.x; }

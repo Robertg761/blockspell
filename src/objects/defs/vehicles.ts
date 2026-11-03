@@ -249,13 +249,15 @@ export default [
     name: 'boat',
     synonyms: ['ship', 'sailboat', 'sail boat', 'canoe', 'raft', 'rowboat', 'dinghy'],
     category: 'vehicles',
-    blurb: 'Floats on water and sails along. Wood burns, though.',
+    blurb: 'Floats on water and sails away from you. Wood burns, though.',
     tags: ['floats', 'vehicle', 'flammable'],
     tintKeys: ['boatHull', 'boatHullDark'],
     burstColor: '#a8693a',
     spawnSound: 'splash',
     voxelSize: 0.1,
-    physics: { mass: 12, shape: 'auto', maxBoxes: 8, friction: 0.4 },
+    orient: 'away',
+    // the hull is hollow, which decomposes into a thin keel; give it a solid hull to bump things with
+    physics: { mass: 12, shape: 'auto', boxes: [[2, 0, 2, 8, 2, 20], [1, 2, 1, 9, 6, 21]], friction: 0.4 },
     props: { speed: 3, burnTime: 10 },
     build(b) {
       const base = (z: number) => (z < 3 ? 3 + z * 0.5 : z <= 12 ? 4.5 : 4.5 - (z - 12) * 0.4);

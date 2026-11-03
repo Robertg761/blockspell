@@ -22,8 +22,14 @@ export default defineBehavior({
     if (e.has('frozen')) return;
     const b = e.body;
     b.quaternion.vmult(UP, up);
-    if (up.y < 0.6) return; // flipped over
     const swimming = e.has('floats') && inWater(world, e);
+    if (swimming) {
+      // a keel: on water it rights itself instead of capsizing when it bumps into things
+      const k = Math.min(1, h * 6);
+      b.angularVelocity.x += (-up.z * 5 - b.angularVelocity.x) * k;
+      b.angularVelocity.z += (up.x * 5 - b.angularVelocity.z) * k;
+    }
+    if (up.y < 0.6) return; // flipped over
     const ground = world.groundAt(b.position.x, b.position.z);
     const onGround = Number.isFinite(ground) && b.position.y - e.size.y / 2 - ground < 0.25 && Math.abs(b.velocity.y) < 1.5;
     if (!onGround && !swimming && !e.has('flies')) return;
