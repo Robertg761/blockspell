@@ -15,13 +15,13 @@ const H = 1.6;
 const solutions: LevelSolution[] = [
   { name: 'walk in and cast 3 sheep', steps: [{ walkTo: [-0.6, 0], timeout: 8 }, { cast: '3 sheep', at: [0.8, 0] }], timeout: 8 },
   {
-    name: '5 carrots in the pen lure 4 rabbits',
-    steps: [{ walkTo: [-0.9, 0], timeout: 8 }, { cast: '5 carrots', at: [0.4, 0] }, { walkTo: [-4.2, -2.4], timeout: 6 }, { cast: '4 rabbits', at: [-5, 0] }],
+    name: '5 carrots in the pen lure 5 rabbits',
+    steps: [{ walkTo: [-0.2, 0], timeout: 8 }, { cast: '5 carrots', at: [1, 0] }, { walkTo: [-4.2, -2.4], timeout: 8 }, { cast: '5 rabbits', at: [-5, 0] }],
     timeout: 20,
   },
   {
-    name: '5 bread in the pen lure 4 ducks',
-    steps: [{ walkTo: [-0.9, 0], timeout: 8 }, { cast: '5 bread', at: [0.4, 0] }, { walkTo: [-4.2, -2.4], timeout: 6 }, { cast: '4 ducks', at: [-5, 0] }],
+    name: '5 bread in the pen lure 5 ducks',
+    steps: [{ walkTo: [-0.2, 0], timeout: 8 }, { cast: '5 bread', at: [1, 0] }, { walkTo: [-4.2, -2.4], timeout: 8 }, { cast: '5 ducks', at: [-5, 0] }],
     timeout: 20,
   },
   // 5 flowers or 5 apples luring 3 sheep or 3 pigs also works now and then, but the big animals jam in the gate too often
