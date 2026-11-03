@@ -531,12 +531,19 @@ export class GameWorld {
     }
     this.syncLinks();
 
-    if (this.pendingRemoval.length) {
-      for (const e of this.pendingRemoval) this.disposeEntity(e);
-      const dead = new Set(this.pendingRemoval);
-      this.pendingRemoval.length = 0;
-      for (let i = this.entities.length - 1; i >= 0; i--) if (dead.has(this.entities[i])) this.entities.splice(i, 1);
-    }
+    this.flushRemovals();
+  }
+
+  /**
+   * Disposes removed entities now instead of at the end of the next update (their bodies leave the
+   * physics world). A zone reset calls this before rebuilding, so old things can't knock new props around.
+   */
+  flushRemovals(): void {
+    if (!this.pendingRemoval.length) return;
+    for (const e of this.pendingRemoval) this.disposeEntity(e);
+    const dead = new Set(this.pendingRemoval);
+    this.pendingRemoval.length = 0;
+    for (let i = this.entities.length - 1; i >= 0; i--) if (dead.has(this.entities[i])) this.entities.splice(i, 1);
   }
 
   private syncEntity(e: Entity): void {

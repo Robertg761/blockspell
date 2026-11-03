@@ -4,18 +4,18 @@ import { countIn, hold } from '../predicates';
 import { defineTask, offset } from '../types';
 import cliffside from '../zones/10-cliffside';
 
-// The summit: a sheer rock pillar 3.5 m high (2.4 m square), north of the
-// Cliffside center between the star's cliff and the floating ledge. Anything
-// that glows held up at summit height (within 4 m of the pillar) for 2 s lights it. Spells aimed at the
+// The summit: a sheer rock pillar 3.5 m high (2.4 m square), at the north
+// edge of Cliffside, past where the star from the cliff can land. Anything
+// that glows held up at summit height (within about 4.5 m of the pillar) for 2 s lights it. Spells aimed at the
 // top only reach 1.8 m, so a torch has to be brought up by the hero (or something that
 // glows has to fly up by itself).
-const f = new Frame(offset(cliffside.center, [0.5, 0, -6.5]));
+const f = new Frame(offset(cliffside.center, [1, 0, -9.3]));
 const H = 3.5;
 
 const solutions: LevelSolution[] = [
   { name: 'a star floats up', steps: [{ cast: 'star', at: [2.3, 0] }], timeout: 12 },
   { name: 'a ufo hovers over it', steps: [{ cast: 'ufo', at: [2.4, 0] }], timeout: 12 },
-  { name: 'the sun rises over it', steps: [{ cast: 'sun', at: [0, 2.2] }], timeout: 12 },
+  { name: 'the sun rises over it', steps: [{ cast: 'sun', at: [-2.4, 0] }], timeout: 12 },
   {
     name: 'giant stairs up, then a torch',
     steps: [
@@ -41,7 +41,8 @@ export default defineTask({
     // an empty stone bowl on top, waiting for a light
     f.staticBox(world, { position: [0.6, H + 0.15, -0.6], size: [0.5, 0.3, 0.5], color: 'stoneDark' });
   },
-  check: hold(2, countIn({ tag: 'glows' }, f.box([-4, H - 0.2, -4], [4, H + 9, 4]))),
+  // (flying lights drift a few meters, so the box is wide; the ledge's own star never counts)
+  check: hold(2, countIn({ tag: 'glows', noRole: true }, f.box([-4.5, H - 0.2, -4.5], [4.5, H + 9, 3]))),
   start: f.p(0, 0, 4.5),
   solutions: solutions.map((s) => f.solution(s)),
 });

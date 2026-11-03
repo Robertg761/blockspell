@@ -224,6 +224,7 @@ export class Game {
       const mine = e.state.zone === zone.id || e.state.castZone === zone.id || (!e.state.pinned && zoneAt(e.x, e.y, e.z, this.level.zones) === zone);
       if (mine) w.remove(e, 'zoneReset');
     }
+    w.flushRemovals();
     this.tracker.resetZone(zone);
     w.skipStatics = true;
     try {

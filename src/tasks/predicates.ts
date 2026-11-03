@@ -24,13 +24,16 @@ export interface Filter {
   notTag?: string;
   /** Object id, e.g. 'star'. */
   id?: string;
+  /** Only things without a role: what the player cast, never the zone's own props. */
+  noRole?: boolean;
 }
 
 export const matches = (e: Entity, f: Filter): boolean =>
   (f.role === undefined || e.state.role === f.role) &&
   (f.tag === undefined || e.has(f.tag as Tag)) &&
   (f.notTag === undefined || !e.has(f.notTag as Tag)) &&
-  (f.id === undefined || e.def.id === f.id);
+  (f.id === undefined || e.def.id === f.id) &&
+  (!f.noRole || e.state.role === undefined);
 
 export const select = (w: GameWorld, f: Filter): Entity[] => w.living((e) => e !== w.hero && matches(e, f));
 
