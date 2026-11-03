@@ -10,10 +10,10 @@ import { makeTintMap, resolveColor } from '../voxel/palette';
 import { Entity } from './entity';
 import { GROUP } from './groups';
 import { envMap } from '../engine/env';
-import { makeRng } from './rng';
+import { makeRng, random } from './rng';
 
 /** Builds the mesh + physics body for an object definition with modifiers applied. */
-export function createEntity(def: ObjectDef, mods: SpawnModifiers, label: string, seed = Math.random() * 1e9): Entity {
+export function createEntity(def: ObjectDef, mods: SpawnModifiers, label: string, seed = random() * 1e9): Entity {
   const rng = makeRng(seed);
   const builder = new VoxelBuilder();
   def.build(builder, rng);

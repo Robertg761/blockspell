@@ -6,6 +6,8 @@ export default defineLevel({
   id: 'fire-hut',
   name: 'Put Out the Fire',
   order: 3,
+  // Kept out of the menu: the puzzle now lives in the open world. The level stays as a regression baseline for its solutions.
+  hidden: true,
   description: 'A little hut is on fire, and the flames are spreading!',
   hint: 'Fire hates water. Try something wet, or something that makes rain, or something very cold.',
   hero: [0, 0, 5.5],

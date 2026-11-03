@@ -1,5 +1,5 @@
 import type { GameWorld } from '../../core/world';
-import { orderedTasks, orderedZones, zoneEntry } from '../../tasks';
+import { buildZone, orderedTasks, orderedZones, zoneEntry } from '../../tasks';
 import { GAP_MID } from '../../tasks/defs/02-cross-gap';
 import { defineLevel, type V3 } from '../types';
 
@@ -68,10 +68,6 @@ export default defineLevel({
       bridge(world, along(cx, cz, 13), along(cx, cz, GAP_MID - 9));
       bridge(world, along(cx, cz, GAP_MID + 7), along(cx, cz, d - 8));
     }
-    for (const z of zones) z.setup(world, z.center);
-    for (const t of tasks) {
-      const z = zones.find((zz) => zz.id === t.zone);
-      if (z) t.setup?.(world, z.center);
-    }
+    for (const z of zones) buildZone(world, z, tasks);
   },
 });

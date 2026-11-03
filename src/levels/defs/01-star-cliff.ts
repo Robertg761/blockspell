@@ -5,6 +5,8 @@ export default defineLevel({
   id: 'star-cliff',
   name: 'Star on the Cliff',
   order: 1,
+  // Kept out of the menu: the puzzle now lives in the open world. The level stays as a regression baseline for its solutions.
+  hidden: true,
   description: 'A star has gotten stuck on top of a tall cliff.',
   hint: 'The cliff is too high to jump. Try a "ladder" or "stairs" to climb up, or knock the star off some other way.',
   terrain: { flatRadius: 11, trees: 6, rocks: 3 },

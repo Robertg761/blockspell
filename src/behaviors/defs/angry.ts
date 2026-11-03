@@ -1,5 +1,6 @@
 import { Vec3 } from 'cannon-es';
 import type { Entity } from '../../core/entity';
+import { random } from '../../core/rng';
 import { defineBehavior } from '../types';
 
 const imp = new Vec3();
@@ -15,7 +16,7 @@ export default defineBehavior({
   update(e, world, dt) {
     if (e.has('frozen')) return;
     let target = e.state.angryAt as Entity | null;
-    if (!target?.alive || e.distanceTo(target) > 14 || Math.random() < dt * 0.15) {
+    if (!target?.alive || e.distanceTo(target) > 14 || random() < dt * 0.15) {
       target = world.nearest(e.body.position, 12, (o) => o !== e && o.body.mass > 0 && !o.has('ghost'));
       e.state.angryAt = target;
     }
@@ -26,7 +27,7 @@ export default defineBehavior({
     if (!e.has('animal') && target && e.body.mass > 0) {
       let t = ((e.state.hopTimer as number) ?? 1) - dt;
       if (t <= 0) {
-        t = 1.2 + Math.random();
+        t = 1.2 + random();
         const dx = target.x - p.x, dz = target.z - p.z;
         const d = Math.hypot(dx, dz) || 1;
         const m = e.body.mass;

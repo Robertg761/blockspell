@@ -1,4 +1,3 @@
-import type { LevelRecord } from '../levels/progress';
 import { spellsText, starsForPar, type LevelDef } from '../levels/types';
 import { Audio, loadMuted } from '../engine/audio';
 import { h } from './dom';
@@ -12,6 +11,22 @@ export interface HudCallbacks {
   onStart: () => void;
   onSpellbook: () => void;
   onLevels: () => void;
+}
+
+/** One task row in the Journal. */
+export interface JournalTask {
+  title: string;
+  hint: string;
+  done: boolean;
+  ways: number;
+}
+
+/** What the Journal shows: tasks grouped by zone, plus the spell count (world mode keeps it here, not in the HUD). */
+export interface JournalInfo {
+  zones: { name: string; here: boolean; tasks: JournalTask[] }[];
+  spells: number;
+  onFreePlay: () => void;
+  onTitle: () => void;
 }
 
 export interface WinInfo {
@@ -38,6 +53,8 @@ export class Hud {
   private chips = h('div.word-chips');
   private help = h('div.help');
   private overlay = h('div.overlay.hidden');
+  private banner = h('div.zone-banner', { 'aria-live': 'polite' });
+  private menuBtn: HTMLButtonElement;
   private history: string[] = [];
   private historyIdx = -1;
   private hint = '';
@@ -77,6 +94,7 @@ export class Hud {
 
     muteBtn.classList.toggle('off', this.muted);
     this.bookBtn = h('button.icon-btn', { title: 'Spellbook (Tab)', text: '📖', onClick: () => cb.onSpellbook() });
+    this.menuBtn = h('button.icon-btn.levels-btn', { title: 'Menu', text: '☰ Menu', 'data-icon': '☰', onClick: () => cb.onLevels() });
 
     root.append(
       h('div.hud-top-left', {}, [
@@ -84,14 +102,15 @@ export class Hud {
         h('div.level-card', {}, [this.levelName, this.levelDesc, this.goal, this.wordsLine, this.hintBtn]),
       ]),
       h('div.hud-top-right', {}, [
-        h('button.icon-btn.levels-btn', { title: 'Level select', text: '☰ Levels', onClick: () => cb.onLevels() }),
+        this.menuBtn,
         this.bookBtn,
-        h('button.icon-btn.reset-btn', { title: 'Restart level (R)', text: '↺', onClick: () => cb.onReset() }),
+        h('button.icon-btn.reset-btn', { title: 'Restart (R)', text: '↺', onClick: () => cb.onReset() }),
         muteBtn,
       ]),
       this.toasts.el,
       h('div.hud-bottom', {}, [this.chips, this.form]),
       this.help,
+      this.banner,
       this.overlay,
     );
   }
@@ -133,18 +152,58 @@ export class Hud {
   }
 
   setLevel(level: LevelDef): void {
+    const world = !!level.tasks;
     this.levelName.textContent = level.order > 0 && !level.hidden ? `${level.order}. ${level.name}` : level.name;
     this.levelDesc.textContent = level.description;
     this.hint = level.hint ?? '';
     this.hintBtn.style.display = level.hint && level.goal ? '' : 'none';
     this.goal.replaceChildren();
     if (level.goal) this.goal.append(h('span.goal-box'), h('span', { text: level.goal.text }));
-    else if (level.hint) this.goal.append(h('span.goal-free', { text: level.hint }));
+    else if (level.hint && !world) this.goal.append(h('span.goal-free', { text: level.hint }));
     this.goal.classList.remove('done');
-    this.help.textContent = level.hero
-      ? 'WASD / arrows: move · Space: jump · W near a ladder: climb · Enter: write a word · Click ground: aim · R: restart'
-      : 'Drag to orbit · Scroll to zoom · Click ground to aim · Click things to poke';
+    this.help.textContent = world
+      ? 'WASD / arrows: move · Space: jump · W near a ladder: climb · Enter: write a word · Click ground: aim · J: journal · R: reset this island'
+      : level.hero
+        ? 'WASD / arrows: move · Space: jump · W near a ladder: climb · Enter: write a word · Click ground: aim · R: restart'
+        : 'Drag to orbit · Scroll to zoom · Click ground to aim · Click things to poke';
+    this.menuBtn.textContent = world ? '📓 Journal' : '☰ Menu';
+    this.menuBtn.title = world ? 'Journal (J)' : 'Menu';
+    this.menuBtn.dataset.icon = world ? '📓' : '☰';
+    this.banner.classList.remove('show');
     this.setWords(0, level.goal ? (level.par ?? 2) : null);
+  }
+
+  /** Open world: the level card names the hero's zone. */
+  setZoneName(name: string): void {
+    this.levelName.textContent = name;
+  }
+
+  /**
+   * Open world: the pinned tracker line in the level card, showing the nearest
+   * unfinished task (and its zone when it is somewhere else). Null shows `idle`.
+   */
+  setTracker(task: { title: string; zone: string | null } | null, idle = ''): void {
+    const key = task ? `${task.title}|${task.zone}` : `|${idle}`;
+    if (this.goal.dataset.key === key) return;
+    this.goal.dataset.key = key;
+    this.goal.classList.remove('done');
+    if (!task) {
+      this.goal.replaceChildren(idle ? h('span.goal-free', { text: idle }) : '');
+      return;
+    }
+    this.goal.replaceChildren(
+      h('span.goal-box'),
+      h('span.goal-text', { text: task.title }),
+      task.zone ? h('span.goal-zone', { text: task.zone }) : '',
+    );
+  }
+
+  /** Big zone name across the top of the screen, fading out after a couple of seconds. */
+  showZoneBanner(name: string): void {
+    this.banner.textContent = name;
+    this.banner.classList.remove('show');
+    void this.banner.offsetWidth;
+    this.banner.classList.add('show');
   }
 
   /** Spells-cast counter under the goal (one per successful cast). `par` null hides it (free play). */
@@ -186,7 +245,7 @@ export class Hud {
         info.stars < 3 ? h('p.small', { text: `Can you do it in ${spellsText(info.par)} or fewer for ★★★?` }) : null,
         h('div.panel-actions', {}, [
           h('button.btn.secondary', { text: '↺ Retry', onClick: () => { this.hideOverlay(); onRetry(); } }),
-          h('button.btn.secondary', { text: '☰ Levels', onClick: () => this.cb.onLevels() }),
+          h('button.btn.secondary', { text: '☰ Menu', onClick: () => this.cb.onLevels() }),
           next(info.next, onNext, this),
         ]),
       ]),
@@ -201,33 +260,53 @@ export class Hud {
     }
   }
 
-  /** Level select screen: a card per level with saved stars. */
-  showLevels(levels: LevelDef[], records: Record<string, LevelRecord>, current: string | null): void {
-    const card = (l: LevelDef) => {
-      const rec = records[l.id];
-      const free = !l.goal;
-      return h(`button.level-tile${rec ? '.solved' : ''}${l.id === current ? '.current' : ''}${free ? '.free' : ''}`, {
-        onClick: () => { this.hideOverlay(); this.cb.onLevel(l.id); },
-      }, [
-        h('div.tile-num', { text: free ? '✦' : String(l.order) }),
-        h('div.tile-name', { text: l.name }),
-        h('div.tile-goal', { text: l.goal?.text ?? 'Sandbox: write anything' }),
-        free ? h('div.tile-stars.muted', { text: 'no goal' }) : h('div.tile-stars', { text: starText(rec?.stars ?? 0), title: rec ? `Best: ${spellsText(rec.words)}` : 'Not solved yet' }),
-        rec ? h('div.tile-best', { text: `best: ${spellsText(rec.words)}` }) : null,
+  /** The open world's Journal: tasks by zone with a tick, a hint to reveal and the ways found so far. */
+  showJournal(info: JournalInfo): void {
+    const total = info.zones.reduce((n, z) => n + z.tasks.length, 0);
+    const done = info.zones.reduce((n, z) => n + z.tasks.filter((t) => t.done).length, 0);
+    const row = (t: JournalTask) => {
+      const hint = h('div.journal-hint.hidden', { text: t.hint });
+      const btn = h('button.link-btn.journal-hint-btn', {
+        type: 'button',
+        text: 'Hint',
+        onClick: () => {
+          const hidden = hint.classList.toggle('hidden');
+          btn.textContent = hidden ? 'Hint' : 'Hide hint';
+        },
+      });
+      return h(`div.journal-task${t.done ? '.done' : ''}`, {}, [
+        h('span.journal-tick', { text: t.done ? '✓' : '', title: t.done ? 'Done' : 'Not done yet' }),
+        h('div.journal-main', {}, [
+          h('div.journal-title', { text: t.title }),
+          h('div.journal-meta', {}, [h('span.journal-ways', { text: `ways found: ${t.ways}` }), btn]),
+          hint,
+        ]),
       ]);
     };
-    const total = levels.filter((l) => l.goal).reduce((s, l) => s + (records[l.id]?.stars ?? 0), 0);
-    const max = levels.filter((l) => l.goal).length * 3;
     this.overlay.classList.remove('title');
     this.overlay.replaceChildren(
-      h('div.panel.levels', {}, [
-        h('h2', { text: 'Choose a level' }),
-        h('p.small.levels-total', { text: `★ ${total} / ${max} stars · fewer spells, more stars` }),
-        h('div.level-grid', {}, [...levels.filter((l) => l.goal), ...levels.filter((l) => !l.goal)].map(card)),
-        current ? h('div.panel-actions', {}, [h('button.btn.secondary', { text: 'Back', onClick: () => this.hideOverlay() })]) : null,
+      h('div.panel.journal', {}, [
+        h('h2', { text: '📓 Journal' }),
+        h('p.small.journal-total', { text: `${done} of ${total} tasks done · Spells cast: ${info.spells}` }),
+        ...info.zones.map((z) =>
+          h('section.journal-zone', {}, [
+            h('h3', {}, [z.name, z.here ? h('span.journal-here', { text: 'you are here' }) : '']),
+            ...z.tasks.map(row),
+          ]),
+        ),
+        h('p.small', { text: 'Every task has more than one answer. Solve one again with different words to find a new way.' }),
+        h('div.panel-actions', {}, [
+          h('button.btn', { text: 'Back to the world', onClick: () => this.hideOverlay() }),
+          h('button.btn.secondary', { text: '✦ Free Play', onClick: () => { this.hideOverlay(); info.onFreePlay(); } }),
+          h('button.btn.secondary', { text: 'Title screen', onClick: () => info.onTitle() }),
+        ]),
       ]),
     );
     this.overlay.classList.remove('hidden');
+  }
+
+  get journalOpen(): boolean {
+    return this.overlayOpen && !!this.overlay.querySelector('.journal');
   }
 
   get overlayOpen(): boolean {
@@ -246,7 +325,7 @@ export class Hud {
   }
 
   /** Title screen. `logo` is an optional animated element shown above the name. */
-  showTitle(opts: { onPlay: () => void; onLevels: () => void; playLabel: string; logo?: HTMLElement }): void {
+  showTitle(opts: { onExplore: () => void; onFreePlay: () => void; exploreLabel: string; logo?: HTMLElement }): void {
     const go = (fn: () => void) => () => {
       this.cb.onStart();
       this.hideOverlay();
@@ -257,10 +336,10 @@ export class Hud {
         opts.logo ?? h('div.intro-logo', { text: '▣' }),
         h('h1', { text: 'Blockspell' }),
         h('p.tagline', { text: 'Write a word. Make it real.' }),
-        h('p', { text: 'Type the name of a thing (add adjectives like “big”, “blue” or “flaming”) and watch it appear. Use what you summon to solve each puzzle.' }),
+        h('p', { text: 'Type the name of a thing (add adjectives like “big”, “blue” or “flaming”) and watch it appear. Explore the islands and help out with what you summon, or play with every word in Free Play.' }),
         h('div.panel-actions', {}, [
-          h('button.btn.big', { text: opts.playLabel, onClick: go(opts.onPlay) }),
-          h('button.btn.big.secondary', { text: '☰ Levels', onClick: () => { this.cb.onStart(); opts.onLevels(); } }),
+          h('button.btn.big.explore-btn', { text: opts.exploreLabel, onClick: go(opts.onExplore) }),
+          h('button.btn.big.secondary.freeplay-btn', { text: '✦ Free Play', onClick: go(opts.onFreePlay) }),
         ]),
         h('p.small', { text: 'Runs entirely offline. No network, no tracking.' }),
       ]),

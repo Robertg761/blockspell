@@ -57,7 +57,44 @@ export class TaskTracker {
     this.casts.clear();
     this.entered.clear();
     this.acc = 0;
-    for (const t of list) t.check.arm?.(this.host.world, t.id);
+    for (const t of list) this.arm(t);
+  }
+
+  /** Arms a task's check with its subscriptions filed under `task:<id>`, so a zone reset can drop them. */
+  private arm(t: TaskDef): void {
+    const w = this.host.world;
+    w.subScope = `task:${t.id}`;
+    try {
+      t.check.arm?.(w, t.id);
+    } finally {
+      w.subScope = null;
+    }
+  }
+
+  /**
+   * Forgets everything about a zone before it is set up again: its tasks'
+   * done and failed marks, event latches and flags (`task:<id>:*`), the zone's
+   * own flags (`<zone>:*`), its casts and its `enter` hook. Call `armZone`
+   * after the zone setup has run.
+   */
+  resetZone(zone: ZoneDef): void {
+    const w = this.host.world;
+    const prefixes = [`${zone.id}:`];
+    for (const t of this.list) {
+      if (t.zone !== zone.id) continue;
+      this.done.delete(t.id);
+      this.failed.delete(t.id);
+      w.offScope(`task:${t.id}`);
+      prefixes.push(`task:${t.id}:`);
+    }
+    for (const k of Object.keys(w.flags)) if (prefixes.some((p) => k.startsWith(p))) delete w.flags[k];
+    this.casts.delete(zone.id);
+    this.entered.delete(zone.id);
+  }
+
+  /** Arms the checks of a zone's tasks again (after `resetZone` and the zone setup). */
+  armZone(zone: ZoneDef): void {
+    for (const t of this.list) if (t.zone === zone.id) this.arm(t);
   }
 
   /** Stops tracking (classic levels). */

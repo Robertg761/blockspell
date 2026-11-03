@@ -13,7 +13,8 @@ import type { Box, Pred } from './types';
  *
  * Every predicate is a `(world) => boolean`. Stateful ones (`latch`, `hold`,
  * `distinctEaters`) also carry an `arm(world, taskId)` that the tracker calls
- * after each world setup; combinators pass it down to their children.
+ * after each world (or zone) setup; combinators pass it down to their children.
+ * State goes in `world.flags['task:<id>:...']` so a zone reset can clear it.
  */
 
 /** Which entities a predicate looks at. Every given field must match. */
@@ -154,7 +155,9 @@ let holdSeq = 0;
  * zone) restarts the clock.
  */
 export function hold(seconds: number, q: Pred): Pred {
-  const key = `hold:${holdSeq++}`;
+  const n = holdSeq++;
+  // filed under the task once armed, so a zone reset clears it with the task's other flags
+  let key = `hold:${n}`;
   const p: Pred = (w) => {
     if (!q(w)) {
       delete w.flags[key];
@@ -168,6 +171,9 @@ export function hold(seconds: number, q: Pred): Pred {
     rec.last = w.time;
     return w.time - rec.since >= seconds;
   };
-  p.arm = q.arm;
+  p.arm = (w, task) => {
+    key = `task:${task}:hold:${n}`;
+    q.arm?.(w, task);
+  };
   return p;
 }

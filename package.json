@@ -9,7 +9,8 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
-    "check-offline": "node scripts/check-offline.mjs"
+    "check-offline": "node scripts/check-offline.mjs",
+    "check-tasks": "node scripts/check-tasks.mjs"
   },
   "dependencies": {
     "cannon-es": "^0.20.0",

@@ -237,9 +237,9 @@ export class Tutorial {
   }
 
   private tooFar(c: Ctx): boolean {
-    const range = c.level.castRange;
     const hero = c.game.world.hero;
-    const aim = c.game.world.aim ?? (c.level.spawnPoint ? { x: c.level.spawnPoint[0], z: c.level.spawnPoint[2] } : null);
+    const aim = c.game.world.aim ?? (c.level.spawnPoint ? { x: c.level.spawnPoint[0], y: c.level.spawnPoint[1], z: c.level.spawnPoint[2] } : null);
+    const range = aim ? c.game.castRangeAt(aim.x, aim.y, aim.z) : null;
     if (!range || !hero?.alive || !aim) return false;
     return document.activeElement === c.game.hud.input && Math.hypot(aim.x - hero.x, aim.z - hero.z) > range;
   }

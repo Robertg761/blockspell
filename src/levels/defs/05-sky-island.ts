@@ -5,6 +5,8 @@ export default defineLevel({
   id: 'sky-island',
   name: 'Sky Island',
   order: 5,
+  // Kept out of the menu: the puzzle now lives in the open world. The level stays as a regression baseline for its solutions.
+  hidden: true,
   description: 'A little island floats high above the meadow, far too high to jump to.',
   hint: 'Get launched ("trampoline", "spring") or build your way up ("big ladder", "giant stairs"). You can only cast about 6 m from where you stand.',
   terrain: { flatRadius: 12, trees: 4, rocks: 2 },

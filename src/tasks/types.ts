@@ -22,8 +22,6 @@ export interface ZoneDef {
   bounds: Box;
   /** Where the hero comes back after a fall, relative to `center`. */
   entry: V3;
-  /** Overrides the level's cast range while the hero is in this zone. */
-  castRange?: number;
   /** Builds the zone's props. `origin` is `center`; pass local coordinates through it. */
   setup(world: GameWorld, origin: V3): void;
   /** Runs once per setup, the first time the hero sets foot in the zone (e.g. light the hut fire only when someone is there to see it). */
@@ -45,6 +43,11 @@ export interface TaskDef {
   check: Pred;
   /** Polled with the check: return a message when the attempt is lost (reset the zone to retry). */
   fail?: (world: GameWorld) => string | null;
+  /**
+   * Spells aimed into `box` only reach `range` m from the hero (the level default is 7 m). Keeps a
+   * player from casting straight into a walled pen from outside it.
+   */
+  castLimit?: { box: Box; range: number };
   /** Builds the task's props after the zone setup. `origin` is the zone center. */
   setup?(world: GameWorld, origin: V3): void;
   /** Hero start for scripted solves (world space). */

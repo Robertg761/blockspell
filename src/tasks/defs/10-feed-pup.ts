@@ -6,8 +6,9 @@ import { defineTask, offset } from '../types';
 import farmstead from '../zones/30-farmstead';
 
 // The old Feed the Pup puzzle. Pen interior local x -3..3, z -1.6..-6, walls
-// 2.2 m high (the hero jumps about 1.25 m); front wall z -1.6..0. The
-// Farmstead's short cast range (1.8 m) keeps spells from reaching over it.
+// 2.2 m high (the hero jumps about 1.25 m); front wall z -1.6..0. Spells aimed
+// anywhere in the pen (walls included) only reach 1.8 m, so the hero has to get
+// up there; the rest of the Farmstead uses the normal range.
 const f = new Frame(offset(farmstead.center, [0, 0, 5]));
 const WALL_H = 2.2;
 
@@ -59,6 +60,7 @@ export default defineTask({
   order: 10,
   title: 'Feed the pup',
   hint: 'You can\'t cast over the pen wall from down here. Get up on top of it (a "ladder"?), or fling food over some other way.',
+  castLimit: { box: f.box([-3.6, -1, -6.6], [3.6, 6, 0.1]), range: 1.8 },
   setup(world) {
     const wall = { color: 'wood', topColor: 'woodDark' } as const;
     // front wall (thick), side walls, back wall

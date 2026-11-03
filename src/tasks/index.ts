@@ -1,4 +1,5 @@
 import { Registry } from '../core/registry';
+import type { GameWorld } from '../core/world';
 import type { V3 } from '../levels/types';
 import type { Box, TaskDef, ZoneDef } from './types';
 
@@ -37,6 +38,32 @@ export function zoneAt(x: number, y: number, z: number, list: ZoneDef[] = ordere
       best = zone;
       bestD = d;
     }
+  }
+  return best;
+}
+
+/**
+ * Builds a zone: its own setup, then the setup of each of its tasks. Entities
+ * spawned here are stamped with the zone id (state.zone) so a zone reset can
+ * find them. A zone reset calls this again with `world.skipStatics` on.
+ */
+export function buildZone(world: GameWorld, zone: ZoneDef, list: readonly TaskDef[]): void {
+  const prev = world.spawnZone;
+  world.spawnZone = zone.id;
+  try {
+    zone.setup(world, zone.center);
+    for (const t of list) if (t.zone === zone.id) t.setup?.(world, zone.center);
+  } finally {
+    world.spawnZone = prev;
+  }
+}
+
+/** The tightest task cast limit whose box contains a point, or null if none applies. */
+export function castLimitAt(x: number, y: number, z: number, list: readonly TaskDef[]): number | null {
+  let best: number | null = null;
+  for (const t of list) {
+    const c = t.castLimit;
+    if (c && inside(c.box, x, y, z) && (best === null || c.range < best)) best = c.range;
   }
   return best;
 }

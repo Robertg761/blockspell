@@ -1,6 +1,7 @@
 import { Raycaster, Vector2, Vector3 } from 'three';
 import { Vec3 } from 'cannon-es';
 import { MAX_ENTITIES, GameWorld } from './core/world';
+import { random } from './core/rng';
 import { Effects } from './engine/fx';
 import { SpawnMarker } from './engine/marker';
 import { Renderer } from './engine/renderer';
@@ -11,7 +12,8 @@ import { progress } from './levels/progress';
 import { SolutionRunner } from './levels/solve';
 import { starsFor, type LevelDef, type V3 } from './levels/types';
 import type { Entity } from './core/entity';
-import { zoneAt, zoneEntry } from './tasks';
+import { buildZone, castLimitAt, zoneAt, zoneEntry, zones } from './tasks';
+import { worldSave } from './tasks/save';
 import { TaskTracker } from './tasks/tracker';
 import type { ZoneDef } from './tasks/types';
 import { spellbookObjects } from './objects';
@@ -55,6 +57,8 @@ export class Game {
   private seen = new Set<string>();
   private last = performance.now();
   private raycaster = new Raycaster();
+  private logo?: HTMLElement;
+  private trackerAcc = 0;
 
   constructor(root: HTMLElement) {
     this.renderer = new Renderer(root);
@@ -86,26 +90,66 @@ export class Game {
     requestAnimationFrame(this.frame);
   }
 
-  /** Title screen over the free-play island; Play jumps to the first unsolved level. */
+  /** Title screen over the current scene: Explore (the open world) or Free Play (the sandbox). */
   showTitle(logo?: HTMLElement): void {
-    const puzzles = menuLevels().filter((l) => l.goal);
-    const records = progress.all();
-    const next = puzzles.find((l) => !records[l.id]) ?? puzzles[0];
-    const started = puzzles.some((l) => records[l.id]);
+    if (logo) this.logo = logo;
     this.titleMode = true;
+    this.keys.clear();
     this.hud.showTitle({
-      logo,
-      playLabel: started && next ? `▶ Continue: ${next.name}` : '▶ Play',
-      onPlay: () => {
-        this.titleMode = false;
-        if (next) this.loadLevel(next.id);
-      },
-      onLevels: () => this.showLevels(),
+      logo: this.logo,
+      exploreLabel: '▶ Explore',
+      onExplore: () => this.explore(),
+      onFreePlay: () => this.freePlay(),
     });
   }
 
+  /** Loads the open world and puts the hero where they last were (the entry of their last zone). */
+  explore(): void {
+    const world = orderedLevels().find((l) => l.tasks);
+    if (!world) return;
+    this.loadLevel(world.id);
+    const last = worldSave.all().lastZone;
+    const zone = last ? this.level.zones?.find((z) => z.id === last) : undefined;
+    if (zone && zone !== this.zone) {
+      this.teleportHero(zoneEntry(zone));
+      this.zone = zone;
+      this.tracker.enterZone(zone);
+      this.hud.setZoneName(zone.name);
+    }
+  }
+
+  /** The sandbox: every word, no hero, no goal. */
+  freePlay(): void {
+    const free = menuLevels().find((l) => !l.goal);
+    if (free) this.loadLevel(free.id);
+  }
+
+  /** The ☰ button: the Journal in the open world, else the title screen (to switch modes). */
   showLevels(): void {
-    this.hud.showLevels(menuLevels(), progress.all(), this.titleMode ? null : this.level?.id ?? null);
+    if (this.level?.tasks && !this.titleMode) this.showJournal();
+    else this.showTitle();
+  }
+
+  /** The open world's Journal: every task by zone, done ticks from the save, hints and ways found. */
+  showJournal(): void {
+    const list = this.level.tasks;
+    if (!list) return;
+    this.keys.clear();
+    const saved = worldSave.all().tasks;
+    const groups = (this.level.zones ?? [])
+      .map((z) => ({
+        name: z.name,
+        here: z === this.zone,
+        tasks: list.filter((t) => t.zone === z.id).map((t) => ({ title: t.title, hint: t.hint, done: !!saved[t.id], ways: saved[t.id]?.ways.length ?? 0 })),
+      }))
+      .filter((g) => g.tasks.length);
+    this.hud.showJournal({ zones: groups, spells: this.words, onFreePlay: () => this.freePlay(), onTitle: () => this.showTitle() });
+  }
+
+  /** J: opens or closes the Journal. */
+  toggleJournal(): void {
+    if (this.hud.journalOpen) this.hud.hideOverlay();
+    else if (!this.hud.overlayOpen) this.showJournal();
   }
 
   // ------------------------------------------------------------ levels
@@ -134,12 +178,14 @@ export class Game {
     if (level.hero) this.spawnHero(level.hero);
     this.tracker.reset(level.tasks ?? []);
     if (this.zone) this.tracker.enterZone(this.zone, false);
+    this.trackerAcc = Infinity;
     if (level.camera) this.renderer.setView(level.camera.position, level.camera.target);
     const sp = level.spawnPoint ?? [0, 0, 0];
     const g = this.world.groundAt(sp[0], sp[2]);
     this.marker.set(new Vector3(sp[0], sp[1] || (Number.isFinite(g) ? g : 0), sp[2]));
     this.hud.autoFocus = !level.hero;
     this.hud.setLevel(level);
+    if (this.zone) this.hud.setZoneName(this.zone.name);
     if (level.hero) this.hud.input.blur();
     this.tutorial.onLevel(level);
   }
@@ -151,17 +197,50 @@ export class Game {
   }
 
   /**
-   * Resets the hero's zone. Per-zone reset is not built yet, so for now this
-   * reloads the whole world and puts the hero back at the zone's entry.
+   * Resets only the hero's zone (the one they were last in while on a bridge):
+   * removes its props and every unpinned thing cast there or lying there,
+   * forgets its task progress since the last setup, runs the zone's (and its
+   * tasks') setup again without rebuilding statics, and puts the hero at the
+   * zone entry. Other zones are left as they are.
    */
   resetZone(): void {
     const zone = this.zone;
-    this.loadLevel(this.level.id);
-    if (zone && this.level.zones?.includes(zone) && zone !== this.zone) {
-      this.teleportHero(zoneEntry(zone));
-      this.zone = zone;
-      this.tracker.enterZone(zone);
+    const list = this.level.tasks;
+    if (!zone || !list) {
+      this.loadLevel(this.level.id);
+      return;
     }
+    const w = this.world;
+    for (const e of w.living()) {
+      if (e === w.hero) continue;
+      const mine = e.state.zone === zone.id || e.state.castZone === zone.id || (!e.state.pinned && zoneAt(e.x, e.y, e.z, this.level.zones) === zone);
+      if (mine) w.remove(e, 'zoneReset');
+    }
+    this.tracker.resetZone(zone);
+    w.skipStatics = true;
+    try {
+      buildZone(w, zone, list);
+    } finally {
+      w.skipStatics = false;
+    }
+    this.tracker.armZone(zone);
+    const entry = zoneEntry(zone);
+    if (w.hero?.alive) this.teleportHero(entry);
+    else this.spawnHero(entry);
+    this.zone = zone;
+    this.tracker.enterZone(zone);
+    this.trackerAcc = Infinity;
+    const g = w.groundAt(entry[0], entry[2] - 3);
+    this.marker.set(new Vector3(entry[0], Number.isFinite(g) ? g : entry[1], entry[2] - 3));
+    w.aim = null;
+    if (w.hero?.alive) this.fx.sparkle(w.hero.body.position);
+    this.hud.toasts.show(`${zone.name} is back to how it started.`, { kind: 'info', duration: 1800 });
+  }
+
+  /** Max cast distance (horizontal, from the hero) for a spell aimed at a point, or null for anywhere. */
+  castRangeAt(x: number, y: number, z: number): number | null {
+    const limit = this.level.tasks ? castLimitAt(x, y, z, this.level.tasks) : null;
+    return limit ?? this.level.castRange ?? null;
   }
 
   /** Moves the hero to a feet position (y omitted: the ground there) and brings the camera along. */
@@ -201,7 +280,12 @@ export class Game {
     const g = this.world.groundAt(hero.x, hero.z);
     if (!Number.isFinite(g) || feet < g - 0.5) return;
     const zone = zoneAt(hero.x, feet, hero.z, this.level.zones) ?? this.zone;
-    if (zone && zone !== this.zone) this.tracker.enterZone(zone);
+    if (zone && zone !== this.zone) {
+      this.tracker.enterZone(zone);
+      this.hud.setZoneName(zone.name);
+      if (!this.runner) this.hud.showZoneBanner(zone.name);
+      this.trackerAcc = Infinity;
+    }
     this.zone = zone;
   }
 
@@ -248,11 +332,13 @@ export class Game {
       this.hud.toasts.show(`“${res.def.name}” won't work in this level.`, { kind: 'warn' });
       return false;
     }
-    const range = this.zone?.castRange ?? this.level.castRange;
+    const mp = this.marker.position;
+    const range = this.castRangeAt(mp.x, mp.y, mp.z);
     const hero = this.world.hero;
-    if (range && hero?.alive && Math.hypot(this.marker.position.x - hero.x, this.marker.position.z - hero.z) > range) {
+    if (range && hero?.alive && Math.hypot(mp.x - hero.x, mp.z - hero.z) > range) {
       this.fizzle();
-      this.hud.toasts.show(`Your magic only reaches ${range} m in this level. Walk closer, or click nearer to you.`, { kind: 'warn', title: 'Too far away' });
+      const where = range < (this.level.castRange ?? Infinity) ? 'there' : 'in this level';
+      this.hud.toasts.show(`Your magic only reaches ${range} m ${where}. Walk closer, or click nearer to you.`, { kind: 'warn', title: 'Too far away' });
       return false;
     }
     this.hud.pulseInput();
@@ -266,9 +352,10 @@ export class Game {
     // nudge repeat casts so things don't land in a perfect tower
     const jitter = this.world.nearby(base, 1.5, (e) => e !== this.world.hero).length > 0 ? 0.5 : 0;
     const yaw = this.castYaw(res.def.orient, base);
+    const castZone = this.level.tasks ? this.zone?.id ?? null : null;
     for (let i = 0; i < count; i++) {
       const angle = (i / count) * Math.PI * 2;
-      const r = (count > 1 ? 0.6 + count * 0.15 : 0) + jitter * Math.random();
+      const r = (count > 1 ? 0.6 + count * 0.15 : 0) + jitter * random();
       const x = base.x + Math.cos(angle) * r, z = base.z + Math.sin(angle) * r;
       this.fx.tweens.add({
         duration: 0.001,
@@ -277,12 +364,14 @@ export class Game {
         done: () => {
           const ground = Math.max(this.world.groundAt(x, z), base.y);
           const scaleGuess = res.adjectives.reduce((s, a) => s * (a.category === 'size' ? (a.id === 'tiny' ? 0.4 : a.id === 'small' ? 0.65 : a.id === 'big' ? 1.6 : 2.4) : 1), 1);
-          this.world.spawn(res.def, {
+          const e = this.world.spawn(res.def, {
             position: { x, y: ground + 1.2 + scaleGuess * 0.9, z },
             adjectives: res.adjectives,
             label: res.label,
-            yaw: yaw ?? Math.random() * Math.PI * 2,
+            yaw: yaw ?? random() * Math.PI * 2,
           });
+          // a zone reset clears what was cast there, wherever it ended up
+          if (castZone) e.state.castZone = castZone;
         },
       });
     }
@@ -370,6 +459,13 @@ export class Game {
         return;
       }
       const typing = document.activeElement === input;
+      if (this.level.tasks && !this.titleMode && !typing && !e.metaKey && !e.ctrlKey && !e.altKey && !e.repeat) {
+        if (e.code === 'KeyJ' || (e.key === 'Escape' && this.hud.journalOpen)) {
+          e.preventDefault();
+          this.toggleJournal();
+          return;
+        }
+      }
       if (typing || e.metaKey || e.ctrlKey || e.altKey || this.hud.overlayOpen) return;
       if (this.level.hero) {
         // hero levels: keys move the hero; Enter (or T or /) opens the spell bar
@@ -443,8 +539,8 @@ export class Game {
     if (b.mass === 0) return;
     b.wakeUp();
     const m = b.mass;
-    b.applyImpulse(new Vec3((Math.random() - 0.5) * 2 * m, 4.5 * m, (Math.random() - 0.5) * 2 * m));
-    b.angularVelocity.set(Math.random() * 4 - 2, Math.random() * 4 - 2, Math.random() * 4 - 2);
+    b.applyImpulse(new Vec3((random() - 0.5) * 2 * m, 4.5 * m, (random() - 0.5) * 2 * m));
+    b.angularVelocity.set(random() * 4 - 2, random() * 4 - 2, random() * 4 - 2);
     this.fx.sound(ent.def.voice ?? (ent.has('animal') ? 'bark' : 'squeak'), { pitch: 1 / Math.sqrt(ent.scale) });
   }
 
@@ -468,7 +564,14 @@ export class Game {
     if (this.level.zones && hero?.alive) this.trackZone(hero);
     if (this.level.hero && (!hero?.alive || hero.y < (this.level.killY ?? -6))) this.respawnHero();
 
-    if (this.level.tasks) this.tracker.update(dt, this.zone);
+    if (this.level.tasks) {
+      this.tracker.update(dt, this.zone);
+      this.trackerAcc += dt;
+      if (this.trackerAcc >= 0.25) {
+        this.trackerAcc = 0;
+        this.refreshTracker();
+      }
+    }
     else if (this.level.goal && !this.won && this.level.goal.check(this.world)) this.win();
     else if (this.level.fail && !this.won && !this.failed) {
       const msg = this.level.fail(this.world);
@@ -478,6 +581,33 @@ export class Game {
         this.hud.toasts.show('Press R (or ↺) to try again.', { kind: 'error', title: msg, duration: 8000, actions: [{ label: '↺ Retry', onClick: () => this.loadLevel(this.level.id) }] });
       }
     }
+  }
+
+  /**
+   * The pinned tracker line: the nearest task not yet done (from the save),
+   * looking in the hero's zone first, then anywhere.
+   */
+  private refreshTracker(): void {
+    const list = this.level.tasks;
+    if (!list) return;
+    const saved = worldSave.all().tasks;
+    const open = list.filter((t) => !saved[t.id] && !this.tracker.isDone(t.id));
+    if (!open.length) {
+      this.hud.setTracker(null, 'Every task is done! Press J and try finding new ways.');
+      return;
+    }
+    const here = this.zone ? open.filter((t) => t.zone === this.zone!.id) : [];
+    const h = this.world.hero;
+    const from = h?.alive ? [h.x, h.z] : [0, 0];
+    let best = (here.length ? here : open)[0], bestD = Infinity;
+    for (const t of here.length ? here : open) {
+      const d = Math.hypot(t.start[0] - from[0], t.start[2] - from[1]);
+      if (d < bestD) {
+        best = t;
+        bestD = d;
+      }
+    }
+    this.hud.setTracker({ title: best.title, zone: best.zone === this.zone?.id ? null : (zones.get(best.zone)?.name ?? null) });
   }
 
   /** Runs the simulation for `seconds` without rendering (headless checks, screenshots). */

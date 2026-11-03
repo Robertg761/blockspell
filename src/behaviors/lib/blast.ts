@@ -1,5 +1,6 @@
 import { Vec3 } from 'cannon-es';
 import type { Entity } from '../../core/entity';
+import { random } from '../../core/rng';
 import type { GameWorld } from '../../core/world';
 import { shatter } from './debris';
 import { ignite, pop } from './fire';
@@ -35,7 +36,7 @@ export function explode(world: GameWorld, at: P3, radius: number, force: number,
     const d = Math.max(0.2, Math.hypot(dx, dy, dz) - o.radius * 0.5);
     if (d > radius) continue;
     const fall = 1 - d / radius;
-    if (o.has('explosive')) lightFuse(o, world, 0.15 + Math.random() * 0.3);
+    if (o.has('explosive')) lightFuse(o, world, 0.15 + random() * 0.3);
     if (o.has('poppable')) { pop(o, world); continue; }
     if (o.has('fragile') && fall > 0.25) { shatter(o, world, 'exploded'); continue; }
     if (o.has('flammable') && fall > 0.35) ignite(o, world);
@@ -46,6 +47,6 @@ export function explode(world: GameWorld, at: P3, radius: number, force: number,
     imp.set((dx / len) * dv * o.body.mass, ((dy + 0.6) / len + 0.5) * dv * o.body.mass, (dz / len) * dv * o.body.mass);
     o.body.wakeUp();
     o.body.applyImpulse(imp);
-    o.body.angularVelocity.set(Math.random() * 10 - 5, Math.random() * 10 - 5, Math.random() * 10 - 5);
+    o.body.angularVelocity.set(random() * 10 - 5, random() * 10 - 5, random() * 10 - 5);
   }
 }

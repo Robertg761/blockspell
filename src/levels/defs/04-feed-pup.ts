@@ -8,6 +8,8 @@ export default defineLevel({
   id: 'feed-pup',
   name: 'Feed the Pup',
   order: 4,
+  // Kept out of the menu: the puzzle now lives in the open world. The level stays as a regression baseline for its solutions.
+  hidden: true,
   description: 'A hungry pup is shut in a tall pen. You can only cast so far, and the wall is in the way.',
   hint: 'You can\'t cast over the wall from down here. Get up on top of it (a "ladder"?), or fling a "bone" over some other way.',
   terrain: { flatRadius: 12, trees: 5, rocks: 3 },

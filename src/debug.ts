@@ -3,7 +3,8 @@ import { orderedLevels } from './levels';
 import { SolutionRunner } from './levels/solve';
 import type { LevelDef, LevelSolution, SolutionStep, V3 } from './levels/types';
 import { parseSpell } from './parser/parser';
-import { orderedTasks, tasks } from './tasks';
+import { seedRandom } from './core/rng';
+import { orderedTasks, tasks, zoneEntry } from './tasks';
 import { wayKey } from './tasks/save';
 
 /**
@@ -18,8 +19,15 @@ import { wayKey } from './tasks/save';
  *   __blockspell.teleport([x, y, z])          move the hero (feet position; y omitted = ground there)
  *   __blockspell.solve('sky-island', 0)       replay a level's scripted solution headlessly -> result
  *   __blockspell.solveTask('feed-pup', 0)     replay an open-world task's solution from its start -> result
- *   __blockspell.solveAll()                   every level solution, every task solution, plus a
- *                                             "3 distinct ways" check per task (the save is restored after)
+ *   __blockspell.solveTask('feed-pup', 0, 120, 7)  ... with the game's randomness seeded (7)
+ *   __blockspell.playTask('feed-pup', 0)      like solveTask, but the completion is saved for real
+ *   __blockspell.resetZone()                  reset the hero's zone (like pressing R in the world)
+ *   __blockspell.leakCheck()                  cast things and reset each zone a few times; counts must match
+ *   __blockspell.solveAll()                   every level solution, every task solution, a "3 distinct
+ *                                             ways" check and a "solves again after a zone reset" check per
+ *                                             task, an idle check per zone and the leak check (the save is
+ *                                             restored after)
+ *   __blockspell.solveAll({ seeds: [1, 2, 3] })  the same, with every task solution run once per seed
  *
  * Query flags (handy for screenshots):
  *   ?level=2               skip the title and load level 2 (order number or id; `world` is the open world)
@@ -30,7 +38,8 @@ import { wayKey } from './tasks/save';
  *   &task=feed-pup         with ?level=world: jump to that task's start (and &solve=0 plays its solution)
  *   &cam=x,y,z,tx,ty,tz    camera position + target
  *   &mute                  start muted
- *   &levels                open the level select screen
+ *   &levels                open the menu (the title screen)
+ *   &journal               with ?level=world: open the Journal
  */
 export interface SolveResult {
   /** Set for classic level solves. */
@@ -44,7 +53,17 @@ export interface SolveResult {
   stars: number;
   log: string[];
   error: string | null;
+  /** Seed of the game's randomness for this run (absent: unseeded). */
+  seed?: number;
 }
+
+export interface SolveAllOptions {
+  /** Run every task solution once per seed (default: once, unseeded). */
+  seeds?: number[];
+}
+
+/** Seconds each zone is left alone in the idle check. */
+const IDLE_SECONDS = 30;
 
 /** Distinct ways a task needs (sets of cast object ids). */
 const MIN_WAYS = 3;
@@ -131,7 +150,17 @@ export function installDebug(game: Game) {
    * hero to the task's start and runs the steps. Passes when the tracker
    * marks the task done. Leaves the world in its end state.
    */
-  function solveTask(id: string, index: number | LevelSolution, maxSeconds: number): SolveResult {
+  function solveTask(id: string, index: number | LevelSolution, maxSeconds: number, seed?: number): SolveResult {
+    if (seed === undefined) return runTask(id, index, maxSeconds);
+    seedRandom(seed);
+    try {
+      return { ...runTask(id, index, maxSeconds), seed };
+    } finally {
+      seedRandom(null);
+    }
+  }
+
+  function runTask(id: string, index: number | LevelSolution, maxSeconds: number): SolveResult {
     const task = tasks.get(id);
     if (!task) throw new Error(`no task "${id}"`);
     const sol = typeof index === 'number' ? task.solutions[index] : index;
@@ -170,6 +199,93 @@ export function installDebug(game: Game) {
     };
   }
 
+  const check = (task: string, solution: string, pass: boolean, error: string | null, log: string[] = []): SolveResult => ({
+    task, solution, pass, time: 0, words: 0, stars: 0, log, error: pass ? null : error,
+  });
+
+  /**
+   * Solves a task, resets its zone (from the task start, like a player
+   * pressing R there) and solves it again with another solution, without
+   * reloading the world. Proves the reset rebuilds the props and re-arms the checks.
+   */
+  function solveAfterReset(id: string): SolveResult {
+    const task = tasks.get(id)!;
+    const first = runTask(id, 0, 120);
+    if (!first.pass) return check(id, 'solves again after a zone reset', false, `first solve failed: ${first.error}`, first.log);
+    const second = task.solutions[1 % task.solutions.length];
+    const runner = new SolutionRunner(game, {
+      ...second,
+      steps: [{ teleport: task.start }, { wait: 0.3 }, { resetZone: true }, { teleport: task.start }, { wait: 0.3 }, ...second.steps],
+    });
+    game.runner = runner;
+    let t = 0, cleared = false;
+    try {
+      while (!runner.timedOut && t < 120) {
+        game.tick(1 / 60);
+        t += 1 / 60;
+        if (!cleared && runner.log.includes('reset zone')) cleared = !game.tracker.isDone(id);
+        if (cleared && game.tracker.isDone(id)) break;
+      }
+    } finally {
+      game.runner = null;
+    }
+    const pass = cleared && game.tracker.isDone(id);
+    return { ...check(id, `solves again after a zone reset (${second.name})`, pass, cleared ? `not completed again: ${runner.error ?? ''}` : 'the reset did not clear the task', runner.log), time: +t.toFixed(1) };
+  }
+
+  /** Leaves each zone alone for a while with the hero at its entry: no task may complete by itself. */
+  function idleChecks(): SolveResult[] {
+    const world = orderedLevels().find((l) => l.tasks);
+    if (!world) return [];
+    return (world.zones ?? []).map((zone) => {
+      game.hud.hideOverlay();
+      game.loadLevel(world.id);
+      game.teleportHero(zoneEntry(zone));
+      const fired: string[] = [];
+      const off = game.world.events.on('taskComplete', ({ taskId }) => void fired.push(taskId));
+      try {
+        game.step(IDLE_SECONDS);
+      } finally {
+        off();
+      }
+      const ok = !fired.length && game.zone === zone;
+      return { ...check(`zone:${zone.id}`, `idle ${IDLE_SECONDS} s completes nothing`, ok, fired.length ? `completed by itself: ${fired.join(', ')}` : `hero left the zone (in ${game.zone?.id})`), time: IDLE_SECONDS };
+    });
+  }
+
+  /** Casts a handful of things in each zone and resets it a few times: live entity, body, static, subscription and link counts must return to the baseline. */
+  function leakCheck(rounds = 4): SolveResult[] {
+    const world = orderedLevels().find((l) => l.tasks);
+    if (!world) return [];
+    const out: SolveResult[] = [];
+    for (const zone of world.zones ?? []) {
+      game.hud.hideOverlay();
+      game.loadLevel(world.id);
+      const [ex, ey, ez] = zoneEntry(zone);
+      game.teleportHero([ex, ey, ez]);
+      game.step(1);
+      game.resetZone(); // the first reset may differ from the fresh load (an enter hook, settled props)
+      game.step(1);
+      const base = game.world.counts();
+      const seen: string[] = [];
+      let ok = true;
+      for (let r = 0; r < rounds; r++) {
+        for (const [spell, dx, dz] of [['ball', 1.5, -1.5], ['3 dogs', -2, -2], ['fire', 2.5, 0], ['big box', -2.5, 1], ['balloon', 0, -2.5]] as const) {
+          const g = game.world.groundAt(ex + dx, ez + dz);
+          game.castAt(spell, [ex + dx, Number.isFinite(g) ? g : ey, ez + dz]);
+        }
+        game.step(2);
+        game.resetZone();
+        game.step(0.5);
+        const now = game.world.counts();
+        seen.push(JSON.stringify(now));
+        if ((Object.keys(base) as (keyof typeof base)[]).some((k) => now[k] !== base[k])) ok = false;
+      }
+      out.push(check(`zone:${zone.id}`, `${rounds} resets leak nothing`, ok, `baseline ${JSON.stringify(base)}, after resets ${seen.join(' ')}`, [JSON.stringify(base), ...seen]));
+    }
+    return out;
+  }
+
   const api = {
     game,
     get world() {
@@ -184,6 +300,8 @@ export function installDebug(game: Game) {
       return l.id;
     },
     tasks: () => orderedTasks().map((t) => ({ id: t.id, zone: t.zone, title: t.title, done: game.tracker.isDone(t.id), solutions: t.solutions.map((s) => s.name) })),
+    resetZone: () => game.resetZone(),
+    leakCheck: (rounds = 4) => keepingSave(() => leakCheck(rounds)),
     cast(text: string, at?: [number, number] | V3) {
       if (!at) return game.cast(text);
       const g = game.world.groundAt(at[0], at[1]);
@@ -201,6 +319,7 @@ export function installDebug(game: Game) {
         won: game.won,
         result: game.lastResult,
         zone: game.zone?.id ?? null,
+        counts: game.world.counts(),
         tasksDone: game.tracker.tasks.filter((t) => game.tracker.isDone(t.id)).map((t) => t.id),
         hero: h?.alive ? { x: +h.x.toFixed(2), y: +(h.y - h.size.y / 2).toFixed(2), z: +h.z.toFixed(2), climbing: !!h.state.climbing } : null,
         entities: game.world.living().map((e) => ({ id: e.def.id, label: e.label, role: e.state.role ?? null, x: +e.x.toFixed(2), y: +e.y.toFixed(2), z: +e.z.toFixed(2), size: [+e.size.x.toFixed(2), +e.size.y.toFixed(2), +e.size.z.toFixed(2)], mass: +e.body.mass.toFixed(1), burning: e.state.burning })),
@@ -221,22 +340,32 @@ export function installDebug(game: Game) {
     /** Replays a solution synchronously. Leaves the level in its end state (the save is left untouched). */
     solve: (key: string | number, index = 0, maxSeconds = 120): SolveResult => keepingSave(() => solveLevel(key, index, maxSeconds)),
     /** `index` may also be a solution object (world space) to try one out. */
-    solveTask: (id: string, index: number | LevelSolution = 0, maxSeconds = 120): SolveResult => keepingSave(() => solveTask(id, index, maxSeconds)),
+    solveTask: (id: string, index: number | LevelSolution = 0, maxSeconds = 120, seed?: number): SolveResult =>
+      keepingSave(() => solveTask(id, index, maxSeconds, seed)),
+    /** Plays a task's solution like solveTask, but keeps the save: the task is really marked done. */
+    playTask: (id: string, index: number | LevelSolution = 0, maxSeconds = 120): SolveResult => solveTask(id, index, maxSeconds),
     /**
-     * Every solution of every level, then every task solution, then one
-     * check per task that at least 3 solutions passed with distinct sets of
-     * cast object ids. Restores the player's save afterwards.
+     * Every solution of every level, then every task solution (once per seed
+     * when `seeds` is given), then per task: at least 3 solutions passed (in
+     * every seed) with distinct sets of cast object ids, and it solves again
+     * after a zone reset. Then an idle check per zone (nothing completes by
+     * itself) and the zone reset leak check. Restores the player's save afterwards.
      */
-    solveAll(): SolveResult[] {
+    solveAll(opts: SolveAllOptions = {}): SolveResult[] {
+      const seeds: (number | undefined)[] = opts.seeds?.length ? opts.seeds : [undefined];
       return keepingSave(() => {
         const out: SolveResult[] = [];
         for (const l of orderedLevels()) l.solutions?.forEach((_, i) => out.push(api.solve(l.id, i)));
         for (const task of orderedTasks()) {
           const ways = new Set<string>();
           task.solutions.forEach((sol, i) => {
-            const r = api.solveTask(task.id, i);
-            out.push(r);
-            if (r.pass) ways.add(solutionWay(sol));
+            let passed = true;
+            for (const seed of seeds) {
+              const r = solveTask(task.id, i, 120, seed);
+              out.push(r);
+              passed &&= r.pass;
+            }
+            if (passed) ways.add(solutionWay(sol));
           });
           const ok = ways.size >= MIN_WAYS;
           out.push({
@@ -249,7 +378,9 @@ export function installDebug(game: Game) {
             log: [...ways],
             error: ok ? null : `only ${ways.size} distinct passing way(s): ${[...ways].join(' | ')}`,
           });
+          out.push(solveAfterReset(task.id));
         }
+        out.push(...idleChecks(), ...leakCheck());
         return out;
       });
     },
@@ -277,6 +408,7 @@ export function applyQuery(game: Game, api: ReturnType<typeof installDebug>): bo
   const task = q.get('task') ? tasks.get(q.get('task')!) : undefined;
   if (task) {
     game.teleportHero(task.start);
+    game.step(0.1); // pick up the task's zone before anything else
     const sol = solve !== null ? task.solutions[Number(solve) || 0] : undefined;
     if (sol) game.runner = new SolutionRunner(game, sol);
   } else if (solve !== null) {
@@ -285,5 +417,6 @@ export function applyQuery(game: Game, api: ReturnType<typeof installDebug>): bo
   }
   const t = Number(q.get('t') ?? 0);
   if (t > 0) game.step(t);
+  if (q.has('journal')) game.showJournal();
   return true;
 }

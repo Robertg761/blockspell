@@ -1,5 +1,6 @@
 import { Quaternion, Vec3 } from 'cannon-es';
 import type { Entity } from '../../core/entity';
+import { random } from '../../core/rng';
 import type { GameWorld } from '../../core/world';
 import { canEat } from '../lib/diet';
 import { inWater } from '../lib/water';
@@ -71,8 +72,8 @@ export default defineBehavior({
 
     let t = (e.state.wanderTimer as number) - dt;
     if (t <= 0) {
-      t = 2 + Math.random() * 3;
-      e.state.wander = Math.random() < 0.35 ? null : { x: e.x + (Math.random() * 2 - 1) * 4, z: e.z + (Math.random() * 2 - 1) * 4 };
+      t = 2 + random() * 3;
+      e.state.wander = random() < 0.35 ? null : { x: e.x + (random() * 2 - 1) * 4, z: e.z + (random() * 2 - 1) * 4 };
       if (Math.random() < 0.15 && e.def.voice) world.fx.sound(e.def.voice, { pitch: 1 / Math.sqrt(e.scale), volume: 0.45 });
     }
     e.state.wanderTimer = t;
@@ -99,9 +100,9 @@ export default defineBehavior({
 
     // fish out of water: flop around
     if (swimmer && !wet) {
-      if (Math.abs(b.velocity.y) < 0.3 && Math.random() < h * 1.5) {
-        b.velocity.set((Math.random() - 0.5) * 2, 2.5 + Math.random() * 1.5, (Math.random() - 0.5) * 2);
-        e.state.yaw = (e.state.yaw as number) + (Math.random() - 0.5) * 2;
+      if (Math.abs(b.velocity.y) < 0.3 && random() < h * 1.5) {
+        b.velocity.set((random() - 0.5) * 2, 2.5 + random() * 1.5, (random() - 0.5) * 2);
+        e.state.yaw = (e.state.yaw as number) + (random() - 0.5) * 2;
         tmpQ.setFromAxisAngle(UP, e.state.yaw as number);
         b.quaternion.copy(tmpQ);
       }

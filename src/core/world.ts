@@ -92,12 +92,18 @@ export class GameWorld {
   /** The keyboard-controlled hero of the current level (null in free play). */
   hero: Entity | null = null;
   readonly input: HeroInput = { move: { x: 0, z: 0 }, up: false, down: false, jump: false };
+  /** Open world: while set, spawned entities are stamped with this zone id (state.zone), so a zone reset finds its props. */
+  spawnZone: string | null = null;
+  /** While true, `addStaticBox` does nothing (a zone reset re-runs setup code but keeps the statics it built). */
+  skipStatics = false;
+  /** While set, `on()` subscriptions are filed under this scope so `offScope` can drop them early (a task's latches). */
+  subScope: string | null = null;
 
   private statics: { mesh: Mesh; body: Body; yaw: number }[] = [];
   private bodyMap = new Map<number, Entity>();
   private pendingContacts: { e: Entity; other: Entity | null; speed: number }[] = [];
   private pendingRemoval: Entity[] = [];
-  private levelSubs: (() => void)[] = [];
+  private levelSubs: { off: () => void; scope: string | null }[] = [];
   private acc = 0;
   private staticMat = new MeshStandardMaterial({ vertexColors: true, roughness: 0.9 });
   private ropeMat = new LineBasicMaterial({ color: '#f4f1ea' });
@@ -118,7 +124,29 @@ export class GameWorld {
   // ---------------------------------------------------------------- events
   /** Level-scoped event subscription, auto-removed on `clear()`. */
   on<K extends keyof GameEvents>(type: K, fn: (p: GameEvents[K]) => void): void {
-    this.levelSubs.push(this.events.on(type, fn));
+    this.levelSubs.push({ off: this.events.on(type, fn), scope: this.subScope });
+  }
+
+  /** Drops every level subscription made under `scope` (see `subScope`). */
+  offScope(scope: string): void {
+    for (let i = this.levelSubs.length - 1; i >= 0; i--) {
+      const s = this.levelSubs[i];
+      if (s.scope !== scope) continue;
+      s.off();
+      this.levelSubs.splice(i, 1);
+    }
+  }
+
+  /** Live counts for leak checks (zone resets): entities, physics bodies, scene children, statics, level subscriptions, links. */
+  counts(): { entities: number; bodies: number; scene: number; statics: number; subs: number; links: number } {
+    return {
+      entities: this.entities.filter((e) => e.alive).length,
+      bodies: this.physics.bodies.length,
+      scene: this.scene.children.length,
+      statics: this.statics.length,
+      subs: this.levelSubs.length,
+      links: this.links.length,
+    };
   }
 
   // ---------------------------------------------------------------- spawning
@@ -145,6 +173,7 @@ export class GameWorld {
       const other = this.bodyMap.get(ev.body.id) ?? null;
       this.pendingContacts.push({ e, other, speed: Math.abs(ev.contact.getImpactVelocityAlongNormal()) });
     });
+    if (this.spawnZone) e.state.zone = this.spawnZone;
     this.scene.add(e.root);
     this.entities.push(e);
     this.syncEntity(e);
@@ -359,7 +388,8 @@ export class GameWorld {
   }
 
   /** Adds a static voxel block (platforms, walls) for level design. */
-  addStaticBox(o: StaticBoxOptions): Mesh {
+  addStaticBox(o: StaticBoxOptions): Mesh | null {
+    if (this.skipStatics) return null;
     const V = 0.25;
     const [sx, sy, sz] = o.size.map((s) => Math.max(1, Math.round(s / V)));
     const b = new VoxelBuilder();
@@ -411,8 +441,10 @@ export class GameWorld {
       this.physics.removeBody(s.body);
     }
     this.statics.length = 0;
-    for (const off of this.levelSubs) off();
+    for (const s of this.levelSubs) s.off();
     this.levelSubs.length = 0;
+    this.spawnZone = this.subScope = null;
+    this.skipStatics = false;
     this.flags = {};
     this.aim = null;
     this.hero = null;

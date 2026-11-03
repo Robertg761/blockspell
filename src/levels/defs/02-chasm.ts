@@ -5,6 +5,8 @@ export default defineLevel({
   id: 'chasm',
   name: 'Cross the Chasm',
   order: 2,
+  // Kept out of the menu: the puzzle now lives in the open world. The level stays as a regression baseline for its solutions.
+  hidden: true,
   description: 'A gap too wide to jump lies between you and the flag.',
   hint: 'You can\'t jump that far. Try building a bridge, or launching yourself across.',
   terrain: null,
