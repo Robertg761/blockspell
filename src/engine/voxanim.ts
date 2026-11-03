@@ -1,6 +1,6 @@
 import {
-  BoxGeometry, BufferAttribute, Color, Group, InstancedBufferAttribute, InstancedBufferGeometry, Matrix4, Mesh,
-  MeshStandardMaterial, Quaternion, Vector3, Vector4, type Material, type Object3D, type Scene, type WebGLProgramParametersWithUniforms,
+  BoxGeometry, BufferAttribute, BufferGeometry, Color, Group, InstancedBufferAttribute, InstancedBufferGeometry, Matrix4, Mesh,
+  MeshBasicMaterial, MeshStandardMaterial, Quaternion, Vector3, Vector4, type Material, type Object3D, type Scene, type WebGLProgramParametersWithUniforms,
 } from 'three';
 import type { Entity } from '../core/entity';
 import type { VoxelModel } from '../voxel/model';
@@ -331,6 +331,27 @@ function warmupCubes(): Mesh {
   return m;
 }
 
+/**
+ * An invisible triangle drawn with patched entity materials (lit and emissive), always in the scene:
+ * entity programs no longer match the static ones, so without it a level with no objects would let
+ * three.js drop them and the next cast would recompile.
+ */
+function keepEntityPrograms(): Mesh {
+  const g = new BufferGeometry();
+  g.setAttribute('position', new BufferAttribute(new Float32Array(9), 3));
+  g.setAttribute('normal', new BufferAttribute(new Float32Array([0, 1, 0, 0, 1, 0, 0, 1, 0]), 3));
+  g.setAttribute('color', new BufferAttribute(new Float32Array(9), 3));
+  g.addGroup(0, 3, 0);
+  g.addGroup(0, 3, 1);
+  const mats = [new MeshStandardMaterial({ vertexColors: true }), new MeshBasicMaterial({ vertexColors: true })];
+  patchEntityMaterials(mats, makeEntityAnim());
+  const m = new Mesh(g, mats);
+  m.frustumCulled = false;
+  m.receiveShadow = true; // part of the program key: match entity meshes
+  m.name = 'voxel-anims-programs';
+  return m;
+}
+
 /** Surface cells of a model (filled, with an empty neighbour) and their colors: cached per model. */
 const surfaceCache = new WeakMap<VoxelModel, { cells: Uint8Array; colors: Float32Array; n: number }>();
 function surfaceOf(m: VoxelModel) {
@@ -406,7 +427,7 @@ export class VoxelAnims {
   constructor(scene: Scene, private fx: Effects) {
     this.ghosts.name = 'voxel-anims';
     scene.add(this.ghosts);
-    this.ghosts.add(warmupCubes());
+    this.ghosts.add(warmupCubes(), keepEntityPrograms());
   }
 
   get time(): number {
@@ -670,7 +691,7 @@ export class VoxelAnims {
     e.visual.scale.set(grow * (1 - wob * 0.5), grow * (1 + wob), grow * (1 - wob * 0.5));
     if (T < 1.05) {
       e.root.getWorldPosition(_v);
-      this.fx.glow.request(_v, '#' + a.color.getHexString(), 7 * Math.sin(Math.min(1, T) * Math.PI) * Math.min(2, Math.max(0.7, e.radius)));
+      this.fx.glow.request(_v, '#' + a.color.getHexString(), 3.5 * Math.sin(Math.min(1, T) * Math.PI) * Math.min(2, Math.max(0.7, e.radius)));
     }
     // sparkles riding the wave front
     if (!a.lite && T < 1 && Math.random() < 0.7) {
