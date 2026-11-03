@@ -1,6 +1,6 @@
 import type { GameWorld } from '../core/world';
 import type { TerrainOptions } from '../engine/terrain';
-import type { ZoneDef } from '../tasks/types';
+import type { TaskDef, ZoneDef } from '../tasks/types';
 
 export type V3 = [number, number, number];
 
@@ -22,10 +22,18 @@ export type SolutionStep =
   | { wait: number }
   /** Hold hero input for `for` seconds. dir is a world-space direction [x, z]. */
   | { hold: { dir?: [number, number]; up?: boolean; down?: boolean; jump?: boolean }; for: number }
-  /** Steer the hero toward x,z until within 0.35 m (or timeout). `jump` hops while walking, `up` climbs. */
-  | { walkTo: [number, number]; timeout?: number; jump?: boolean; up?: boolean }
+  /**
+   * Steer the hero toward x,z until within 0.35 m (or timeout). `jump` hops while walking, `up` climbs.
+   * With `of` (an object id), x,z is an offset from the nearest such entity, read when the step starts
+   * (walk up to a trampoline wherever it came to rest).
+   */
+  | { walkTo: [number, number]; of?: string; timeout?: number; jump?: boolean; up?: boolean }
   /** Click (poke) the nearest entity matching an object id near a point. */
-  | { poke: string; near?: [number, number] };
+  | { poke: string; near?: [number, number] }
+  /** Move the hero to a feet position (open world: jump to a task's start). */
+  | { teleport: V3 }
+  /** Reset the hero's zone to its starting state (for now this reloads the whole world). */
+  | { resetZone: true };
 
 export interface LevelSolution {
   /** Short human description, e.g. "giant balloon lifts the star". */
@@ -52,6 +60,8 @@ export interface LevelDef {
   islands?: Partial<TerrainOptions>[];
   /** Open-world zones: the hero's zone is tracked and a fallen hero respawns at its entry. */
   zones?: ZoneDef[];
+  /** Open-world tasks, checked by the task tracker instead of `goal`. */
+  tasks?: TaskDef[];
   /** Kept out of the level menu (the open world has its own entry point). */
   hidden?: boolean;
   /** View distance overrides: fog start and end, camera far plane and max zoom-out distance. */

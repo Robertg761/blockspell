@@ -12,6 +12,7 @@ import { SolutionRunner } from './levels/solve';
 import { starsFor, type LevelDef, type V3 } from './levels/types';
 import type { Entity } from './core/entity';
 import { zoneAt, zoneEntry } from './tasks';
+import { TaskTracker } from './tasks/tracker';
 import type { ZoneDef } from './tasks/types';
 import { spellbookObjects } from './objects';
 import { parseSpell, randomWords, suggestAdjectives } from './parser/parser';
@@ -45,6 +46,8 @@ export class Game {
   titleMode = false;
   /** Open world: the zone the hero is in, or was last in while on a bridge (null in classic levels). */
   zone: ZoneDef | null = null;
+  /** Open world: checks every task instead of a single level goal. */
+  readonly tracker: TaskTracker;
   private keys = new Set<string>();
   private failed = false;
   private winTimer = 0;
@@ -58,12 +61,13 @@ export class Game {
     this.fx = new Effects(this.renderer.scene);
     this.world = new GameWorld(this.renderer.scene, this.fx);
     this.renderer.scene.add(this.marker.group);
+    this.tracker = new TaskTracker(this);
 
     const levels = menuLevels();
     this.hud = new Hud(root, {
       onCast: (t) => this.cast(t),
       onLevel: (id) => this.loadLevel(id),
-      onReset: () => this.loadLevel(this.level.id),
+      onReset: () => this.restart(),
       onLevels: () => this.showLevels(),
       onMute: (m) => this.fx.audio.setMuted(m),
       onStart: () => this.fx.audio.unlock(),
@@ -128,6 +132,8 @@ export class Game {
     level.setup(this.world);
     this.zone = level.zones && level.hero ? zoneAt(...level.hero, level.zones) : null;
     if (level.hero) this.spawnHero(level.hero);
+    this.tracker.reset(level.tasks ?? []);
+    if (this.zone) this.tracker.enterZone(this.zone, false);
     if (level.camera) this.renderer.setView(level.camera.position, level.camera.target);
     const sp = level.spawnPoint ?? [0, 0, 0];
     const g = this.world.groundAt(sp[0], sp[2]);
@@ -136,6 +142,42 @@ export class Game {
     this.hud.setLevel(level);
     if (level.hero) this.hud.input.blur();
     this.tutorial.onLevel(level);
+  }
+
+  /** R and the reset button: the current zone in the open world, else the whole level. */
+  restart(): void {
+    if (this.level.tasks) this.resetZone();
+    else this.loadLevel(this.level.id);
+  }
+
+  /**
+   * Resets the hero's zone. Per-zone reset is not built yet, so for now this
+   * reloads the whole world and puts the hero back at the zone's entry.
+   */
+  resetZone(): void {
+    const zone = this.zone;
+    this.loadLevel(this.level.id);
+    if (zone && this.level.zones?.includes(zone) && zone !== this.zone) {
+      this.teleportHero(zoneEntry(zone));
+      this.zone = zone;
+      this.tracker.enterZone(zone);
+    }
+  }
+
+  /** Moves the hero to a feet position (y omitted: the ground there) and brings the camera along. */
+  teleportHero(at: [number, number] | V3): V3 {
+    const h = this.world.hero;
+    if (!h?.alive) throw new Error('no hero in this level');
+    const [x, z] = at.length === 3 ? [at[0], at[2]] : at;
+    const g = this.world.groundAt(x, z);
+    const y = at.length === 3 ? at[1] : Number.isFinite(g) ? g : 0;
+    h.body.position.set(x, y + h.size.y / 2 + 0.05, z);
+    h.body.velocity.set(0, 0, 0);
+    h.body.wakeUp();
+    const c = this.renderer.controls.target, cam = this.renderer.camera.position;
+    cam.set(cam.x + x - c.x, cam.y, cam.z + z - c.z);
+    c.set(x, c.y, z);
+    return [x, y, z];
   }
 
   /** Spawns the keyboard-controlled hero at its feet position. */
@@ -158,7 +200,9 @@ export class Game {
     const feet = hero.y - hero.size.y / 2;
     const g = this.world.groundAt(hero.x, hero.z);
     if (!Number.isFinite(g) || feet < g - 0.5) return;
-    this.zone = zoneAt(hero.x, feet, hero.z, this.level.zones) ?? this.zone;
+    const zone = zoneAt(hero.x, feet, hero.z, this.level.zones) ?? this.zone;
+    if (zone && zone !== this.zone) this.tracker.enterZone(zone);
+    this.zone = zone;
   }
 
   /** Puts a fallen (or lost) hero back at the start of the level, or at the entry of the zone they were last in. */
@@ -212,6 +256,7 @@ export class Game {
       return false;
     }
     this.hud.pulseInput();
+    this.tracker.noteCast(this.zone?.id ?? null, res.def.id);
     if (!this.won) {
       this.words++;
       this.hud.setWords(this.words, this.level.goal ? (this.level.par ?? 2) : null);
@@ -336,7 +381,7 @@ export class Game {
           e.preventDefault();
           this.keys.clear();
           input.focus();
-        } else if (e.code === 'KeyR' && !e.repeat) this.loadLevel(this.level.id);
+        } else if (e.code === 'KeyR' && !e.repeat) this.restart();
         return;
       }
       if (e.key.length === 1 && /\S/.test(e.key)) input.focus();
@@ -423,7 +468,8 @@ export class Game {
     if (this.level.zones && hero?.alive) this.trackZone(hero);
     if (this.level.hero && (!hero?.alive || hero.y < (this.level.killY ?? -6))) this.respawnHero();
 
-    if (this.level.goal && !this.won && this.level.goal.check(this.world)) this.win();
+    if (this.level.tasks) this.tracker.update(dt, this.zone);
+    else if (this.level.goal && !this.won && this.level.goal.check(this.world)) this.win();
     else if (this.level.fail && !this.won && !this.failed) {
       const msg = this.level.fail(this.world);
       if (msg) {

@@ -8,6 +8,10 @@ export interface SolveHost {
   /** Aims at a point and casts a spell like the player would. Returns false if it failed to parse. */
   castAt(text: string, at: V3): boolean;
   poke(e: Entity): void;
+  /** Moves the hero to a feet position. */
+  teleportHero(at: V3): void;
+  /** Resets the hero's zone (open world). */
+  resetZone(): void;
 }
 
 /**
@@ -18,6 +22,8 @@ export interface SolveHost {
 export class SolutionRunner {
   private i = 0;
   private t = 0;
+  /** Resolved target of the current walkTo step. */
+  private target: [number, number] | null = null;
   /** Seconds spent after the last step (waiting for the goal). */
   tail = 0;
   readonly log: string[] = [];
@@ -51,8 +57,20 @@ export class SolutionRunner {
     }
   }
 
+  /** Where a walkTo step heads: its point, or its offset from the nearest entity with id `of`. */
+  private walkTarget(step: { walkTo: [number, number]; of?: string }): [number, number] | null {
+    if (!step.of) return null;
+    const w = this.host.world, h = w.hero;
+    const e = h ? w.nearest({ x: h.x, y: h.y, z: h.z }, 50, (o) => o.def.id === step.of) : null;
+    if (!e) {
+      this.log.push(`walkTo: no ${step.of}`);
+      return null;
+    }
+    return [e.x + step.walkTo[0], e.z + step.walkTo[1]];
+  }
+
   /** Executes one tick of `step`; returns true when it's finished. */
-  private run(step: SolutionStep, inp: HeroInput, _dt: number): boolean {
+  private run(step: SolutionStep, inp: HeroInput, dt: number): boolean {
     const w = this.host.world;
     if ('cast' in step) {
       const at: V3 = step.at.length === 3 ? step.at : [step.at[0], w.groundAt(step.at[0], step.at[1]), step.at[1]];
@@ -78,10 +96,12 @@ export class SolutionRunner {
     if ('walkTo' in step) {
       const h = w.hero;
       if (!h?.alive) return true;
-      const dx = step.walkTo[0] - h.x, dz = step.walkTo[1] - h.z;
+      if (this.t <= dt) this.target = this.walkTarget(step);
+      const [tx, tz] = this.target ?? step.walkTo;
+      const dx = tx - h.x, dz = tz - h.z;
       const d = Math.hypot(dx, dz);
       if (d < 0.35 || this.t > (step.timeout ?? 10)) {
-        if (d >= 0.35) this.log.push(`walkTo ${step.walkTo} timed out ${d.toFixed(2)} m short`);
+        if (d >= 0.35) this.log.push(`walkTo ${step.of ? step.of + '+' : ''}${step.walkTo} timed out ${d.toFixed(2)} m short`);
         return true;
       }
       inp.move.x = dx / d * Math.min(1, d * 2);
@@ -95,6 +115,16 @@ export class SolutionRunner {
       const e = w.nearest({ x: near[0], y: w.hero?.y ?? 1, z: near[1] }, 50, (o) => o.def.id === step.poke);
       if (e) this.host.poke(e);
       else this.log.push(`poke: no ${step.poke}`);
+      return true;
+    }
+    if ('teleport' in step) {
+      this.host.teleportHero(step.teleport);
+      this.log.push(`teleport to ${step.teleport.map((v) => v.toFixed(1)).join(',')}`);
+      return true;
+    }
+    if ('resetZone' in step) {
+      this.host.resetZone();
+      this.log.push('reset zone');
       return true;
     }
     return true;

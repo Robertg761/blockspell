@@ -1,7 +1,7 @@
 import { banner } from '../decor';
 import { defineZone, offset } from '../types';
 
-/** Cliffside (north): cliffs, a floating ledge and a summit. Placeholder until its tasks land. */
+/** Cliffside (north): cliffs, a floating ledge and a summit. */
 export default defineZone({
   id: 'cliffside',
   name: 'Cliffside',

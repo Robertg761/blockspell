@@ -53,6 +53,8 @@ export default defineLevel({
         { walkTo: [0, -4.5], timeout: 6 },
       ],
     },
-    { name: 'bomb on the ledge', steps: [{ cast: 'bomb', at: [0, 2.5, -2.3] }, { wait: 6 }] },
+    // Off to the star's left, so the blast throws it right and down onto the grass (from the front it
+    // flies back over the cliff, onto the rock shoulder or off the island).
+    { name: 'bomb on the ledge', steps: [{ walkTo: [0, 1.5] }, { cast: 'bomb', at: [-1.6, 2.5, -3] }, { wait: 6 }] },
   ],
 });

@@ -13,6 +13,8 @@ export interface GameEvents {
   tagRemoved: { entity: Entity; tag: string };
   contact: { a: Entity; b: Entity | null; speed: number };
   levelComplete: { levelId: string };
+  /** Open world: a task was completed. `first` is its first completion ever, `way` the sorted object ids cast in its zone. */
+  taskComplete: { taskId: string; zone: string; first: boolean; way: string[]; newWay: boolean };
   unlocked: { entity: Entity; key: Entity };
   exploded: { at: { x: number; y: number; z: number }; source: Entity | null };
   broken: { entity: Entity };

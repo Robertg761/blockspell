@@ -62,15 +62,16 @@ export default defineLevel({
       ],
     },
     {
-      name: 'big box stepping stone',
+      name: 'climb a tree by the wall, then a bone',
       steps: [
-        { walkTo: [0, 2.5] }, { cast: 'big box', at: [0, 0.85] }, { wait: 1.5 },
-        { cast: 'box', at: [0, 1.85] }, { wait: 1 },
-        { hold: { dir: [0, -1], jump: true }, for: 5 },
-        { walkTo: [0, -0.5], timeout: 3 },
+        { walkTo: [0, 1.6] }, { cast: 'tree', at: [0, 0.6] }, { wait: 1.5 },
+        { walkTo: [0, 1.1] }, { hold: { dir: [0, -1], up: true }, for: 3 },
+        { walkTo: [0, -0.6], up: true, timeout: 6 }, // up: climb again if we slipped off
         { wait: 1 },
         { cast: 'bone', at: [0, 0, -1.9] },
       ],
     },
+    // "big box" plus a "box" as a step also works for players, but the boxes land at random angles and the
+    // hero shoves the big one aside about 1 time in 20, too often for a scripted check.
   ],
 });

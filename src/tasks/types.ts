@@ -26,20 +26,40 @@ export interface ZoneDef {
   castRange?: number;
   /** Builds the zone's props. `origin` is `center`; pass local coordinates through it. */
   setup(world: GameWorld, origin: V3): void;
+  /** Runs once per setup, the first time the hero sets foot in the zone (e.g. light the hut fire only when someone is there to see it). */
+  enter?(world: GameWorld, origin: V3): void;
 }
 
-/** A task in a zone, checked by the task tracker (milestone M2). */
+/**
+ * A task in a zone, checked by the task tracker (src/tasks/tracker.ts). Add a
+ * file in src/tasks/defs/ default-exporting `defineTask({...})`. Checks are
+ * outcome predicates from src/tasks/predicates.ts, never word lists.
+ */
 export interface TaskDef {
   id: string;
   zone: string;
+  /** Sort order inside the zone (the plan's task number). */
+  order: number;
   title: string;
   hint: string;
-  check: (world: GameWorld) => boolean;
+  check: Pred;
+  /** Polled with the check: return a message when the attempt is lost (reset the zone to retry). */
   fail?: (world: GameWorld) => string | null;
+  /** Builds the task's props after the zone setup. `origin` is the zone center. */
+  setup?(world: GameWorld, origin: V3): void;
   /** Hero start for scripted solves (world space). */
   start: V3;
+  /** Known working solutions in world space, verified by `__blockspell.solveTask`. */
   solutions: LevelSolution[];
 }
+
+/**
+ * A task check. `arm` (set by predicates like `latch` and `hold`) is called
+ * once after every world setup so event listeners can subscribe.
+ */
+export type Pred = ((world: GameWorld) => boolean) & { arm?: (world: GameWorld, task: string) => void };
+
+export const defineTask = (t: TaskDef) => t;
 
 export type ZoneInput = Omit<ZoneDef, 'bounds' | 'entry'> & { bounds?: Box; entry?: V3 };
 

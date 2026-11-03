@@ -1,5 +1,6 @@
 import type { GameWorld } from '../../core/world';
-import { orderedZones, zoneEntry } from '../../tasks';
+import { orderedTasks, orderedZones, zoneEntry } from '../../tasks';
+import { GAP_MID } from '../../tasks/defs/02-cross-gap';
 import { defineLevel, type V3 } from '../types';
 
 const DECK = 2.5;
@@ -26,13 +27,15 @@ const along = (dx: number, dz: number, r: number): [number, number] => {
 };
 
 const zones = orderedZones();
+const tasks = orderedTasks();
 const hub = zones.find((z) => z.id === 'hub')!;
 const start: V3 = zoneEntry(hub);
 
 /**
  * The open world: the Meadow Commons hub at the origin with zone islands
  * around it, joined by plank bridges. The Ruins (northwest) have no bridge:
- * two piers stop 4 m short of each other, and crossing that gap is a task.
+ * two piers end at rocky ledges 4 m apart, and crossing that gap is a task
+ * (the ledges are built by the task, src/tasks/defs/02-cross-gap.ts).
  */
 export default defineLevel({
   id: 'world',
@@ -44,6 +47,7 @@ export default defineLevel({
   terrain: null,
   islands: zones.map((z) => z.island),
   zones,
+  tasks,
   hero: start,
   killY: -10,
   castRange: 7,
@@ -61,9 +65,13 @@ export default defineLevel({
     if (ruins) {
       const [cx, , cz] = ruins.center;
       const d = Math.hypot(cx, cz);
-      bridge(world, along(cx, cz, 13), along(cx, cz, 22));
-      bridge(world, along(cx, cz, 26), along(cx, cz, d - 8));
+      bridge(world, along(cx, cz, 13), along(cx, cz, GAP_MID - 9));
+      bridge(world, along(cx, cz, GAP_MID + 7), along(cx, cz, d - 8));
     }
     for (const z of zones) z.setup(world, z.center);
+    for (const t of tasks) {
+      const z = zones.find((zz) => zz.id === t.zone);
+      if (z) t.setup?.(world, z.center);
+    }
   },
 });
