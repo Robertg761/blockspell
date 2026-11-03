@@ -6,11 +6,11 @@ import { alive, all, gone, hold, noneBurning } from '../predicates';
 import { defineTask, offset } from '../types';
 import ember from '../zones/20-ember';
 
-// A patch of dry brush (5 bushes, two rows) south of the Ember Village
+// A patch of dry brush (5 bushes, two rows) southeast of the Ember Village
 // center, with a barn beside it. The brush is lit when the hero first walks
 // into the village (see the zone's `enter`) and each bush burns for about a
 // minute, so it has to be put out all at once before it burns away.
-const f = new Frame(offset(ember.center, [1.5, 0, 4.5]));
+const f = new Frame(offset(ember.center, [4, 0, 5.5]));
 export const BRUSH: [number, number][] = [[-1.7, -0.6], [0, -0.6], [1.7, -0.6], [-0.85, 0.6], [0.85, 0.6]];
 export const BRUSH_BURN = 60;
 
@@ -33,7 +33,7 @@ export default defineTask({
       if (b) b.state.burnTime = BRUSH_BURN;
     }
     const brown = adjectives.get('brown');
-    place(world, 'hut', f.p(5.5, 0, -0.5), 'barn', brown ? { adjectives: [brown] } : {});
+    place(world, 'hut', f.p(3.5, 0, -4), 'barn', brown ? { adjectives: [brown] } : {});
   },
   // the brush was lit, none of it is burning now and some is left, and the barn stands, for 2 s
   check: hold(2, all((w) => w.flags['ember:brushLit'] === true, alive('brush'), noneBurning({ role: 'brush' }), alive('barn'), noneBurning({ role: 'barn' }))),
