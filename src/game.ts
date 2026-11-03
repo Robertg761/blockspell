@@ -59,6 +59,8 @@ export class Game {
   private raycaster = new Raycaster();
   private logo?: HTMLElement;
   private trackerAcc = 0;
+  /** Multi-object casts still spawning (one object every 0.14 s): a zone reset cancels the ones aimed at that zone. */
+  private pendingCasts = new Set<{ zone: string | null; x: number; y: number; z: number; left: number; cancelled: boolean }>();
 
   constructor(root: HTMLElement) {
     this.renderer = new Renderer(root);
@@ -141,8 +143,7 @@ export class Game {
         name: z.name,
         here: z === this.zone,
         tasks: list.filter((t) => t.zone === z.id).map((t) => ({ title: t.title, hint: t.hint, done: !!saved[t.id], ways: saved[t.id]?.ways.length ?? 0 })),
-      }))
-      .filter((g) => g.tasks.length);
+      }));
     this.hud.showJournal({ zones: groups, spells: this.words, onFreePlay: () => this.freePlay(), onTitle: () => this.showTitle() });
   }
 
@@ -165,6 +166,7 @@ export class Game {
     clearTimeout(this.winTimer);
     this.hud.hideWin();
     this.world.clear();
+    this.pendingCasts.clear();
     const islands = level.islands ?? (level.terrain === null ? [] : [level.terrain ?? {}]);
     const terrain = islands.map((t) => ({ ...DEFAULT_TERRAIN, ...t }));
     const key = JSON.stringify(terrain);
@@ -211,6 +213,12 @@ export class Game {
       return;
     }
     const w = this.world;
+    for (const p of this.pendingCasts) {
+      if (p.zone === zone.id || zoneAt(p.x, p.y, p.z, this.level.zones) === zone) {
+        p.cancelled = true;
+        this.pendingCasts.delete(p);
+      }
+    }
     for (const e of w.living()) {
       if (e === w.hero) continue;
       const mine = e.state.zone === zone.id || e.state.castZone === zone.id || (!e.state.pinned && zoneAt(e.x, e.y, e.z, this.level.zones) === zone);
@@ -353,6 +361,8 @@ export class Game {
     const jitter = this.world.nearby(base, 1.5, (e) => e !== this.world.hero).length > 0 ? 0.5 : 0;
     const yaw = this.castYaw(res.def.orient, base);
     const castZone = this.level.tasks ? this.zone?.id ?? null : null;
+    const pending = { zone: castZone, x: base.x, y: base.y, z: base.z, left: count, cancelled: false };
+    this.pendingCasts.add(pending);
     for (let i = 0; i < count; i++) {
       const angle = (i / count) * Math.PI * 2;
       const r = (count > 1 ? 0.6 + count * 0.15 : 0) + jitter * random();
@@ -362,6 +372,8 @@ export class Game {
         delay: i * 0.14,
         update: () => {},
         done: () => {
+          if (--pending.left <= 0) this.pendingCasts.delete(pending);
+          if (pending.cancelled) return;
           const ground = Math.max(this.world.groundAt(x, z), base.y);
           const scaleGuess = res.adjectives.reduce((s, a) => s * (a.category === 'size' ? (a.id === 'tiny' ? 0.4 : a.id === 'small' ? 0.65 : a.id === 'big' ? 1.6 : 2.4) : 1), 1);
           const e = this.world.spawn(res.def, {

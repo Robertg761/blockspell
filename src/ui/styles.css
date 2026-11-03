@@ -246,6 +246,7 @@ button.sb-word:hover { background: #ffe0b0; }
 .journal-meta .link-btn { padding: 0; font-size: 12.5px; }
 .journal-hint { font-size: 13px; line-height: 1.4; margin-top: 4px; padding: 6px 8px; border-radius: 8px; background: #fffbe8; }
 .journal-hint.hidden { display: none; }
+.journal-empty { font-size: 13px; opacity: 0.65; padding: 6px 10px; border-radius: 12px; background: #f5f6fa; margin-bottom: 6px; }
 
 /* ---------- touch controls (hero levels on touch devices; see src/ui/touch.ts) ---------- */
 .touch-controls {

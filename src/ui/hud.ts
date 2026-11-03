@@ -291,7 +291,7 @@ export class Hud {
         ...info.zones.map((z) =>
           h('section.journal-zone', {}, [
             h('h3', {}, [z.name, z.here ? h('span.journal-here', { text: 'you are here' }) : '']),
-            ...z.tasks.map(row),
+            ...(z.tasks.length ? z.tasks.map(row) : [h('div.journal-empty', { text: 'Tasks coming soon.' })]),
           ]),
         ),
         h('p.small', { text: 'Every task has more than one answer. Solve one again with different words to find a new way.' }),
