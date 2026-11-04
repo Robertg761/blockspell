@@ -99,6 +99,9 @@ export class Game {
   /** Hero action keys pressed since the last tick: a tap shorter than a frame still counts. */
   private taps = new Set<string>();
   private pad = new GamepadInput();
+  /** Real seconds since the last frame (unscaled by slow-mo): the gamepad camera turns at the same speed on any display. */
+  private frameDt = 1 / 60;
+  private cycleWasOn = settings.get().cycle;
   private failed = false;
   private winTimer = 0;
   private terrainKey = '';
@@ -194,6 +197,9 @@ export class Game {
     this.fx.shake.enabled = s.shake;
     this.tutorial.setEnabled(s.tips);
     this.renderer.controls.rotateSpeed = s.orbit;
+    // turning the day and night cycle back on restarts it, even after a manual sky choice or a load with it off
+    if (s.cycle && !this.cycleWasOn && this.level?.tasks) this.skyAuto = true;
+    this.cycleWasOn = s.cycle;
   }
 
   /** The ⚙ panel. Back returns to the title screen if that's where it was opened from. */
@@ -1062,7 +1068,7 @@ export class Game {
     inp.toss = tapped('KeyF') || !!pad?.toss;
     inp.turn = tapped('KeyQ') || !!pad?.turn;
     // right stick orbits the camera around what it looks at
-    if (pad && (pad.look.x || pad.look.y)) this.orbitBy(pad.look.x, pad.look.y);
+    if (pad && (pad.look.x || pad.look.y)) this.orbitBy(pad.look.x, pad.look.y, this.frameDt);
     this.taps.clear();
   }
 
@@ -1079,10 +1085,10 @@ export class Game {
   }
 
   /** Turns the camera around its target (radians per second at full tilt, scaled by the orbit setting). */
-  private orbitBy(x: number, y: number): void {
+  private orbitBy(x: number, y: number, dt: number): void {
     const cam = this.renderer.camera, ctl = this.renderer.controls;
     const t = ctl.target;
-    const k = 0.045 * settings.get().orbit;
+    const k = 2.7 * dt * settings.get().orbit; // 0.045 per frame at 60 fps
     const ox = cam.position.x - t.x, oz = cam.position.z - t.z;
     const a = -x * k * 2.4;
     cam.position.x = t.x + ox * Math.cos(a) - oz * Math.sin(a);
@@ -1302,6 +1308,7 @@ export class Game {
   private frame = (now: number): void => {
     const dt = Math.min(1 / 20, (now - this.last) / 1000);
     this.last = now;
+    this.frameDt = dt;
     this.tick(dt * this.fx.screen.pace(dt) * this.timeScale); // hit-stop and slow motion slow the world, not the camera or the UI
     this.refreshTools();
     this.followCamera(dt);
