@@ -26,6 +26,7 @@ export function explode(world: GameWorld, at: P3, radius: number, force: number,
   fx.burst(at, { count: Math.round(30 * k), color: ['#2d2723', '#5a3d2a', '#7d532f'], speed: 10 * k, up: 5, gravity: 14, size: 0.1, life: 1.4 });
   fx.sound('boom', { pitch: 1 / k });
   fx.addShake(Math.min(1, 0.5 + radius * 0.08));
+  fx.bigBang(Math.min(1.4, radius / 4));
   world.events.emit('exploded', { at: { x: at.x, y: at.y, z: at.z }, source });
   let flash = 0;
   fx.tweens.add({ duration: 0.45, update: (t) => { flash = 1 - t; fx.glow.request({ x: at.x, y: at.y + 0.5, z: at.z }, '#ffb050', 40 * flash * k); } });

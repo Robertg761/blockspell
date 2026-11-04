@@ -271,8 +271,10 @@ export class GameWorld {
     this.fx.sparkle(p, ['#fff6a8', '#ffd84a', '#ffffff', color], 26);
     this.fx.burst(p, { count: 16, color: [color, '#ffffff'], speed: 3.5 * Math.sqrt(s), up: 2.5, size: 0.1 * Math.sqrt(s), life: 0.7 });
     this.fx.addShake(0.12 + Math.min(0.3, e.body.mass * 0.01));
+    const foot = this.groundAt(p.x, p.z);
+    this.fx.summon({ x: p.x, y: Number.isFinite(foot) ? Math.min(foot, p.y) : p.y - 1, z: p.z }, color, Math.max(e.size.x, e.size.z) + 0.4);
     this.fx.sound(e.def.spawnSound ?? 'pop', { pitch: 1 / Math.sqrt(s) });
-    this.fx.sound('magic', { pitch: 1 / Math.sqrt(s), volume: 0.6 });
+    this.fx.sound('summon', { pitch: 1 / Math.sqrt(s), volume: 0.8 });
   }
 
   /** Removes an entity. `effect: 'poof'` plays a smoke puff. */
@@ -627,6 +629,7 @@ export class GameWorld {
       if (!c.e.alive) continue;
       const info = { speed: c.speed };
       for (const b of c.e.behaviors as BehaviorDef[]) if (c.e.alive) b.contact?.(c.e, c.other, this, info);
+      if (c.e.alive) this.impactJuice(c.e, c.speed);
       this.events.emit('contact', { a: c.e, b: c.other, speed: c.speed });
     }
 
@@ -643,6 +646,28 @@ export class GameWorld {
     this.syncLinks();
 
     this.flushRemovals();
+  }
+
+  /**
+   * Anything that lands or bumps hard enough gets a knock, a puff of dust and a nudge of shake,
+   * scaled by how hard and how heavy. Things with their own impact behavior (heavy, bouncy, fragile,
+   * the hero) are left to that.
+   */
+  private impactJuice(e: Entity, speed: number): void {
+    if (speed < 2.4 || e.age < 0.9 || e.body.mass <= 0 || e.has('ghost') || e.has('controlled') || e.has('heavy') || e.has('bouncy') || e.has('fragile')) return;
+    const last = (e.state.impactAt ?? -1) as number;
+    if (this.time - last < 0.22) return;
+    e.state.impactAt = this.time;
+    const hard = Math.min(1, speed / 10);
+    const mass = e.body.mass;
+    const p = e.body.position;
+    const metal = e.has('metal');
+    this.fx.sound(metal ? 'clank' : mass > 6 ? 'thud' : 'knock', { pitch: 1.5 / Math.sqrt(1 + mass * 0.15) * (0.9 + e.scale * 0.1), volume: 0.35 + hard * 0.65 });
+    if (speed > 3.5) {
+      const n = Math.round(4 + hard * 10);
+      this.fx.burst({ x: p.x, y: p.y - e.size.y / 2, z: p.z }, { count: n, color: metal ? ['#ffffff', '#ffe9a0', '#cfd8e0'] : ['#d9c7a6', '#b8a283', '#efe3c9'], speed: 1.6 + hard * 2.2, up: 1.2, gravity: metal ? 9 : 4, drag: 2.4, size: metal ? 0.05 : 0.11, life: metal ? 0.35 : 0.6, grow: !metal, glow: metal, spread: e.radius * 0.5 });
+    }
+    if (mass > 2 && speed > 5) this.fx.addShake(Math.min(0.25, mass * speed * 0.0008));
   }
 
   /**

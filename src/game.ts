@@ -792,12 +792,12 @@ export class Game {
   private frame = (now: number): void => {
     const dt = Math.min(1 / 20, (now - this.last) / 1000);
     this.last = now;
-    this.tick(dt);
+    this.tick(dt * this.fx.screen.pace(dt)); // hit-stop slows the world, not the camera or the UI
     this.followCamera(dt);
     this.updateCarry(dt);
     this.tutorial.update(this, dt);
     updateVoxelLOD(this.renderer.camera.position, (this.renderer.scene.fog as Fog).far);
-    this.renderer.render(dt, this.fx.shake);
+    this.renderer.render(dt, this.fx.shake, this.fx.screen);
     requestAnimationFrame(this.frame);
   };
 }

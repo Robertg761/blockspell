@@ -82,6 +82,11 @@ export class Hud {
       h('button.cast-btn', { type: 'submit', text: 'Cast' }),
     ]);
     this.input.addEventListener('keydown', (ev) => this.onKey(ev));
+    // each letter ticks a little higher, like a typewriter rising up the scale
+    this.input.addEventListener('input', (ev) => {
+      const n = this.input.value.length;
+      if ((ev as InputEvent).inputType?.startsWith('insert') && n) Audio.instance?.play('tick', { pitch: 0.92 + (n % 9) * 0.035 });
+    });
 
     this.hintBtn = h('button.link-btn', { text: 'Need a hint?', onClick: () => this.toasts.show(this.hint, { title: 'Hint', kind: 'info', duration: 6000 }) });
     void levels;

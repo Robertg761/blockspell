@@ -10,7 +10,7 @@ export type SoundName =
   | 'boom' | 'splash' | 'shatter' | 'clank' | 'meow' | 'tweet' | 'moo' | 'beep' | 'chime'
   | 'rumble' | 'quack' | 'ribbit' | 'buzz' | 'freeze' | 'oink' | 'engine'
   | 'jump' | 'land' | 'step' | 'climb' | 'fanfare' | 'star' | 'confetti' | 'uiClick'
-  | 'assemble' | 'snap' | 'shimmer' | 'dissolve';
+  | 'assemble' | 'snap' | 'shimmer' | 'dissolve' | 'knock' | 'tick' | 'summon';
 
 interface PlayOpts {
   pitch?: number;
@@ -180,6 +180,22 @@ const SOUNDS: Record<SoundName, Voice> = {
   },
   uiClick: (a, t, p, v) => {
     a.tone({ t, f0: 900 * p, f1: 700 * p, dur: 0.05, type: 'sine', vol: 0.12 * v });
+  },
+  // a wooden or stony knock: things bumping into each other
+  knock: (a, t, p, v) => {
+    a.tone({ t, f0: 260 * p, f1: 130 * p, dur: 0.09, type: 'triangle', vol: 0.34 * v });
+    a.noise({ t, dur: 0.05, freq: 1400 * p, q: 1.4, vol: 0.18 * v });
+  },
+  // one key of the spell bar
+  tick: (a, t, p, v) => {
+    a.tone({ t, f0: 1250 * p, f1: 900 * p, dur: 0.035, type: 'square', vol: 0.028 * v, filter: 3200 });
+    a.noise({ t, dur: 0.02, freq: 4200, q: 1.2, vol: 0.03 * v });
+  },
+  // the summoning column: a low swell under a bright, rising shimmer
+  summon: (a, t, p, v) => {
+    a.tone({ t, f0: 110 * p, f1: 220 * p, dur: 0.5, type: 'sine', vol: 0.28 * v });
+    a.noise({ t, dur: 0.4, freq: 900 * p, freqEnd: 5200 * p, q: 1.6, vol: 0.18 * v, attack: 0.08 });
+    [0, 7, 12, 16].forEach((semi, i) => a.tone({ t: t + 0.06 + i * 0.045, f0: 880 * p * 2 ** (semi / 12), dur: 0.22, type: 'sine', vol: 0.05 * v }));
   },
   // voxel animations: a glittery rising sweep with soft ticks as voxels click into place
   assemble: (a, t, p, v) => {
