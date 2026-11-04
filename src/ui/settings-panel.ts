@@ -15,7 +15,7 @@ export interface SettingsPanelOps {
 /** The ⚙ panel: volumes, effects, camera speed and the reset buttons. Values apply live and are saved. */
 export function settingsPanel(ops: SettingsPanelOps): HTMLElement {
   const s = settings.get();
-  const slider = (key: 'music' | 'sfx' | 'orbit', label: string, note: string, min: number, max: number, step: number, fmt: (v: number) => string) => {
+  const slider = (key: 'music' | 'sfx' | 'orbit' | 'resolution', label: string, note: string, min: number, max: number, step: number, fmt: (v: number) => string) => {
     const out = h('span.set-value', { text: fmt(s[key]) });
     const input = h('input', { type: 'range', min, max, step, value: s[key], 'aria-label': label });
     input.addEventListener('input', () => {
@@ -25,7 +25,7 @@ export function settingsPanel(ops: SettingsPanelOps): HTMLElement {
     });
     return h('label.set-row', {}, [h('span.set-label', {}, [label, h('small', { text: note })]), input, out]);
   };
-  const toggle = (key: 'reduceEffects' | 'shake' | 'tips' | 'cycle' | 'guide' | 'life', label: string, note: string) => {
+  const toggle = (key: 'reduceEffects' | 'shake' | 'tips' | 'cycle' | 'guide' | 'life' | 'bloom' | 'autoRes' | 'fps', label: string, note: string) => {
     const input = h('input', { type: 'checkbox', 'aria-label': label });
     input.checked = s[key];
     input.addEventListener('change', () => settings.set({ [key]: input.checked } as Partial<Settings>));
@@ -72,6 +72,11 @@ export function settingsPanel(ops: SettingsPanelOps): HTMLElement {
     toggle('guide', 'Task guide', 'In Explore, a beam of light and an arrow point to the nearest unfinished task'),
     toggle('cycle', 'Day and night', 'In Explore the sky slowly turns through sunset and night'),
     toggle('life', 'Little creatures', 'Fireflies at night, butterflies by day and a few birds overhead'),
+    h('h3.set-sub', { text: 'Performance' }),
+    slider('resolution', 'Sharpness', 'Lower it if the game feels slow. 100% is the full resolution of your screen', 0.5, 1, 0.05, pct),
+    toggle('autoRes', 'Adapt to slow devices', 'Lowers the sharpness by itself if the frame rate stays low'),
+    toggle('bloom', 'Glow effects', 'Soft glow around fire, light and sparks'),
+    toggle('fps', 'Show frame rate', 'A small counter in the corner'),
     h('div.set-actions', {}, [hd, tips, wipe]),
     h('div.panel-actions', {}, [h('button.btn', { type: 'button', text: 'Done', onClick: () => ops.onBack() })]),
   ]);

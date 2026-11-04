@@ -21,6 +21,14 @@ export interface Settings {
   cycle: boolean;
   /** Fireflies, butterflies and birds. */
   life: boolean;
+  /** Render resolution as a share of the screen's pixels, 0.5..1. */
+  resolution: number;
+  /** Bloom (glow) post-processing. */
+  bloom: boolean;
+  /** Lowers the resolution by itself when the frame rate stays low. */
+  autoRes: boolean;
+  /** Shows a small frame-rate counter. */
+  fps: boolean;
 }
 
 const KEY = 'blockspell.settings.v1';
@@ -35,6 +43,10 @@ const defaults = (): Settings => ({
   cycle: true,
   guide: true,
   life: true,
+  resolution: 1,
+  bloom: true,
+  autoRes: true,
+  fps: false,
 });
 
 const clamp = (n: unknown, lo: number, hi: number, fallback: number) => (typeof n === 'number' && Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : fallback);
@@ -53,6 +65,10 @@ function load(): Settings {
       cycle: typeof raw.cycle === 'boolean' ? raw.cycle : d.cycle,
       guide: typeof raw.guide === 'boolean' ? raw.guide : d.guide,
       life: typeof raw.life === 'boolean' ? raw.life : d.life,
+      resolution: clamp(raw.resolution, 0.5, 1, d.resolution),
+      bloom: typeof raw.bloom === 'boolean' ? raw.bloom : d.bloom,
+      autoRes: typeof raw.autoRes === 'boolean' ? raw.autoRes : d.autoRes,
+      fps: typeof raw.fps === 'boolean' ? raw.fps : d.fps,
     };
   } catch {
     return d;

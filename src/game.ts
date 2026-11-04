@@ -102,6 +102,12 @@ export class Game {
   /** Real seconds since the last frame (unscaled by slow-mo): the gamepad camera turns at the same speed on any display. */
   private frameDt = 1 / 60;
   private cycleWasOn = settings.get().cycle;
+  /** Frame-rate watch: the on-screen counter and the automatic sharpness drop on slow devices. */
+  private fpsEl = h('div.fps-meter.hidden', { 'aria-hidden': 'true' });
+  private fpsEma = 60;
+  private fpsShownAt = 0;
+  private slowFor = 0;
+  private autoScale = 1;
   private failed = false;
   private winTimer = 0;
   private terrainKey = '';
@@ -157,7 +163,7 @@ export class Game {
     this.reactions = new Reactions(root, this.world);
     this.tools = new SideTools((id) => this.useTool(id));
     this.photoUI = new PhotoUI(root, { onSnap: () => this.snap(), onFreeze: () => this.toggleFreeze(), onExit: () => this.setPhoto(false) });
-    root.append(this.tools.el);
+    root.append(this.tools.el, this.fpsEl);
     this.refreshChips();
 
     this.bindInput();
@@ -198,6 +204,9 @@ export class Game {
     this.tutorial.setEnabled(s.tips);
     this.renderer.controls.rotateSpeed = s.orbit;
     this.renderer.life.enabled = s.life;
+    this.renderer.setBloom(s.bloom);
+    this.applyScale();
+    this.fpsEl.classList.toggle('hidden', !s.fps);
     // turning the day and night cycle back on restarts it, even after a manual sky choice or a load with it off
     if (s.cycle && !this.cycleWasOn && this.level?.tasks) this.skyAuto = true;
     this.cycleWasOn = s.cycle;
@@ -1327,7 +1336,31 @@ export class Game {
     this.carryPrompt.update(hint, this.renderer.camera);
   }
 
+  private applyScale(): void {
+    this.renderer.setRenderScale(settings.get().resolution * this.autoScale);
+  }
+
+  /** The fps counter, and a one-way step down in resolution if the frame rate stays low (never in headless runs). */
+  private watchFrameRate(real: number): void {
+    if (real <= 0 || real > 0.5 || document.hidden) return;
+    this.fpsEma += (1 / real - this.fpsEma) * Math.min(1, real * 2);
+    const st = settings.get();
+    if (st.fps && performance.now() - this.fpsShownAt > 500) {
+      this.fpsShownAt = performance.now();
+      this.fpsEl.textContent = `${Math.round(this.fpsEma)} fps · ${Math.round(this.renderer.scale * 100)}%`;
+    }
+    if (!st.autoRes || navigator.webdriver || this.titleMode) return;
+    this.slowFor = this.fpsEma < 26 ? this.slowFor + real : Math.max(0, this.slowFor - real);
+    if (this.slowFor > 3 && st.resolution * this.autoScale > 0.55) {
+      this.slowFor = 0;
+      this.autoScale = Math.max(0.5, this.autoScale - 0.15);
+      this.applyScale();
+      this.hud.toasts.show('Things were running slowly, so I lowered the sharpness a little. Settings → Sharpness changes it.', { title: 'Smoother, softer', kind: 'info', duration: 6000 });
+    }
+  }
+
   private frame = (now: number): void => {
+    this.watchFrameRate((now - this.last) / 1000);
     const dt = Math.min(1 / 20, (now - this.last) / 1000);
     this.last = now;
     this.frameDt = dt;

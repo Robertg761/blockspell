@@ -51,6 +51,8 @@ export class Renderer {
   /** Null when bloom is disabled (?nobloom) or unsupported; then we render straight to screen. */
   private composer: EffectComposer | null = null;
   private grade: ShaderPass | null = null;
+  private bloomPass: UnrealBloomPass | null = null;
+  private renderScale = 1;
   private baseFov = 50;
   private clock = 0;
 
@@ -119,6 +121,7 @@ export class Renderer {
       // High threshold: only HDR-bright things (fire, glowing particles, stars, specular glints) bloom.
       const bloom = new UnrealBloomPass(new Vector2(256, 256), 0.32, 0.55, 0.92);
       composer.addPass(bloom);
+      this.bloomPass = bloom;
       composer.addPass(new OutputPass()); // applies renderer tone mapping + sRGB
       this.grade = createGradePass(); // film grade, vignette and impact effects, on display colors
       composer.addPass(this.grade);
@@ -208,6 +211,24 @@ export class Renderer {
     this.camera.position.set(...position);
     this.controls.target.set(...target);
     this.controls.update();
+  }
+
+  /** Renders at a share of the screen's pixels (0.5..1) and lets the browser scale it up. */
+  setRenderScale(k: number): void {
+    k = Math.min(1, Math.max(0.4, k));
+    if (Math.abs(k - this.renderScale) < 0.005) return;
+    this.renderScale = k;
+    this.gl.setPixelRatio(Math.min(window.devicePixelRatio, 2) * k);
+    this.resize();
+  }
+
+  get scale(): number {
+    return this.renderScale;
+  }
+
+  /** Turns the glow post-processing off or on. The film grade and tone mapping stay. */
+  setBloom(on: boolean): void {
+    if (this.bloomPass) this.bloomPass.enabled = on;
   }
 
   resize(): void {

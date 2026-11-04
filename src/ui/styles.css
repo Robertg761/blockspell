@@ -411,3 +411,12 @@ body.touch .chip, body.touch .icon-btn { min-height: 40px; }
 }
 .pin-btn:hover { color: var(--accent); transform: scale(1.15); }
 @media (max-width: 640px) { .hot-text { max-width: 90px; } .hot-x { display: none; } }
+
+/* ---------- frame-rate counter ---------- */
+.fps-meter {
+  position: absolute; top: 6px; left: 50%; transform: translateX(-50%); z-index: 4; pointer-events: none;
+  padding: 2px 10px; border-radius: 999px; font: 700 12px/1.6 ui-monospace, Menlo, Consolas, monospace;
+  color: #fff; background: rgba(20, 26, 44, 0.6);
+}
+.fps-meter.hidden { display: none; }
+body.photo-mode .fps-meter { display: none; }

@@ -39,3 +39,5 @@
 .journal-answer b { color: var(--accent-dark); }
 
 .lab-title { margin: 20px 0 2px; font-size: 18px; }
+
+.set-sub { margin: 14px 0 2px; font-size: 14px; text-transform: uppercase; letter-spacing: 0.06em; opacity: 0.6; }
