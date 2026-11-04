@@ -1088,10 +1088,18 @@ export class Game {
     window.addEventListener('keydown', (e) => {
       const input = this.hud.input;
       if (this.photo) {
-        if (e.key === 'Escape' || e.code === 'KeyP') this.setPhoto(false);
-        else if ((e.code === 'Space' || e.key === 'Enter') && !e.repeat && !(e.target instanceof HTMLButtonElement)) this.snap();
-        else if (e.code === 'KeyF' && !e.repeat) this.toggleFreeze();
-        e.preventDefault();
+        // only the shortcuts used here are consumed: Tab and a focused button's Enter/Space keep their native behavior
+        const onButton = e.target instanceof HTMLButtonElement;
+        if (e.key === 'Escape' || e.code === 'KeyP') {
+          this.setPhoto(false);
+          e.preventDefault();
+        } else if ((e.code === 'Space' || e.key === 'Enter') && !onButton) {
+          if (!e.repeat) this.snap();
+          e.preventDefault();
+        } else if (e.code === 'KeyF') {
+          if (!e.repeat) this.toggleFreeze();
+          e.preventDefault();
+        } else if (e.key !== 'Tab' && !(onButton && (e.code === 'Space' || e.key === 'Enter'))) e.preventDefault();
         return;
       }
       if (e.key === 'Tab') {
@@ -1158,9 +1166,10 @@ export class Game {
     fx /= fl;
     fz /= fl;
     const polled = this.pad.poll();
+    const menuWasOpen = this.hud.overlayOpen; // a press that closes a panel must not also act in the world
     this.padButtons();
     // sticks and buttons steer the hero only when the keyboard could (not typing, not in a menu)
-    const pad = !typing && !this.titleMode && !this.photo && !this.hud.overlayOpen ? polled : null;
+    const pad = !typing && !this.titleMode && !this.photo && !menuWasOpen && !this.hud.overlayOpen ? polled : null;
     const px = pad?.move.x ?? 0, pz = pad?.move.y ?? 0;
     // right = forward × up; the stick adds to the keys, clamped so analog tilt keeps its speed
     const mf = Math.max(-1, Math.min(1, fwd - pz)), ms = Math.max(-1, Math.min(1, side + px));
