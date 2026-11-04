@@ -94,6 +94,27 @@ button, input, select { font: inherit; color: inherit; }
   flex: 1; min-width: 0; border: 0; outline: 0; background: transparent;
   font-size: 19px; font-weight: 600; padding: 10px 4px; user-select: text;
 }
+.spell-field { position: relative; flex: 1; min-width: 0; display: flex; }
+.spell-field .spell-input { position: relative; z-index: 1; width: 100%; }
+.spell-ghost {
+  position: absolute; inset: 0; display: flex; align-items: center; overflow: hidden; white-space: pre;
+  font-size: 19px; font-weight: 600; padding: 10px 4px; pointer-events: none; color: transparent;
+}
+.spell-ghost-rest { color: #b4b9c4; }
+.suggest {
+  position: absolute; left: 12px; right: 12px; bottom: calc(100% + 10px); z-index: 5;
+  display: flex; flex-direction: column; padding: 6px; gap: 2px;
+  background: var(--panel-solid); border-radius: 16px; box-shadow: var(--shadow);
+}
+.suggest.hidden { display: none; }
+.suggest-item {
+  display: flex; align-items: baseline; gap: 8px; border: 0; background: transparent; text-align: left; cursor: pointer;
+  padding: 7px 12px; border-radius: 10px; font-size: 15px; font-weight: 500;
+}
+.suggest-item b { font-weight: 800; color: var(--accent-dark); }
+.suggest-item:hover, .suggest-item.active { background: #fff1dc; }
+.suggest-tag { font-size: 11px; opacity: 0.55; text-transform: uppercase; letter-spacing: 0.05em; }
+.suggest-new { margin-left: auto; font-size: 11.5px; font-weight: 750; color: var(--accent-dark); }
 .spell-input::placeholder { color: #9aa0ad; font-weight: 500; }
 .cast-btn {
   border: 0; border-radius: 999px; padding: 0 22px; height: 44px; cursor: pointer;
@@ -315,6 +336,7 @@ body.touch .chip, body.touch .icon-btn { min-height: 40px; }
   .hud-bottom { bottom: max(12px, env(safe-area-inset-bottom)); gap: 6px; width: calc(100vw - 16px); }
   .spell-bar { padding-left: 14px; }
   .spell-input { font-size: 16px; padding: 8px 2px; } /* 16px stops iOS zoom-on-focus */
+  .spell-ghost { font-size: 16px; padding: 8px 2px; }
   .cast-btn { height: 40px; padding: 0 16px; font-size: 15px; }
   .word-chips { gap: 5px; max-height: 76px; overflow: hidden; }
   .chip { padding: 4px 10px; font-size: 12.5px; }
@@ -340,6 +362,7 @@ body.touch .chip, body.touch .icon-btn { min-height: 40px; }
   .level-card:not(.expanded) .words-line { display: none; }
   .hud-bottom { bottom: 8px; gap: 4px; }
   .spell-input { font-size: 16px; padding: 6px 2px; }
+  .spell-ghost { font-size: 16px; padding: 6px 2px; }
   .cast-btn { height: 38px; }
   .word-chips { display: none; }
   .spellbook { top: 52px; bottom: 8px; width: min(380px, 55vw); }

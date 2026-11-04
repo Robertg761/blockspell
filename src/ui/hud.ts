@@ -1,5 +1,6 @@
 import { spellsText, starsForPar, type LevelDef } from '../levels/types';
 import { Audio, loadMuted } from '../engine/audio';
+import { Autocomplete } from './autocomplete';
 import { h } from './dom';
 import { pwa, type PwaState } from '../pwa';
 import { Toasts } from './toast';
@@ -69,6 +70,8 @@ export class Hud {
   readonly bookBtn: HTMLButtonElement;
   private hdBtn: HTMLButtonElement;
   private pwaLine = h('div.pwa-line');
+  /** Word completion for the spell bar. */
+  readonly autocomplete: Autocomplete;
   /** Focus the spell bar after closing overlays (off in hero levels, where keys move the hero). */
   autoFocus = true;
 
@@ -84,9 +87,11 @@ export class Hud {
     });
     this.surpriseBtn = h('button.surprise-btn', { type: 'button', text: '🎲', title: 'Surprise me', 'aria-label': 'Surprise me: stage a random scene', onClick: () => cb.onSurprise() });
     this.surpriseBtn.style.display = 'none';
+    this.autocomplete = new Autocomplete(this.input);
     this.form = h('form.spell-bar', { onSubmit: (ev: Event) => this.submit(ev) }, [
+      this.autocomplete.list,
       h('span.spell-icon', { text: '✦', 'aria-hidden': 'true' }),
-      this.input,
+      h('div.spell-field', {}, [this.autocomplete.ghost, this.input]),
       this.surpriseBtn,
       h('button.cast-btn', { type: 'submit', text: 'Cast' }),
     ]);
@@ -214,17 +219,25 @@ export class Hud {
     this.history = this.history.slice(0, 30);
     this.historyIdx = -1;
     this.input.value = '';
+    this.autocomplete.hide();
     this.cb.onCast(text);
   }
 
   private onKey(ev: KeyboardEvent): void {
+    if (this.autocomplete.onKey(ev)) {
+      ev.preventDefault();
+      ev.stopPropagation();
+      return;
+    }
     if (ev.key === 'ArrowUp' && this.history.length) {
       this.historyIdx = Math.min(this.history.length - 1, this.historyIdx + 1);
       this.input.value = this.history[this.historyIdx];
+      this.autocomplete.hide(true);
       ev.preventDefault();
     } else if (ev.key === 'ArrowDown') {
       this.historyIdx = Math.max(-1, this.historyIdx - 1);
       this.input.value = this.historyIdx >= 0 ? this.history[this.historyIdx] : '';
+      this.autocomplete.hide(true);
       ev.preventDefault();
     } else if (ev.key === 'Escape') this.input.blur();
   }
@@ -233,6 +246,7 @@ export class Hud {
   prefill(text: string): void {
     this.input.value = text;
     this.input.focus();
+    this.autocomplete.hide(true);
   }
 
   setWordChips(words: string[]): void {

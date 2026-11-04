@@ -108,6 +108,7 @@ export class Game {
       },
     }, levels);
     this.spellbook = new Spellbook(spellbookObjects(), adjectives.all(), (w) => this.cast(w));
+    this.hud.autocomplete.known = (id) => this.spellbook.has(id);
     root.append(this.spellbook.el);
     this.tutorial = new Tutorial(root);
     this.carryPrompt = new CarryPrompt(root);
