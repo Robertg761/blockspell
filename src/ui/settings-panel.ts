@@ -25,7 +25,7 @@ export function settingsPanel(ops: SettingsPanelOps): HTMLElement {
     });
     return h('label.set-row', {}, [h('span.set-label', {}, [label, h('small', { text: note })]), input, out]);
   };
-  const toggle = (key: 'reduceEffects' | 'shake' | 'tips' | 'cycle' | 'guide', label: string, note: string) => {
+  const toggle = (key: 'reduceEffects' | 'shake' | 'tips' | 'cycle' | 'guide' | 'life', label: string, note: string) => {
     const input = h('input', { type: 'checkbox', 'aria-label': label });
     input.checked = s[key];
     input.addEventListener('change', () => settings.set({ [key]: input.checked } as Partial<Settings>));
@@ -71,6 +71,7 @@ export function settingsPanel(ops: SettingsPanelOps): HTMLElement {
     toggle('tips', 'Control tips', 'Little hints that appear when a control becomes useful'),
     toggle('guide', 'Task guide', 'In Explore, a beam of light and an arrow point to the nearest unfinished task'),
     toggle('cycle', 'Day and night', 'In Explore the sky slowly turns through sunset and night'),
+    toggle('life', 'Little creatures', 'Fireflies at night, butterflies by day and a few birds overhead'),
     h('div.set-actions', {}, [hd, tips, wipe]),
     h('div.panel-actions', {}, [h('button.btn', { type: 'button', text: 'Done', onClick: () => ops.onBack() })]),
   ]);

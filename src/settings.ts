@@ -19,6 +19,8 @@ export interface Settings {
   guide: boolean;
   /** Explore: the sky slowly turns through day, sunset, night and dawn. */
   cycle: boolean;
+  /** Fireflies, butterflies and birds. */
+  life: boolean;
 }
 
 const KEY = 'blockspell.settings.v1';
@@ -32,6 +34,7 @@ const defaults = (): Settings => ({
   orbit: 1,
   cycle: true,
   guide: true,
+  life: true,
 });
 
 const clamp = (n: unknown, lo: number, hi: number, fallback: number) => (typeof n === 'number' && Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : fallback);
@@ -49,6 +52,7 @@ function load(): Settings {
       orbit: clamp(raw.orbit, 0.4, 2.5, d.orbit),
       cycle: typeof raw.cycle === 'boolean' ? raw.cycle : d.cycle,
       guide: typeof raw.guide === 'boolean' ? raw.guide : d.guide,
+      life: typeof raw.life === 'boolean' ? raw.life : d.life,
     };
   } catch {
     return d;

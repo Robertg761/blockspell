@@ -15,6 +15,7 @@ import { Clouds } from './clouds';
 import { createGradePass, type ScreenFx } from './grade';
 import { cloneSky, lerpSky, SKIES, type SkyName, type SkyState } from './skies';
 import { Weather } from './weather';
+import { Life } from './life';
 import type { CameraShake } from './shake';
 import type { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 
@@ -39,6 +40,7 @@ export class Renderer {
   private sky;
   private hemi!: HemisphereLight;
   readonly weather: Weather;
+  readonly life: Life;
   /** Time of day: the preset we are heading for, the look when the change began, and how far along it is. */
   private skyName: SkyName = 'day';
   private skyFrom: SkyState = cloneSky(SKIES.day);
@@ -90,6 +92,7 @@ export class Renderer {
     this.clouds = new Clouds();
     this.scene.add(this.clouds.group, createBackdrop());
     this.weather = new Weather(this.scene);
+    this.life = new Life(this.scene);
 
     this.controls = new OrbitControls(this.camera, this.gl.domElement);
     this.controls.enableDamping = true;
@@ -265,6 +268,8 @@ export class Renderer {
     this.stepSky(dt);
     this.clouds.update(dt);
     this.weather.update(dt, this.controls.target);
+    this.life.setMood(this.skyPreset, this.weather.current);
+    this.life.update(dt, this.controls.target);
     this.followSun();
     shake.apply(this.camera);
     this.sky.position.copy(this.camera.position);

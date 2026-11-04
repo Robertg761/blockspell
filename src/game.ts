@@ -197,6 +197,7 @@ export class Game {
     this.fx.shake.enabled = s.shake;
     this.tutorial.setEnabled(s.tips);
     this.renderer.controls.rotateSpeed = s.orbit;
+    this.renderer.life.enabled = s.life;
     // turning the day and night cycle back on restarts it, even after a manual sky choice or a load with it off
     if (s.cycle && !this.cycleWasOn && this.level?.tasks) this.skyAuto = true;
     this.cycleWasOn = s.cycle;
