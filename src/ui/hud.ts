@@ -15,6 +15,7 @@ export interface HudCallbacks {
   /** 🎲 in Free Play: stage a random scene. */
   onSurprise: () => void;
   onLevels: () => void;
+  onSettings: () => void;
   /** Flips the voxel detail (HD / classic); returns the new state. */
   onHD: () => boolean;
 }
@@ -33,6 +34,8 @@ export interface JournalInfo {
   spells: number;
   onFreePlay: () => void;
   onTitle: () => void;
+  /** More buttons for the panel's action row (trophies...). */
+  extra?: HTMLElement[];
 }
 
 export interface WinInfo {
@@ -129,7 +132,7 @@ export class Hud {
         this.bookBtn,
         h('button.icon-btn.reset-btn', { title: 'Restart (R)', text: '↺', onClick: () => cb.onReset() }),
         muteBtn,
-        this.hdBtn,
+        h('button.icon-btn.settings-btn', { title: 'Settings', text: '⚙', 'aria-label': 'Settings', onClick: () => cb.onSettings() }),
       ]),
       this.toasts.el,
       h('div.hud-bottom', {}, [this.chips, this.form]),
@@ -193,16 +196,6 @@ export class Hud {
       n = Math.max(0, n);
       this.input.placeholder = n ? `Try “${text.slice(0, n)}”` : base;
     }, 75);
-  }
-
-  /** A menu button that flips the voxel detail (HD / classic). */
-  private hdToggle(): HTMLButtonElement {
-    const label = () => (this.hdBtn.classList.contains('off') ? 'Graphics: Classic' : 'Graphics: HD');
-    const btn = h('button.btn.secondary.hd-toggle', { text: label(), title: 'HD voxels or the classic, faster look', onClick: () => {
-      this.setHD(this.cb.onHD());
-      btn.textContent = label();
-    } });
-    return btn;
   }
 
   /** Shows the voxel detail setting on its button. */
@@ -405,10 +398,18 @@ export class Hud {
           h('button.btn', { text: 'Back to the world', onClick: () => this.hideOverlay() }),
           h('button.btn.secondary', { text: '✦ Free Play', onClick: () => { this.hideOverlay(); info.onFreePlay(); } }),
           h('button.btn.secondary', { text: 'Title screen', onClick: () => info.onTitle() }),
-          this.hdToggle(),
+          h('button.btn.secondary', { text: '⚙ Settings', onClick: () => this.cb.onSettings() }),
+          ...(info.extra ?? []),
         ]),
       ]),
     );
+    this.overlay.classList.remove('hidden');
+  }
+
+  /** Shows any panel (settings, trophies, finale...) in the overlay. Close it with `hideOverlay()`. */
+  showPanel(panel: HTMLElement): void {
+    this.overlay.classList.remove('title');
+    this.overlay.replaceChildren(panel);
     this.overlay.classList.remove('hidden');
   }
 
@@ -432,7 +433,7 @@ export class Hud {
   }
 
   /** Title screen. `logo` is an optional animated element shown above the name. */
-  showTitle(opts: { onExplore: () => void; onFreePlay: () => void; onSurprise: () => void; exploreLabel: string; logo?: HTMLElement }): void {
+  showTitle(opts: { onExplore: () => void; onFreePlay: () => void; onSurprise: () => void; onSettings: () => void; extra?: HTMLElement[]; exploreLabel: string; logo?: HTMLElement }): void {
     const go = (fn: () => void) => () => {
       this.cb.onStart();
       this.hideOverlay();
@@ -448,7 +449,11 @@ export class Hud {
           h('button.btn.big.explore-btn', { text: opts.exploreLabel, onClick: go(opts.onExplore) }),
           h('button.btn.big.secondary.freeplay-btn', { text: '✦ Free Play', onClick: go(opts.onFreePlay) }),
         ]),
-        h('button.link-btn.surprise-link', { type: 'button', text: '🎲 Surprise me', onClick: go(opts.onSurprise) }),
+        h('div.title-links', {}, [
+          h('button.link-btn.surprise-link', { type: 'button', text: '🎲 Surprise me', onClick: go(opts.onSurprise) }),
+          ...(opts.extra ?? []),
+          h('button.link-btn.settings-link', { type: 'button', text: '⚙ Settings', onClick: opts.onSettings }),
+        ]),
         h('p.small', { text: 'Runs entirely offline. No network, no tracking.' }),
         this.pwaLine,
       ]),

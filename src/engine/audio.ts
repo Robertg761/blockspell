@@ -307,6 +307,9 @@ export class Audio {
   static instance: Audio | null = null;
   private synth: Synth | null = null;
   private master: GainNode | null = null;
+  private sfxBus: GainNode | null = null;
+  private musicBus: GainNode | null = null;
+  private volumes = { music: 1, sfx: 1 };
   private lastPlayed = new Map<SoundName, number>();
   /** Background music; available after `unlock()`. */
   music: Music | null = null;
@@ -335,9 +338,27 @@ export class Audio {
     const buf = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
     const d = buf.getChannelData(0);
     for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
-    this.synth = new Synth(ctx, this.master, buf);
-    this.music = new Music(this.synth, this.master);
+    // two buses so the settings sliders can set music and effects apart
+    this.sfxBus = ctx.createGain();
+    this.sfxBus.connect(this.master);
+    this.musicBus = ctx.createGain();
+    this.musicBus.connect(this.master);
+    this.applyVolumes();
+    this.synth = new Synth(ctx, this.sfxBus, buf);
+    this.music = new Music(new Synth(ctx, this.musicBus, buf), this.musicBus);
     this.music.start();
+  }
+
+  /** Music and effects loudness, 0..1 each (the settings sliders). Works before and after `unlock()`. */
+  setVolumes(v: { music: number; sfx: number }): void {
+    this.volumes = { music: v.music, sfx: v.sfx };
+    this.applyVolumes();
+  }
+
+  private applyVolumes(): void {
+    const t = this.synth?.ctx.currentTime ?? this.sfxBus?.context.currentTime ?? 0;
+    this.sfxBus?.gain.setTargetAtTime(this.volumes.sfx, t, 0.05);
+    this.musicBus?.gain.setTargetAtTime(this.volumes.music, t, 0.05);
   }
 
   setMuted(m: boolean): void {

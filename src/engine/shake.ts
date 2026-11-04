@@ -6,8 +6,11 @@ export class CameraShake {
   private trauma = 0;
   private t = 0;
   private saved = new Vector3();
+  /** Off in the settings: add() does nothing. */
+  enabled = true;
 
   add(amount: number): void {
+    if (!this.enabled) return;
     this.trauma = Math.min(1, this.trauma + amount);
   }
 

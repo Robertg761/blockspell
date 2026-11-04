@@ -40,3 +40,5 @@
 .pwa-line:empty { display: none; }
 .pwa-ok { color: var(--good); font-weight: 650; }
 .install-btn { font-weight: 700; }
+
+.title-links { display: flex; justify-content: center; gap: 18px; flex-wrap: wrap; }

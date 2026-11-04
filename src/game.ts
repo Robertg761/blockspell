@@ -30,6 +30,8 @@ import { ease } from './engine/tween';
 import { Reactions } from './ui/reactions';
 import { pickVignette } from './surprise';
 import { Tutorial } from './ui/tutorial';
+import { settings, type Settings } from './settings';
+import { settingsPanel } from './ui/settings-panel';
 
 /** Wires renderer, world, input, parser, levels and HUD together. */
 export class Game {
@@ -95,6 +97,7 @@ export class Game {
       onLevel: (id) => this.loadLevel(id),
       onReset: () => this.restart(),
       onLevels: () => this.showLevels(),
+      onSettings: () => this.openSettings(),
       onMute: (m) => this.fx.audio.setMuted(m),
       onStart: () => this.fx.audio.unlock(),
       onSurprise: () => this.surprise(),
@@ -112,6 +115,7 @@ export class Game {
     root.append(this.spellbook.el);
     this.tutorial = new Tutorial(root);
     this.carryPrompt = new CarryPrompt(root);
+    settings.onChange((s) => this.applySettings(s));
     this.reactions = new Reactions(root, this.world);
     this.refreshChips();
 
@@ -140,7 +144,45 @@ export class Game {
       onExplore: () => this.explore(),
       onFreePlay: () => this.freePlay(),
       onSurprise: () => this.freePlay(true),
+      onSettings: () => this.openSettings(),
     });
+  }
+
+  /** Pushes the player's settings into audio, effects, camera and tips. */
+  private applySettings(s: Settings): void {
+    this.fx.audio.setVolumes({ music: s.music, sfx: s.sfx });
+    this.fx.screen.calm = s.reduceEffects;
+    this.fx.shake.enabled = s.shake;
+    this.tutorial.setEnabled(s.tips);
+    this.renderer.controls.rotateSpeed = s.orbit;
+  }
+
+  /** The ⚙ panel. Back returns to the title screen if that's where it was opened from. */
+  openSettings(): void {
+    this.keys.clear();
+    const back = () => (this.titleMode ? this.showTitle() : this.hud.hideOverlay());
+    this.hud.showPanel(
+      settingsPanel({
+        hdOn: () => hd.enabled,
+        toggleHD: () => {
+          setHDEnabled(!hd.enabled);
+          return hd.enabled;
+        },
+        resetTips: () => this.tutorial.resetTips(),
+        resetProgress: () => this.eraseProgress(),
+        onBack: back,
+      }),
+    );
+  }
+
+  /** Forgets everything saved on this device (levels, world, spellbook, tips) and starts over. */
+  private eraseProgress(): void {
+    worldSave.reset();
+    progress.reset();
+    this.spellbook.reset();
+    this.tutorial.resetTips();
+    try { localStorage.removeItem(SURPRISED); } catch { /* ignore */ }
+    window.setTimeout(() => location.reload(), 700);
   }
 
   /** Loads the open world and puts the hero where they last were (the entry of their last zone). */
