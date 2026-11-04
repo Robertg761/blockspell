@@ -83,7 +83,7 @@ toward the marker, ramps rise toward it, and stairs climb away from you.
 
 ## The open world (Explore)
 
-**▶ Play** opens the open world: seven small islands (*zones*) joined by paths, each with a few
+**▶ Play** opens the open world: eight small islands (*zones*) joined by paths, each with a few
 tasks. Open the Journal with **J** (or **Start** on a gamepad) to see them. A task is finished by
 what happens, not by one right spell, and each has at least three ways to solve it. The Journal
 counts the ways you've found.
@@ -91,8 +91,11 @@ counts the ways you've found.
 - **Meadow Commons**, **Cliffside**, **Ember Village**, **Farmstead**, **Lily Lake** and **Sky Ruins**
 - **Windmill Hill** (new): spin the windmill sails (a *fan*, a passing *rocket* or a blast will do),
   ring the bell on its gallows (anything flying into it, or a bang nearby), and climb the treehouse.
+- **Harvest Camp** (new): grow a tree from a single seed (it needs water: pour some, bring a cloud, or
+  cast a *wet seed*), make camp (a tent, somewhere to sit and a light on the flat pad), and play a tune
+  on the piano by dropping things on it.
 - **Guide.** A soft beam and a compass arrow point to the nearest task you haven't done. Turn it off in ⚙.
-- **Finale.** Finish every task and the world celebrates. 🏆 **Trophies** (28 of them, from your
+- **Finale.** Finish every task and the world celebrates. 🏆 **Trophies** (over thirty, from your
   first spell to casting at night) are listed in the Journal and on the title screen.
 - **Day and night.** The sky drifts from day to sunset, night (with stars) and dawn while you play.
   The 🌤 and 🌦 buttons on the right edge set the sky and weather (clear, rain, snow) by hand.
@@ -109,6 +112,28 @@ counts the ways you've found.
 - **Share a scene.** 🔗 copies a link like `…/#scene=ball@2,3;dog@-1,4`. Opening it replays those
   spells in Free Play. Links hold spells only, nothing else, so they stay short.
 - **Settings** (⚙) are saved in `localStorage` and can be reset, together with your progress.
+
+## More ways to play
+
+- **Pinned spells.** Press ☆ in the spell bar to pin what you typed (or your last spell) to a hotbar of up
+  to nine slots above it. Click a slot or press its number to cast it (**Alt + number** in Free Play, where
+  plain digits belong to the spell bar). Right-click a slot to unpin. Your spell history (↑ ↓) and pins are
+  saved between visits.
+- **Two-step hints.** In the Journal, *Hint* nudges and *Show me a way (spoiler)* reveals the spells of one
+  known solution, with a button that pins them.
+- **Lab notebook.** The 🏆 panel also lists 17 experiments (set something on fire, melt a snowman, feed a dog,
+  start a chain reaction, grow a tree from a seed...). Each is ticked the first time you make it happen.
+- **Ten new words:** *lantern, pumpkin, haystack, scarecrow, tent, bench, bubble, seed, fence, piano*. A
+  *seed* that gets wet grows into a tree; a *piano* rings a note when something lands on it.
+- **Little creatures.** Fireflies at night, butterflies by day and a few birds overhead (⚙ turns them off).
+- **Music that follows the sky.** The tune slows and softens at night, turns minor in rain and bell-like in snow.
+- **Photo looks and clips.** Photo mode has six looks (natural, warm, cool, vivid, vintage, noir), shown live
+  and baked into saved pictures, and a 🎞 button that records a 6-second video clip.
+- **Performance.** ⚙ has a *Sharpness* slider, an option to lower it automatically on slow devices, a switch
+  for the glow effect and a frame-rate counter.
+- **Backups.** ⚙ → *Save a backup* downloads your progress, trophies, spellbook and settings as one JSON file;
+  *Restore a backup* loads it back (handy for moving to another device, or after clearing site data).
+  *Your journey* shows spells cast, words found, tasks, trophies, experiments and time played.
 
 ## Install it
 
@@ -258,7 +283,7 @@ Guides: `tools/level-brief.md` for writing levels and `tools/object-brief.md` fo
 
 ## What's in the box
 
-100 spellbook words (plus the hero) across creatures, vehicles & flyers, building &
+110 spellbook words (plus the hero) across creatures, vehicles & flyers, building &
 gadgets, nature, food and everyday things, each with a few synonyms (*dog*: puppy, doggo,
 hound…). Interactions come from behavior tags (documented in `src/core/tags.ts`), for example:
 
@@ -297,6 +322,7 @@ src/
     audio.ts         WebAudio synth sound effects
     music.ts         generative music loop on a lookahead scheduler
     fx.ts shake.ts tween.ts marker.ts      juice helpers
+    life.ts          instanced fireflies, butterflies and birds
     voxanim.ts       GPU voxel animations: spawn assembly, change sweep, dissolve
   voxel/             voxel DSL (builder), palette, face-culled AO mesher, box decomposition,
                      HD voxels (hd-core.ts meshing in a worker, hd.ts cache, LOD and setting)
@@ -308,7 +334,8 @@ src/
   parser/            tokenize -> count -> adjectives + noun -> synonyms, fuzzy suggestions
   ui/                DOM HUD, level select, toasts, spellbook, tutorial tips, touch controls, voxel logo,
                      settings, trophies, photo mode, side tools, autocomplete, gamepad
-  settings.ts trophies.ts share.ts pwa.ts   saved settings, trophy rules, scene links, service worker glue
+  settings.ts trophies.ts share.ts pwa.ts   saved settings, trophy and lab-notebook rules, scene links, service worker glue
+  save-data.ts photo-filters.ts             backup files and photo looks
   tasks/             open-world zones, tasks, predicates and their scripted solutions
 scripts/             vite precache plugin, service worker template and the check-* scripts
 ```
