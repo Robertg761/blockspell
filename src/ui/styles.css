@@ -101,6 +101,14 @@ button, input, select { font: inherit; color: inherit; }
   box-shadow: 0 3px 0 #b86400; transition: transform 0.08s;
 }
 .cast-btn:active { transform: translateY(2px); box-shadow: 0 1px 0 #b86400; }
+.surprise-btn {
+  border: 0; border-radius: 999px; width: 44px; height: 44px; flex: none; cursor: pointer; font-size: 22px; line-height: 1;
+  background: #f1f0ee; box-shadow: 0 3px 0 #d6d3cd; transition: transform 0.08s, background 0.15s;
+}
+.surprise-btn:hover { background: #fff3d6; }
+.surprise-btn:hover { animation: dice-wobble 0.5s; }
+.surprise-btn:active { transform: translateY(2px); box-shadow: 0 1px 0 #d6d3cd; }
+@keyframes dice-wobble { 25% { transform: rotate(-14deg) scale(1.1); } 60% { transform: rotate(10deg) scale(1.1); } }
 .spell-bar.shake { animation: shake 0.4s; }
 .spell-bar.pulse { animation: pulse 0.35s; }
 @keyframes shake {

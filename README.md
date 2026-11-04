@@ -33,6 +33,11 @@ reach it, using as few spells as you can.
 | **Tab** or 📖 | Spellbook of discovered words |
 | ♪ | Mute music and sound (remembered) |
 
+**Surprise me.** In Free Play, the 🎲 button next to the spell bar (or "🎲 Surprise me" on the
+title screen) stages a short scene: a cat chasing a mouse chasing cheese, a snowman meeting a
+campfire, a wall meeting some flaming TNT... Your first visit to Free Play opens with one. The
+scenes live in `src/surprise.ts`, which is a good place to add more.
+
 In **Free Play** there's no hero, so typing anywhere goes straight to the spell bar, and
 your pointer is the hand: drag a thing to move it, let go to drop it, and flick to throw it.
 It hovers over whatever is under the pointer, so you can stack things too. On
@@ -183,6 +188,14 @@ looks the same with HD on or off, and is visual only: physics and game state cha
 once, as before. Software rendering, weak GPUs, `prefers-reduced-motion` and a slow frame
 rate get a shorter `lite` version without the flying voxels. `__blockspell.anim()` shows
 the setting; `BLOCKSPELL_ANIM=full npm run check-tasks` runs the checks with the full version.
+
+Game feel: every spell lands in a column of light with a spreading rune ring; hard landings knock,
+puff dust and nudge the camera; explosions and the level-complete fanfare add a beat of hit-stop,
+a flash and a little color fringing; comic words ("Whoosh!", "Nom!", "BOOM!") pop above what just
+happened (`src/ui/reactions.ts`); the spell bar ticks as you type and types example spells into its
+placeholder while empty. The final film grade (contrast, warm highlights, cool shadows, vignette) is
+`src/engine/grade.ts`. Hit-stop, fringing, zoom punch and the camera swoop-in turn themselves off for
+`prefers-reduced-motion`.
 
 Dev-only pages (served by `npm run dev`, not part of the build):
 

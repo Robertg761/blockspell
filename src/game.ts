@@ -26,6 +26,9 @@ import { Hud } from './ui/hud';
 import { CARRY, carryHint, carryKind, handGrab, type Carry, type CarryHint } from './behaviors/lib/carry';
 import { waterSurfaceAt } from './behaviors/lib/water';
 import { Spellbook } from './ui/spellbook';
+import { ease } from './engine/tween';
+import { Reactions } from './ui/reactions';
+import { pickVignette } from './surprise';
 import { Tutorial } from './ui/tutorial';
 
 /** Wires renderer, world, input, parser, levels and HUD together. */
@@ -36,6 +39,9 @@ export class Game {
   readonly hud: Hud;
   readonly spellbook: Spellbook;
   readonly tutorial: Tutorial;
+  private reactions: Reactions;
+  /** The swoop-in when a mode starts from the title screen: the camera eases in from farther out. */
+  private intro: { t: number; offset: Vector3 } | null = null;
   private marker = new SpawnMarker();
   /** Under what the hero would grab, or where what they hold would be set down. */
   private carryRing = new SpawnMarker('#7fe3ff');
@@ -91,6 +97,7 @@ export class Game {
       onLevels: () => this.showLevels(),
       onMute: (m) => this.fx.audio.setMuted(m),
       onStart: () => this.fx.audio.unlock(),
+      onSurprise: () => this.surprise(),
       onHD: () => {
         setHDEnabled(!hd.enabled);
         return hd.enabled;
@@ -104,9 +111,11 @@ export class Game {
     root.append(this.spellbook.el);
     this.tutorial = new Tutorial(root);
     this.carryPrompt = new CarryPrompt(root);
+    this.reactions = new Reactions(root, this.world);
     this.refreshChips();
 
     this.bindInput();
+    this.renderer.controls.addEventListener('start', () => (this.intro = null));
     this.loadLevel(levels.find((l) => !l.goal)?.id ?? levels[0].id);
     this.hud.setHD(hd.enabled);
     // HD meshes for the hero and every castable object, built in the background so spawns don't wait
@@ -129,6 +138,7 @@ export class Game {
       exploreLabel: '▶ Explore',
       onExplore: () => this.explore(),
       onFreePlay: () => this.freePlay(),
+      onSurprise: () => this.freePlay(true),
     });
   }
 
@@ -145,12 +155,47 @@ export class Game {
       this.tracker.enterZone(zone);
       this.hud.setZoneName(zone.name);
     }
+    this.startIntro();
   }
 
   /** The sandbox: every word, no hero, no goal. */
-  freePlay(): void {
+  freePlay(surpriseNow = false): void {
     const free = menuLevels().find((l) => !l.goal);
-    if (free) this.loadLevel(free.id);
+    if (!free) return;
+    this.loadLevel(free.id);
+    this.startIntro();
+    // the very first visit opens with a little show, so the magic is on screen before anything is typed
+    let seen = false;
+    try { seen = !!localStorage.getItem(SURPRISED); } catch { /* no storage: the show just plays each time */ }
+    if (surpriseNow || !seen) this.fx.tweens.add({ delay: surpriseNow ? 0.9 : 1.1, duration: 0.01, update: () => {}, done: () => this.surprise(!surpriseNow) });
+  }
+
+  private startIntro(): void {
+    if (this.fx.screen.calm) return;
+    const { camera, controls } = this.renderer;
+    this.intro = { t: 0, offset: camera.position.clone().sub(controls.target) };
+  }
+
+  /** 🎲 in Free Play: stages a random little scene (see surprise.ts) where the island's center is. */
+  surprise(first = false): void {
+    if (this.level.goal || this.level.hero || this.level.tasks || this.titleMode) return;
+    this.fx.audio.unlock();
+    try { localStorage.setItem(SURPRISED, '1'); } catch { /* ignore */ }
+    const v = pickVignette();
+    const cx = 0, cz = 0;
+    for (const step of v.steps) {
+      this.fx.tweens.add({
+        delay: step.delay,
+        duration: 0.001,
+        update: () => {},
+        done: () => {
+          const x = cx + step.at[0], z = cz + step.at[1];
+          const g = this.world.groundAt(x, z);
+          this.castAt(step.spell, [x, Number.isFinite(g) ? g : 0, z]);
+        },
+      });
+    }
+    this.hud.toasts.show(first ? `${v.blurb} Press 🎲 for another, or write your own word.` : v.blurb, { title: `🎲 ${v.name}`, kind: 'success', duration: first ? 5500 : 3200 });
   }
 
   /** The ☰ button: the Journal in the open world, else the title screen (to switch modes). */
@@ -192,6 +237,7 @@ export class Game {
     this.lastResult = null;
     clearTimeout(this.winTimer);
     this.hud.hideWin();
+    this.reactions.clear();
     this.world.clear();
     this.pendingCasts.clear();
     const islands = level.islands ?? (level.terrain === null ? [] : [level.terrain ?? {}]);
@@ -768,6 +814,16 @@ export class Game {
     this.renderer.camera.position.add(d);
   }
 
+  private stepIntro(dt: number): void {
+    const intro = this.intro;
+    if (!intro) return;
+    intro.t += dt;
+    const k = 1 + 1.2 * (1 - ease.outCubic(Math.min(1, intro.t / 2.2)));
+    const { camera, controls } = this.renderer;
+    camera.position.copy(controls.target).addScaledVector(intro.offset, k);
+    if (intro.t >= 2.2) this.intro = null;
+  }
+
   /** Refreshes what the hero could grab or is holding, and the ring and prompt that show it. */
   private updateCarry(dt: number): void {
     const h = this.world.hero;
@@ -794,12 +850,15 @@ export class Game {
     this.last = now;
     this.tick(dt * this.fx.screen.pace(dt)); // hit-stop slows the world, not the camera or the UI
     this.followCamera(dt);
+    this.stepIntro(dt);
     this.updateCarry(dt);
     this.tutorial.update(this, dt);
+    this.reactions.update(dt, this.renderer.camera, !this.titleMode && !this.hud.overlayOpen);
     updateVoxelLOD(this.renderer.camera.position, (this.renderer.scene.fog as Fog).far);
     this.renderer.render(dt, this.fx.shake, this.fx.screen);
     requestAnimationFrame(this.frame);
   };
 }
 
+const SURPRISED = 'blockspell.surprised.v1';
 const HERO_KEYS = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space', 'KeyE', 'KeyF', 'KeyQ']);
