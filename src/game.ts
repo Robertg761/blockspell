@@ -953,7 +953,7 @@ export class Game {
       this.fx.audio.unlock();
       down = { x: e.clientX, y: e.clientY };
       if (this.level.hero) this.hud.input.blur();
-      else if (!this.titleMode && e.button === 0 && !this.hand) {
+      else if (!this.titleMode && !this.photo && e.button === 0 && !this.hand) {
         const ent = this.entityAt(e.clientX, e.clientY);
         if (ent && carryKind(ent)) {
           this.hand = { e: ent, pointer: e.pointerId, lifted: false };
@@ -979,7 +979,7 @@ export class Game {
       down = null;
       const dragged = this.hand?.lifted;
       this.dropHand();
-      if (moved < 6 && !dragged) this.click(e.clientX, e.clientY);
+      if (moved < 6 && !dragged && !this.photo) this.click(e.clientX, e.clientY); // photo mode: the pointer only orbits
     });
     canvas.addEventListener('pointercancel', () => this.dropHand());
     window.addEventListener('blur', () => {
