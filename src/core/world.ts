@@ -11,7 +11,7 @@ import { ease } from '../engine/tween';
 import { GroundCover, scatterTufts } from '../engine/cover';
 import { addGrain } from '../engine/grain';
 import { blockDetail, buildBlock, inferBlockStyle, type BlockStyle } from '../engine/scenery';
-import { buildTerrain, type Terrain, type TerrainOptions } from '../engine/terrain';
+import { buildTerrain, type SceneryTree, type Terrain, type TerrainOptions } from '../engine/terrain';
 import { objects } from '../objects';
 import type { ObjectDef } from '../objects/types';
 import { VoxelBuilder } from '../voxel/builder';
@@ -71,6 +71,12 @@ export interface HeroInput {
   toss: boolean;
   /** Q held: turn what's held. */
   turn: boolean;
+  /** Shift held: run. In a flying machine, descend. */
+  run: boolean;
+  /** C held: use what's in the hero's hands. */
+  use: boolean;
+  /** The raw stick, not turned by the camera: x is steering (+ right), y is throttle (+ forward). */
+  drive: { x: number; y: number };
 }
 
 export interface SpawnOptions {
@@ -133,7 +139,13 @@ export class GameWorld {
   readonly links: Link[] = [];
   /** The keyboard-controlled hero of the current level (null in free play). */
   hero: Entity | null = null;
-  readonly input: HeroInput = { move: { x: 0, z: 0 }, up: false, down: false, jump: false, grab: false, toss: false, turn: false };
+  readonly input: HeroInput = { move: { x: 0, z: 0 }, up: false, down: false, jump: false, grab: false, toss: false, turn: false, run: false, use: false, drive: { x: 0, y: 0 } };
+  /** Trees baked into a zone's scenery. Those baked into the islands are in `terrains`. */
+  private decorTrees: SceneryTree[] = [];
+  /** True once a tree baked into an island has been cut: the islands must be rebuilt for the next attempt. */
+  islandsCut = false;
+  /** Flying machines turn back this far from the world's center (m). */
+  flightLimit = 50;
   /** Open world: while set, spawned entities are stamped with this zone id (state.zone), so a zone reset finds its props. */
   spawnZone: string | null = null;
   /** While true, `addStaticBox` does nothing (a zone reset re-runs setup code but keeps the statics it built). */
@@ -503,13 +515,52 @@ export class GameWorld {
   }
 
   /** A static collider with no mesh of its own (its look is part of a baked decor mesh). Counts as ground. */
-  addStaticCollider(position: [number, number, number], size: [number, number, number]): void {
-    if (this.skipStatics) return;
+  addStaticCollider(position: [number, number, number], size: [number, number, number]): Body | null {
+    if (this.skipStatics) return null;
     const body = new Body({ mass: 0, type: Body.STATIC, material: this.groundMaterial });
     body.addShape(new Box(new Vec3(size[0] / 2, size[1] / 2, size[2] / 2)));
     body.position.set(...position);
     this.physics.addBody(body);
     this.statics.push({ mesh: null, body, yaw: 0 });
+    return body;
+  }
+
+  /** Registers a tree baked into a zone's decor mesh, so tools can cut it. */
+  addSceneryTree(tree: SceneryTree): void {
+    this.decorTrees.push(tree);
+  }
+
+  /** The baked tree whose trunk is nearest to (x, z), within `radius`. */
+  sceneryTreeNear(x: number, z: number, radius: number): SceneryTree | null {
+    let best: SceneryTree | null = null;
+    let bd = radius;
+    const check = (t: SceneryTree) => {
+      const d = Math.hypot(t.x - x, t.z - z);
+      if (d <= bd && !t.gone) {
+        bd = d;
+        best = t;
+      }
+    };
+    this.decorTrees.forEach(check);
+    for (const t of this.terrains) t.trees.forEach(check);
+    return best;
+  }
+
+  /** Takes a baked tree out of the scenery: its voxels and its collider. */
+  removeSceneryTree(tree: SceneryTree): void {
+    tree.gone = true;
+    tree.erase();
+    if (tree.body) {
+      this.physics.removeBody(tree.body);
+      const i = this.statics.findIndex((s) => s.body === tree.body);
+      if (i >= 0) this.statics.splice(i, 1);
+    }
+    if (this.terrains.some((t) => t.trees.includes(tree))) this.islandsCut = true;
+  }
+
+  /** Swaps a baked decor mesh's model for a new one (a tree came out of it). */
+  rebakeDecor(mesh: Mesh, model: ReturnType<VoxelBuilder['build']>): void {
+    bindVoxelMesh(mesh, { model, voxelSize: 0.25, origin: 'model', style: 'decor', lod: true, label: 'decor' });
   }
 
   /**
@@ -572,6 +623,7 @@ export class GameWorld {
       if (s.body) this.physics.removeBody(s.body);
     }
     this.statics.length = 0;
+    this.decorTrees.length = 0;
     for (const m of this.scenery) {
       this.scene.remove(m);
       releaseVoxelMesh(m);
@@ -591,7 +643,8 @@ export class GameWorld {
     this.aim = null;
     this.hero = null;
     this.input.move.x = this.input.move.z = 0;
-    this.input.up = this.input.down = this.input.jump = this.input.grab = this.input.toss = this.input.turn = false;
+    this.input.up = this.input.down = this.input.jump = this.input.grab = this.input.toss = this.input.turn = this.input.run = this.input.use = false;
+    this.input.drive.x = this.input.drive.y = 0;
     this.waterLevel = null;
     this.acc = 0;
     this.fx.anims.clear();

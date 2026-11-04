@@ -44,7 +44,8 @@ export class SolutionRunner {
     const w = this.host.world;
     const inp = w.input;
     inp.move.x = inp.move.z = 0;
-    inp.up = inp.down = inp.jump = inp.grab = inp.toss = inp.turn = false;
+    inp.up = inp.down = inp.jump = inp.grab = inp.toss = inp.turn = inp.run = inp.use = false;
+    inp.drive.x = inp.drive.y = 0;
     if (this.stepsDone) {
       this.tail += dt;
       return;
@@ -91,6 +92,9 @@ export class SolutionRunner {
       inp.up = !!step.hold.up;
       inp.down = !!step.hold.down;
       inp.jump = !!step.hold.jump && Math.floor(this.t * 4) % 2 === 0; // tap, so jumps re-trigger
+      inp.run = !!step.hold.run;
+      inp.use = !!step.hold.use;
+      if (step.hold.drive) [inp.drive.x, inp.drive.y] = step.hold.drive;
       return this.t >= step.for;
     }
     if ('walkTo' in step) {

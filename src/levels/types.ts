@@ -21,15 +21,15 @@ export type SolutionStep =
   /** Let the simulation run. */
   | { wait: number }
   /** Hold hero input for `for` seconds. dir is a world-space direction [x, z]. */
-  | { hold: { dir?: [number, number]; up?: boolean; down?: boolean; jump?: boolean }; for: number }
+  | { hold: { dir?: [number, number]; up?: boolean; down?: boolean; jump?: boolean; run?: boolean; use?: boolean; drive?: [number, number] }; for: number }
   /**
    * Steer the hero toward x,z until within 0.35 m (or timeout). `jump` hops while walking, `up` climbs.
    * With `of` (an object id), x,z is an offset from the nearest such entity, read when the step starts
    * (walk up to a trampoline wherever it came to rest).
    */
   | { walkTo: [number, number]; of?: string; timeout?: number; jump?: boolean; up?: boolean }
-  /** Tap a hero key: E grabs or puts down, F throws, Q turns what's held. */
-  | { press: 'grab' | 'toss' | 'turn' }
+  /** Tap a hero key: E grabs, gets in or puts down, F throws, Q turns what's held, C uses it. */
+  | { press: 'grab' | 'toss' | 'turn' | 'use' }
   /** Click (poke) the nearest entity matching an object id near a point. */
   | { poke: string; near?: [number, number] }
   /** Move the hero to a feet position (open world: jump to a task's start). */

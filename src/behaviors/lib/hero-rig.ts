@@ -1,6 +1,8 @@
 import type { Entity } from '../../core/entity';
 import type { GameWorld } from '../../core/world';
 import { carryOf, heldBy } from './carry';
+import { HERO } from './hero';
+import { ridingOf } from './ride';
 
 /** How far each leg swings either way (radians) at a slow walk and at a full run. */
 const WALK_SWING = 0.3, RUN_SWING = 0.75;
@@ -10,6 +12,8 @@ const LEG_SHARE = 7 / 19;
 const CLIMB_CYCLE = 1;
 /** Arm angle (radians) and stretch to reach what's held overhead, and the angle out to what's dragged. */
 const LIFT_ARM = -2.95, LIFT_REACH = 1.5, DRAG_ARM = -1.35;
+/** Seated: thighs forward, hands out on the controls. */
+const SIT_LEG = -1.45, SIT_ARM = -1.05;
 
 interface Rig {
   /** Stride position in radians, advanced by distance walked so feet don't skate. */
@@ -17,10 +21,11 @@ interface Rig {
   climbCycle: number;
   /** 0 standing .. 1 full run. */
   gait: number;
-  /** Blend weights for the airborne, climbing and holding poses. */
+  /** Blend weights for the airborne, climbing, holding and sitting poses. */
   air: number;
   climb: number;
   hold: number;
+  sit: number;
   /** Where the arms are held, and how far they stretch. */
   holdArm: number;
   holdReach: number;
@@ -48,7 +53,7 @@ const mix = (a: number, b: number, t: number) => a + (b - a) * t;
 function rigOf(e: Entity, yaw: number): Rig {
   const v = e.body.velocity;
   return (e.state.rig ??= {
-    stride: 0, climbCycle: 0, gait: 0, air: 0, climb: 0, hold: 0, holdArm: 0, holdReach: 1, lead: 1, lean: 0, bank: 0,
+    stride: 0, climbCycle: 0, gait: 0, air: 0, climb: 0, hold: 0, sit: 0, holdArm: 0, holdReach: 1, lead: 1, lean: 0, bank: 0,
     squash: 0, squashV: 0, squashed: false, scarf: 0, headYaw: 0, yaw, vx: v.x, vz: v.z,
   } satisfies Rig) as Rig;
 }
@@ -79,15 +84,15 @@ export function animateHero(e: Entity, world: GameWorld, dt: number): void {
   const r = rigOf(e, yaw);
   const t = world.time + e.id * 7;
   const H = e.size.y;
-  const runSpeed = e.prop('speed', 2.6);
-
   const controlled = e.has('controlled');
+  const runSpeed = controlled ? HERO.run : e.prop('speed', 2.6);
+  const riding = !!ridingOf(e);
   const sp = Math.hypot(v.x, v.z) / e.scale;
   const airTime = (e.state.airTime as number | undefined) ?? (Math.abs(v.y) > 1.5 ? 1 : 0);
   const climbing = !!e.state.climbing;
-  const airborne = airTime > 0.1 && !climbing;
+  const airborne = airTime > 0.1 && !climbing && !riding;
   // no legs when there's no intent to walk: riding or sliding along, the hero just stands
-  const striding = !airborne && !climbing && (!controlled || Math.hypot(world.input.move.x, world.input.move.z) > 0.1);
+  const striding = !airborne && !climbing && !riding && (!controlled || Math.hypot(world.input.move.x, world.input.move.z) > 0.1);
 
   r.gait = damp(r.gait, striding ? Math.min(1.15, sp / runSpeed) : 0, 14, dt);
   r.air = damp(r.air, airborne ? 1 : 0, airborne ? 16 : 22, dt);
@@ -134,16 +139,30 @@ export function animateHero(e: Entity, world: GameWorld, dt: number): void {
   // ---- hands full: the arms stay on what's held, whatever the legs are doing
   const held = heldBy(e);
   const mode = held && carryOf(held)?.mode;
-  const holding = mode === 'lift' || mode === 'drag';
+  const worn = !!held?.has('wearable');
+  const wielded = held?.def.grip !== undefined;
+  const holding = (mode === 'lift' || mode === 'drag') && !worn;
   if (holding) {
-    r.holdArm = mode === 'lift' ? LIFT_ARM : DRAG_ARM;
-    r.holdReach = mode === 'lift' ? LIFT_REACH : 1;
+    const overhead = mode === 'lift' && !wielded;
+    r.holdArm = overhead ? LIFT_ARM : DRAG_ARM - ((e.state.swing as number | undefined) ?? 0) * 0.7;
+    r.holdReach = overhead ? LIFT_REACH : 1;
   }
   r.hold = damp(r.hold, holding ? 1 : 0, 16, dt);
   for (const arm of [armL, armR]) {
     arm.rotation.x = mix(arm.rotation.x, r.holdArm, r.hold);
     arm.rotation.z *= 1 - r.hold;
     arm.scale.y = mix(1, r.holdReach, r.hold);
+  }
+
+  // ---- in the seat
+  r.sit = damp(r.sit, riding && !ridingOf(e)?.def.ride?.stand ? 1 : 0, 14, dt);
+  if (r.sit > 0.001) {
+    legL.rotation.x = mix(legL.rotation.x, SIT_LEG, r.sit);
+    legR.rotation.x = mix(legR.rotation.x, SIT_LEG, r.sit);
+    for (const arm of [armL, armR]) {
+      arm.rotation.x = mix(arm.rotation.x, SIT_ARM, r.sit);
+      arm.rotation.z *= 1 - r.sit;
+    }
   }
 
   // ---- body: lean into acceleration, bank into turns, twist with the arms

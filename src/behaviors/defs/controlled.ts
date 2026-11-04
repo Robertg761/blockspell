@@ -1,42 +1,13 @@
-import { Quaternion, Ray, RaycastResult, Vec3 } from 'cannon-es';
+import { Quaternion, Vec3 } from 'cannon-es';
 import type { Entity } from '../../core/entity';
 import { GROUP } from '../../core/groups';
 import type { GameWorld } from '../../core/world';
-import { carryLoad } from '../lib/carry';
+import { carryLoad, heldBy } from '../lib/carry';
+import { blocked, HERO } from '../lib/hero';
 import { defineBehavior } from '../types';
 
 const UP = new Vec3(0, 1, 0);
 const tmpQ = new Quaternion();
-const ray = new Ray();
-const rayHit = new RaycastResult();
-const rayFrom = new Vec3(), rayTo = new Vec3();
-
-/** Horizontal probe from the hero's center at height `y`, `len` m along (dx, dz). */
-function blocked(e: Entity, world: GameWorld, y: number, dx: number, dz: number, len: number): boolean {
-  rayFrom.set(e.x, y, e.z);
-  rayTo.set(e.x + dx * len, y, e.z + dz * len);
-  rayHit.reset();
-  ray.from.copy(rayFrom);
-  ray.to.copy(rayTo);
-  ray.intersectWorld(world.physics, { mode: Ray.CLOSEST, result: rayHit, skipBackfaces: true, collisionFilterMask: GROUP.STATIC | GROUP.ENTITY });
-  return rayHit.hasHit && rayHit.body !== e.body;
-}
-
-export const HERO = {
-  speed: 2.5,
-  /** Air control drifts toward this: faster than the run, which is what sets how far a jump carries. */
-  airSpeed: 3.6,
-  jump: 5.2,
-  climb: 2.6,
-  /** Upward speed while stepping onto something, and what's left of it on clearing the top. */
-  stepRise: 2.6,
-  stepSettle: 0.8,
-  /** Per-substep velocity blend on the ground / in the air. */
-  groundAccel: 0.16,
-  airAccel: 0.07,
-  coyote: 0.12,
-  jumpBuffer: 0.14,
-};
 
 const feet = (e: Entity) => e.body.position.y - e.size.y / 2;
 
@@ -77,6 +48,40 @@ function climbableAt(e: Entity, world: GameWorld, pad = 0.3): Entity | null {
   return null;
 }
 
+/** What's on the hero's back or in their hands that changes how they fall and fly. */
+function airGear(e: Entity, world: GameWorld, h: number, grounded: boolean): void {
+  const held = heldBy(e);
+  if (!held) return;
+  const b = e.body, inp = world.input;
+  if (held.has('thrust') && held.has('wearable')) {
+    const full = held.prop('fuel', 5);
+    if (grounded) held.state.gearFuel = full;
+    const fuel = (held.state.gearFuel as number | undefined) ?? full;
+    // Space is a plain jump from the ground, and the boosters take over from there
+    if (inp.jump && !grounded && fuel > 0 && (e.state.airTime as number) > 0.1) {
+      held.state.gearFuel = fuel - h;
+      b.velocity.y += (HERO.jetClimb - b.velocity.y) * Math.min(1, h * 7);
+      const p = held.body.position;
+      if (Math.random() < h * 40) world.fx.burst({ x: p.x, y: p.y - held.size.y / 2, z: p.z }, { count: 2, color: ['#fff4b8', '#ffb43c', '#ff6c1e'], speed: 0.8, up: -4, gravity: 0, drag: 2.5, size: 0.1, life: 0.3, glow: true });
+      if (Math.random() < h * 4) world.fx.sound('rumble', { pitch: 1.4, volume: 0.5 });
+    }
+    return;
+  }
+  if (held.has('wearable')) {
+    if (grounded) e.state.flaps = HERO.flaps;
+    const left = (e.state.flaps as number | undefined) ?? HERO.flaps;
+    if (!grounded && left > 0 && (e.state.jumpBuf as number) > 0 && (e.state.airTime as number) >= HERO.coyote) {
+      e.state.flaps = left - 1;
+      e.state.jumpBuf = 0;
+      b.velocity.y = HERO.flapSpeed;
+      world.fx.sound('whoosh', { pitch: 1.5, volume: 0.6 });
+      world.fx.burst(held.body.position, { count: 6, color: ['#ffffff', '#cfd6e8'], speed: 1.5, up: -1, gravity: 2, size: 0.07, life: 0.5 });
+    }
+  }
+  const cap = held.has('glider') ? held.prop('fallSpeed', 1.5) : held.has('wearable') ? HERO.wingFall : held.has('flies') ? HERO.balloonFall : Infinity;
+  if (b.velocity.y < -cap) b.velocity.y += (-cap - b.velocity.y) * 0.5;
+}
+
 /**
  * The keyboard-driven hero: reads `world.input` (camera-relative, set by the
  * game), walks, jumps, climbs climbables and stands on anything solid.
@@ -111,7 +116,7 @@ export default defineBehavior({
   },
   fixedUpdate(e, world, h) {
     const b = e.body;
-    if (e.has('frozen')) return;
+    if (e.has('frozen') || e.state.riding) return; // in the seat, the vehicle moves them
     const inp = world.input;
     const grounded = onGround(e, world, h);
     const wasAir = e.state.airTime as number;
@@ -170,7 +175,9 @@ export default defineBehavior({
     // ---- walking
     const k = grounded ? HERO.groundAccel : HERO.airAccel;
     const load = carryLoad(e);
-    const speed = (grounded ? HERO.speed : HERO.airSpeed) * load.speed;
+    const fed = ((e.state.fedUntil as number | undefined) ?? 0) > world.time;
+    const running = inp.run && load.jump > 0;
+    const speed = (grounded ? (running ? HERO.run : HERO.speed) : HERO.airSpeed) * load.speed * (fed ? HERO.fedSpeed : 1);
     if (grounded || ml > 0.05) {
       b.velocity.x += (mx * speed - b.velocity.x) * k;
       b.velocity.z += (mz * speed - b.velocity.z) * k;
@@ -188,9 +195,17 @@ export default defineBehavior({
       } else if (stepping) b.velocity.y = Math.min(b.velocity.y, HERO.stepSettle); // over the lip: no leftover hop
     }
 
+    airGear(e, world, h, grounded);
+
     // ---- jumping
     if ((e.state.jumpBuf as number) > 0 && (e.state.airTime as number) < HERO.coyote && load.jump > 0) {
-      b.velocity.y = HERO.jump * load.jump;
+      b.velocity.y = HERO.jump * load.jump * (fed ? HERO.fedJump : 1);
+      // takes off at jumping speed, however fast the run-up was
+      const flat = Math.hypot(b.velocity.x, b.velocity.z), most = HERO.airSpeed * (fed ? HERO.fedSpeed : 1);
+      if (flat > most) {
+        b.velocity.x *= most / flat;
+        b.velocity.z *= most / flat;
+      }
       e.state.airTime = HERO.coyote; // no double jumps off coyote time
       e.state.jumpBuf = 0;
       e.state.squashKick = 2.6;

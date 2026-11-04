@@ -24,7 +24,7 @@ export const KNOWN_TAGS = {
   explosive: 'Explodes when ignited, after a fuse, or on hard impact. [fuse=0 (s, 0 = only when lit), blastRadius=4, blastForce=14, impactBlast=0 (m/s, 0 = off)]',
   thrust: 'Rocket thrust along its local +Y axis while fuel lasts. [thrust=2.2 (×gravity), fuel=4 (s)]',
   wind: 'Blows things in front of it (local +Z). [windForce=14, windRange=6]',
-  vehicle: 'Drives forward (local +Z) on the ground, or across water if it floats. [speed=4]',
+  vehicle: 'Drives itself forward (local +Z) on the ground, or across water if it floats, unless it\'s `rideable` and a hero is around. [speed=4]',
   carrier: 'Grabs light things it touches and carries them (balloons). [carryMass=3]',
   launcher: 'Launches things that land on it straight up (trampoline, spring). [launch=10 (m/s)]',
   glider: 'Falls slowly, like a parachute. [fallSpeed=1.5]',
@@ -43,6 +43,9 @@ export const KNOWN_TAGS = {
   locked: 'Opens when touched by a key.',
   player: 'A summoned hero: walks to where you click and climbs climbable things.',
   controlled: 'The level hero: moved with WASD/arrows + Space, climbs climbables, stands on anything, grabs and throws things.',
+  rideable: 'The hero can get in with E and drive it (ObjectDef.ride). While a hero is around it waits to be driven.',
+  ridden: 'Carrying the hero: the hero\'s input moves it, and its own movement is on hold (state.ride).',
+  wearable: 'Worn on the hero\'s back when grabbed (jetpack, wings). Space flies. It waits to be worn while a hero is around.',
   held: 'In the hero\'s hands, or just let go and passing through them until they part (state.carry).',
 } as const;
 

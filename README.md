@@ -20,11 +20,14 @@ reach it, using as few spells as you can.
 | Key / action | What it does |
 | --- | --- |
 | **WASD** / **arrows** | Walk (relative to the camera) |
+| **Shift** | Run |
 | **Space** | Jump. Walking into knee-high steps climbs onto them |
 | **W** next to a ladder, rope, tree or stairs | Climb. At the top you hop over the edge. Space grabs on from the air |
 | **Enter** (or **T**, **/**) | Open the spell bar. Type a spell and press Enter to cast it. Esc closes it |
 | **Click the ground** | Choose where the next spell appears (the glowing marker) |
-| **E** near an object | Grab it: light things go overhead, heavy ones are dragged. **E** again sets it down |
+| **E** near an object | Grab it: light things go overhead, tools go in your hand, heavy ones are dragged. **E** again sets it down |
+| **E** near a vehicle | Get in. **E** again gets out |
+| **C** while holding something | Use it: saw, chop, eat, light, splash... The prompt says what it does |
 | **F** while carrying | Throw it the way you're facing |
 | **Q** while carrying | Turn it 45° before you set it down |
 | **Click an object** | Poke it |
@@ -33,7 +36,7 @@ reach it, using as few spells as you can.
 | **Tab** or 📖 | Spellbook of discovered words |
 | ⚙ | Settings: music and sound volume, effects, screen shake, tips, camera speed, day and night, guide, HD voxels, erase progress |
 | **P** or 📷 | Photo mode (see below) |
-| **Gamepad** | Left stick or d-pad walks, right stick orbits, **A** jump, **X** grab, **B** throw (or close a panel), **LB/RB** turn, **Y** spell bar, **Start** Journal, **Back** spellbook |
+| **Gamepad** | Left stick or d-pad walks, right stick orbits, **A** jump, **X** grab or get in, **B** throw (or close a panel), **LB/RB** turn, **LT** or stick click run, **RT** use, **Y** spell bar, **Start** Journal, **Back** spellbook |
 
 **Surprise me.** In Free Play, the 🎲 button next to the spell bar (or "🎲 Surprise me" on the
 title screen) stages a short scene: a cat chasing a mouse chasing cheese, a snowman meeting a
@@ -41,10 +44,11 @@ campfire, a wall meeting some flaming TNT... Your first visit to Free Play opens
 scenes live in `src/surprise.ts`, which is a good place to add more.
 
 In **Free Play** there's no hero, so typing anywhere goes straight to the spell bar, and
-your pointer is the hand: drag a thing to move it, let go to drop it, and flick to throw it.
+your pointer is the hand: drag a thing to move it, let go to drop it, flick to throw it, and
+click a vehicle to drive it (the keys work as they do in a hero level until you get out).
 It hovers over whatever is under the pointer, so you can stack things too. On
-touch screens, hero levels show a joystick with Jump and Climb buttons, plus Grab, Throw
-and Turn when they apply. Tips about the controls pop up the first time you need them.
+touch screens, hero levels show a joystick with Jump and Climb buttons, plus Grab, Throw,
+Turn and Use when they apply. Pushing the joystick all the way runs. Tips about the controls pop up the first time you need them.
 
 **Carrying things.** Walk up to almost anything you've cast and a prompt names it, with a
 ring under what **E** would grab. Things up to 16 kg (a box, a dog, a plank, a bridge) go
@@ -55,6 +59,29 @@ dragged: you pull or push them along the ground, slowly and without jumping. Ani
 engines over 16 kg won't be dragged, and anything heavier is too heavy to move. A low
 ceiling knocks a carried thing out of your hands, and thrown things hit as hard as they
 fly, so a thrown crystal shatters. Ghostly things can't be held.
+
+**Riding things.** Cast a vehicle and it waits for you: walk up and press **E** to get in. W and
+S are throttle and brake, A and D steer, and the camera swings round behind you. In anything
+that flies, Space goes up and Shift goes down. A plane needs speed: hold W down the runway, then
+pull up with Space, and slowing down over the void ends the way you'd expect. Cars, trains and
+skateboards roll, boats sail (you can't hop out in deep water), and helicopters, UFOs, hot air
+balloons and rockets go straight up. A rocket only has so much fuel, and **C** next to one lights
+it with nobody aboard. Cows, bears, pigs, sheep and dragons can be ridden too. In Free Play,
+click a vehicle or a big animal to take the controls, and **E** gets you out again. Anything hot
+lights a waiting rocket, so *flaming rocket* takes off by itself.
+
+**Wearing and holding things.** A jetpack or wings go on your back when you grab them: hold Space
+in the air to boost, or tap it to flap, and they're ready again when you land. Hold an umbrella,
+a parachute, a kite or a balloon and you fall slowly.
+
+**Using things.** Hold something and press **C** to use it. A chainsaw or axe cuts down trees
+(the ones already in the world too) and anything wooden, and a tree gives two logs. A pickaxe or
+hammer breaks rock, ice and anything fragile, and rock may have a coin in it. A sword slashes
+small wooden things and pops balloons. Torches light things, buckets put out fires, keys open
+doors, TNT gets its fuse lit, and food gives you a burst of speed and bounce. Books give a hint,
+gifts open, coins flip, and you can pet whatever animal you're holding. Things that belong to a
+level or task can't be cut down, and creatures are safe from every tool. In Free Play there's no
+hand but the pointer, so drag a tool onto what you want to break and hold it there.
 
 **Stars.** Every successful cast counts as one spell, however many words it has:
 "ladder", "giant plank" and "3 tiny balloons" are 1 spell each, and spells that fail to
@@ -76,7 +103,7 @@ can't simply summon the answer next to the goal.
 - Unknown words get close-match suggestions, and small typos are autocorrected.
 
 Some favourite words: *ladder, stairs, ramp, bridge, plank, trampoline, spring, rope,
-balloon, hot air balloon, rocket, jetpack, fan, magnet, bomb, tnt, water, cloud, ice,
+balloon, hot air balloon, rocket, jetpack, plane, car, chainsaw, axe, pickaxe, fan, magnet, bomb, tnt, water, cloud, ice,
 snowman, bucket, fire, torch, bone, steak, cheese, dog, cat, mouse, robot, hut, tree, star*.
 Objects with a direction line up with your aim: bridges and planks span from the hero
 toward the marker, ramps rise toward it, and stairs climb away from you.

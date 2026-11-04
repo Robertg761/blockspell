@@ -2,6 +2,7 @@ import { Body, Vec3 } from 'cannon-es';
 import type { Entity } from '../../core/entity';
 import { GROUP } from '../../core/groups';
 import type { GameWorld } from '../../core/world';
+import { board, canRide, ridingOf } from './ride';
 
 type P3 = { x: number; y: number; z: number };
 
@@ -44,9 +45,10 @@ export interface Carry {
 
 /** What the on-screen prompt, touch buttons and target ring show. */
 export type CarryHint =
-  | { verb: CarryKind; entity: Entity }
-  | { verb: 'holding'; entity: Entity; spot: P3 | null }
-  | { verb: 'dragging'; entity: Entity };
+  | { verb: CarryKind | 'ride' | 'wear' | 'dragging'; entity: Entity }
+  /** `fresh`: just climbed aboard, so it's worth saying what the keys do. */
+  | { verb: 'riding'; entity: Entity; fresh: boolean }
+  | { verb: 'holding'; entity: Entity; spot: P3 | null };
 
 const from = new Vec3(), to = new Vec3();
 
@@ -116,11 +118,12 @@ export function carryTarget(world: GameWorld, hero: Entity): Entity | null {
     if (o.body.aabbNeedsUpdate) o.body.updateAABB();
     const { lowerBound: lo, upperBound: hi } = o.body.aabb;
     const gap = Math.hypot(hero.x - Math.min(Math.max(hero.x, lo.x), hi.x), hero.z - Math.min(Math.max(hero.z, lo.z), hi.z));
-    if (gap > CARRY.reach || hi.y < feet - 0.4 || lo.y > feet + hero.size.y + 0.5) continue;
-    if (gap < 0.05 && hi.y < feet + 0.12) continue; // standing on it
+    // a dragon hovers: the hero can climb on higher than they can reach
+    if (gap > CARRY.reach || hi.y < feet - 0.4 || lo.y > feet + hero.size.y + (canRide(o) ? 1.2 : 0.5)) continue;
+    if (gap < 0.05 && hi.y < feet + 0.12 && !canRide(o)) continue; // standing on it
     const dx = o.x - hero.x, dz = o.z - hero.z;
     const facing = (dx * fx + dz * fz) / (Math.hypot(dx, dz) || 1);
-    list.push({ e: o, score: gap - facing * 0.4 + (kind === 'heavy' ? 1 : 0) });
+    list.push({ e: o, score: gap - facing * 0.4 + (kind === 'heavy' && !canRide(o) ? 1 : 0) });
   }
   list.sort((a, b) => a.score - b.score);
   return list.find((c) => inSight(world, hero, c.e))?.e ?? null;
@@ -147,15 +150,23 @@ export function placeSpot(world: GameWorld, hero: Entity, e: Entity): P3 | null 
 
 /** What the hero can do right now with the things around them. */
 export function carryHint(world: GameWorld, hero: Entity): CarryHint | null {
+  const riding = ridingOf(hero);
+  if (riding) return { verb: 'riding', entity: riding, fresh: !!hero.state.pilot || world.time - (hero.state.boardedAt as number) < 7 };
   const held = heldBy(hero);
   if (held) return carryOf(held)?.mode === 'drag' ? { verb: 'dragging', entity: held } : { verb: 'holding', entity: held, spot: placeSpot(world, hero, held) };
   const entity = carryTarget(world, hero);
-  const verb = entity && carryKind(entity);
-  return entity && verb ? { verb, entity } : null;
+  if (!entity) return null;
+  if (canRide(entity)) return { verb: 'ride', entity };
+  const verb = carryKind(entity);
+  return verb ? { verb: verb === 'lift' && entity.has('wearable') ? 'wear' : verb, entity } : null;
 }
 
 /** Turns toward the thing and takes hold of it. Too heavy: a strain and nothing more. */
 export function grab(world: GameWorld, hero: Entity, e: Entity): void {
+  if (canRide(e)) {
+    board(world, hero, e);
+    return;
+  }
   const kind = carryKind(e);
   if (!kind) return;
   if (kind === 'heavy') {
