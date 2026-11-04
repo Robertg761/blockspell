@@ -47,6 +47,7 @@ export const TROPHIES: TrophyDef[] = [
   { id: 'hero', icon: '🏆', name: 'Hero of the Islands', desc: 'Finish every task.', stat: 'allTasks', goal: 1 },
   { id: 'lab-rat', icon: '🧪', name: 'Lab Rat', desc: 'Complete 6 experiments in the lab notebook.', stat: 'lab', goal: 6 },
   { id: 'mad-scientist', icon: '⚗', name: 'Mad Scientist', desc: 'Complete every experiment in the lab notebook.', stat: 'lab', goal: 17 },
+  { id: 'settled', icon: '☕', name: 'Settled In', desc: 'Play for half an hour.', stat: 'playSeconds', goal: 1800 },
   { id: 'night', icon: '🌙', name: 'Night Owl', desc: 'Cast a spell at night.', stat: 'nightCasts', goal: 1, secret: true },
 ];
 

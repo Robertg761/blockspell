@@ -1,3 +1,4 @@
+import { exportSave, importSave, saveFileName } from '../save-data';
 import { settings, type Settings } from '../settings';
 import { h } from './dom';
 import './panels.css';
@@ -9,6 +10,8 @@ export interface SettingsPanelOps {
   /** Forget the open-world and level progress, spellbook and tips. */
   resetProgress: () => void;
   resetTips: () => void;
+  /** Numbers for the "Your journey" block: label and value. */
+  journey: () => [string, string][];
   onBack: () => void;
 }
 
@@ -61,8 +64,41 @@ export function settingsPanel(ops: SettingsPanelOps): HTMLElement {
     wipe.textContent = 'Progress erased ✓';
     armed = 0;
   });
+  // ---- backup and restore
+  const status = h('p.small.save-status', { 'aria-live': 'polite' });
+  const exportBtn = h('button.btn.secondary', { type: 'button', text: '⬇ Save a backup', title: 'Download your progress as a file' });
+  exportBtn.addEventListener('click', () => {
+    const blob = new Blob([exportSave()], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = h('a', { href: url, download: saveFileName() });
+    document.body.append(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+    status.textContent = 'Backup saved. Keep the file somewhere safe.';
+  });
+  const fileInput = h('input', { type: 'file', accept: 'application/json,.json', class: 'hidden-file', 'aria-label': 'Choose a backup file' });
+  const importBtn = h('button.btn.secondary', { type: 'button', text: '⬆ Restore a backup', title: 'Replace your progress with a backup file' });
+  importBtn.addEventListener('click', () => fileInput.click());
+  fileInput.addEventListener('change', async () => {
+    const file = fileInput.files?.[0];
+    if (!file) return;
+    if (file.size > 1_500_000) {
+      status.textContent = 'That file is too big to be a Blockspell save.';
+      return;
+    }
+    const result = importSave(await file.text());
+    if (result.ok) {
+      status.textContent = 'Restored. Reloading…';
+      setTimeout(() => location.reload(), 600);
+    } else status.textContent = result.error;
+    fileInput.value = '';
+  });
+  const journey = h('div.journey', {}, ops.journey().map(([k, v]) => h('div.journey-item', {}, [h('b', { text: v }), h('span', { text: k })])));
   return h('div.panel.settings', {}, [
     h('h2', { text: '⚙ Settings' }),
+    h('h3.set-sub', { text: 'Your journey' }),
+    journey,
     slider('music', 'Music', 'The generated background tune', 0, 1, 0.05, pct),
     slider('sfx', 'Sound effects', 'Spells, bumps, booms and barks', 0, 1, 0.05, pct),
     slider('orbit', 'Camera speed', 'How fast dragging turns the view', 0.4, 2.5, 0.1, (v) => `${v.toFixed(1)}×`),
@@ -77,6 +113,9 @@ export function settingsPanel(ops: SettingsPanelOps): HTMLElement {
     toggle('autoRes', 'Adapt to slow devices', 'Lowers the sharpness by itself if the frame rate stays low'),
     toggle('bloom', 'Glow effects', 'Soft glow around fire, light and sparks'),
     toggle('fps', 'Show frame rate', 'A small counter in the corner'),
+    h('h3.set-sub', { text: 'Your data' }),
+    h('div.set-actions', {}, [exportBtn, importBtn, fileInput]),
+    status,
     h('div.set-actions', {}, [hd, tips, wipe]),
     h('div.panel-actions', {}, [h('button.btn', { type: 'button', text: 'Done', onClick: () => ops.onBack() })]),
   ]);

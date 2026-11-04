@@ -36,7 +36,7 @@ import { settings, type Settings } from './settings';
 import { sceneUrl, type SceneCast } from './share';
 import { SideTools, type ToolId } from './ui/tools';
 import { PhotoUI } from './ui/photo';
-import { Trophies, TROPHIES, type Experiment, type TrophyDef } from './trophies';
+import { EXPERIMENTS, Trophies, TROPHIES, type Experiment, type TrophyDef } from './trophies';
 import { Waypoint } from './engine/waypoint';
 import { SKY_LABEL, SKY_NAMES, type SkyName } from './engine/skies';
 import { WEATHER_LABEL, WEATHER_NAMES, type WeatherName } from './engine/weather';
@@ -224,6 +224,7 @@ export class Game {
           return hd.enabled;
         },
         resetTips: () => this.tutorial.resetTips(),
+        journey: () => this.journeyStats(),
         resetProgress: () => this.eraseProgress(),
         onBack: back,
       }),
@@ -231,6 +232,21 @@ export class Game {
   }
 
   /** Forgets everything saved on this device (levels, world, spellbook, tips) and starts over. */
+  /** The numbers in Settings → Your journey. */
+  private journeyStats(): [string, string][] {
+    const mins = Math.floor(this.trophies.stat('playSeconds') / 60);
+    const played = mins >= 60 ? `${Math.floor(mins / 60)} h ${mins % 60} min` : `${mins} min`;
+    const tasks = this.level.tasks ?? orderedLevels().find((l) => l.tasks)?.tasks ?? [];
+    return [
+      [`spells cast`, String(this.trophies.stat('casts'))],
+      [`words found`, `${this.spellbook.count} / ${this.spellbook.total}`],
+      [`tasks done`, `${Object.keys(worldSave.all().tasks).length} / ${tasks.length}`],
+      [`trophies`, `${this.trophies.unlockedCount} / ${TROPHY_TOTAL}`],
+      [`experiments`, `${this.trophies.labDone.size} / ${EXPERIMENTS.length}`],
+      [`played`, played],
+    ];
+  }
+
   private eraseProgress(): void {
     worldSave.reset();
     progress.reset();
@@ -1359,8 +1375,17 @@ export class Game {
     }
   }
 
+  private playAcc = 0;
+
   private frame = (now: number): void => {
     this.watchFrameRate((now - this.last) / 1000);
+    if (!this.titleMode && !document.hidden) {
+      this.playAcc += Math.min(0.25, (now - this.last) / 1000);
+      if (this.playAcc >= 5) {
+        this.trophies.bump('playSeconds', Math.round(this.playAcc));
+        this.playAcc = 0;
+      }
+    }
     const dt = Math.min(1 / 20, (now - this.last) / 1000);
     this.last = now;
     this.frameDt = dt;
