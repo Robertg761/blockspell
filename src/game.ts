@@ -43,6 +43,7 @@ import { WEATHER_LABEL, WEATHER_NAMES, type WeatherName } from './engine/weather
 import { finalePanel } from './ui/finale-panel';
 import { trophiesPanel } from './ui/trophies-panel';
 import { settingsPanel } from './ui/settings-panel';
+import { GamepadInput } from './ui/gamepad';
 
 /** Wires renderer, world, input, parser, levels and HUD together. */
 export class Game {
@@ -97,6 +98,7 @@ export class Game {
   private keys = new Set<string>();
   /** Hero action keys pressed since the last tick: a tap shorter than a frame still counts. */
   private taps = new Set<string>();
+  private pad = new GamepadInput();
   private failed = false;
   private winTimer = 0;
   private terrainKey = '';
@@ -1043,17 +1045,51 @@ export class Game {
     const fl = Math.hypot(fx, fz) || 1;
     fx /= fl;
     fz /= fl;
-    // right = forward × up
-    inp.move.x = fx * fwd - fz * side;
-    inp.move.z = fz * fwd + fx * side;
-    inp.up = fwd > 0;
-    inp.down = fwd < 0;
-    inp.jump = on('Space');
+    const polled = this.pad.poll();
+    this.padButtons();
+    // sticks and buttons steer the hero only when the keyboard could (not typing, not in a menu)
+    const pad = !typing && !this.titleMode && !this.photo && !this.hud.overlayOpen ? polled : null;
+    const px = pad?.move.x ?? 0, pz = pad?.move.y ?? 0;
+    // right = forward × up; the stick adds to the keys, clamped so analog tilt keeps its speed
+    const mf = Math.max(-1, Math.min(1, fwd - pz)), ms = Math.max(-1, Math.min(1, side + px));
+    inp.move.x = fx * mf - fz * ms;
+    inp.move.z = fz * mf + fx * ms;
+    inp.up = mf > 0.3;
+    inp.down = mf < -0.3;
+    inp.jump = on('Space') || !!pad?.jump;
     const tapped = (code: string) => on(code) || (!typing && !this.titleMode && this.taps.has(code));
-    inp.grab = tapped('KeyE');
-    inp.toss = tapped('KeyF');
-    inp.turn = tapped('KeyQ');
+    inp.grab = tapped('KeyE') || !!pad?.grab;
+    inp.toss = tapped('KeyF') || !!pad?.toss;
+    inp.turn = tapped('KeyQ') || !!pad?.turn;
+    // right stick orbits the camera around what it looks at
+    if (pad && (pad.look.x || pad.look.y)) this.orbitBy(pad.look.x, pad.look.y);
     this.taps.clear();
+  }
+
+  /** Gamepad buttons that act once per press: Start is the Journal, Back the spellbook, Y the spell bar. */
+  private padButtons(): void {
+    const pressed = this.pad.last;
+    if (!pressed.size || this.photo || this.titleMode) return;
+    if (pressed.has('start')) {
+      if (this.level.tasks) this.toggleJournal();
+      else this.spellbook.toggle();
+    } else if (pressed.has('select')) this.spellbook.toggle();
+    else if (pressed.has('y') && !this.hud.overlayOpen) this.hud.input.focus();
+    else if (pressed.has('b') && this.hud.overlayOpen) this.hud.hideOverlay();
+  }
+
+  /** Turns the camera around its target (radians per second at full tilt, scaled by the orbit setting). */
+  private orbitBy(x: number, y: number): void {
+    const cam = this.renderer.camera, ctl = this.renderer.controls;
+    const t = ctl.target;
+    const k = 0.045 * settings.get().orbit;
+    const ox = cam.position.x - t.x, oz = cam.position.z - t.z;
+    const a = -x * k * 2.4;
+    cam.position.x = t.x + ox * Math.cos(a) - oz * Math.sin(a);
+    cam.position.z = t.z + ox * Math.sin(a) + oz * Math.cos(a);
+    const r = Math.hypot(cam.position.x - t.x, cam.position.y - t.y, cam.position.z - t.z);
+    cam.position.y = Math.max(t.y + 0.6, Math.min(t.y + r * 0.95, cam.position.y + y * k * 8));
+    ctl.update();
   }
 
   /** Points the raycaster through a spot on the screen. */
