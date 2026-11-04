@@ -1,6 +1,7 @@
 import './ui/styles.css';
 import { applyQuery, installDebug } from './debug';
 import { Game } from './game';
+import { registerPwa } from './pwa';
 import { createVoxelLogo } from './ui/logo';
 
 const root = document.getElementById('app')!;
@@ -10,3 +11,4 @@ const game = new Game(root);
 (window as unknown as { blockspell: Game }).blockspell = game;
 const api = installDebug(game);
 if (!applyQuery(game, api)) game.showTitle(createVoxelLogo().el);
+registerPwa();

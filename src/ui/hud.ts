@@ -1,6 +1,7 @@
 import { spellsText, starsForPar, type LevelDef } from '../levels/types';
 import { Audio, loadMuted } from '../engine/audio';
 import { h } from './dom';
+import { pwa, type PwaState } from '../pwa';
 import { Toasts } from './toast';
 
 export interface HudCallbacks {
@@ -42,6 +43,7 @@ export interface WinInfo {
   next: LevelDef | null;
 }
 
+const OFFLINE_TOLD = 'blockspell.offlineTold.v1';
 const starText = (n: number, of = 3) => '★'.repeat(n) + '☆'.repeat(Math.max(0, of - n));
 
 /** All DOM UI: spell input, level card, toasts, overlays. */
@@ -66,6 +68,7 @@ export class Hud {
   private muted = loadMuted();
   readonly bookBtn: HTMLButtonElement;
   private hdBtn: HTMLButtonElement;
+  private pwaLine = h('div.pwa-line');
   /** Focus the spell bar after closing overlays (off in hero levels, where keys move the hero). */
   autoFocus = true;
 
@@ -130,6 +133,33 @@ export class Hud {
       this.overlay,
     );
     this.startPlaceholderDemo();
+    this.watchPwa();
+  }
+
+  /** Install button, "saved for offline" note and update prompts, driven by src/pwa.ts. */
+  private watchPwa(): void {
+    let told = false, updateShown = false;
+    pwa.onChange((s) => {
+      this.renderPwaLine(s);
+      if (s.updateReady && !updateShown) {
+        updateShown = true;
+        this.toasts.show('A new version of Blockspell has been downloaded.', { title: 'Update ready', kind: 'info', duration: 30000, actions: [{ label: 'Reload now', onClick: () => pwa.applyUpdate() }] });
+      }
+      if (s.offlineReady && !told) {
+        told = true;
+        let seen = false;
+        try { seen = !!localStorage.getItem(OFFLINE_TOLD); localStorage.setItem(OFFLINE_TOLD, '1'); } catch { /* ignore */ }
+        if (!seen) this.toasts.show('The whole game is saved on this device now. You can turn the Wi-Fi off and keep playing.', { title: '✈ Ready for offline play', kind: 'success', duration: 7000 });
+      }
+    });
+  }
+
+  private renderPwaLine(s: PwaState): void {
+    const bits: (HTMLElement | string)[] = [];
+    if (s.offlineReady) bits.push(h('span.pwa-ok', { text: s.online ? '✓ Saved for offline play' : '✈ Playing offline' }));
+    else if (!s.online) bits.push(h('span.pwa-ok', { text: '✈ Playing offline' }));
+    if (s.canInstall) bits.push(h('button.link-btn.install-btn', { type: 'button', text: '⬇ Install as an app', onClick: () => void pwa.install() }));
+    this.pwaLine.replaceChildren(...bits);
   }
 
   /**
@@ -406,6 +436,7 @@ export class Hud {
         ]),
         h('button.link-btn.surprise-link', { type: 'button', text: '🎲 Surprise me', onClick: go(opts.onSurprise) }),
         h('p.small', { text: 'Runs entirely offline. No network, no tracking.' }),
+        this.pwaLine,
       ]),
     );
     this.overlay.classList.add('title');
