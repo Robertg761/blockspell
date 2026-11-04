@@ -1,4 +1,4 @@
-import { Group, Mesh, MeshStandardMaterial } from 'three';
+import { Group, Mesh, MeshStandardMaterial, type Color } from 'three';
 import { makeRng, randRange } from '../core/rng';
 import { VoxelBuilder } from '../voxel/builder';
 import { meshVoxels } from '../voxel/mesher';
@@ -32,11 +32,12 @@ function buildCloud(rng: () => number): VoxelBuilder {
 /** A ring of voxel clouds that slowly drift around the island. */
 export class Clouds {
   readonly group = new Group();
+  private mat: MeshStandardMaterial;
   private items: { mesh: Mesh; speed: number; radius: number; angle: number }[] = [];
 
   constructor(seed = 7, count = 15) {
     const rng = makeRng(seed);
-    const mat = new MeshStandardMaterial({ vertexColors: true, roughness: 1, emissive: 0xffffff, emissiveIntensity: 0.5 });
+    const mat = (this.mat = new MeshStandardMaterial({ vertexColors: true, roughness: 1, emissive: 0xffffff, emissiveIntensity: 0.5 }));
     for (let i = 0; i < count; i++) {
       const { geometry } = meshVoxels(buildCloud(rng).build(), { voxelSize: VOXEL, ao: 0.3, jitter: 0.006 });
       const mesh = new Mesh(geometry, mat);
@@ -47,6 +48,13 @@ export class Clouds {
       this.group.add(mesh);
     }
     this.update(0);
+  }
+
+  /** Time of day: how much the clouds glow by themselves and the color they are lit with. */
+  setLight(glow: number, tint: Color): void {
+    this.mat.emissiveIntensity = glow;
+    this.mat.emissive.copy(tint);
+    this.mat.color.copy(tint);
   }
 
   update(dt: number): void {

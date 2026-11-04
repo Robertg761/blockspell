@@ -37,6 +37,13 @@ export class Spellbook {
     }
   }
 
+  /** Forgets every discovered word (Settings > Erase my progress). */
+  reset(): void {
+    this.objects.clear();
+    this.adjectives.clear();
+    try { localStorage.removeItem(STORAGE_KEY); } catch { /* ignore */ }
+  }
+
   /** Discovered words that are in the book (ignores stale saved ids). */
   get count(): number {
     return this.allObjects.filter((d) => this.objects.has(d.id)).length;

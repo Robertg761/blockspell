@@ -10,9 +10,9 @@ import { menuLevels, orderedLevels } from './levels';
 import { mark } from './levels/goals';
 import { progress } from './levels/progress';
 import { SolutionRunner } from './levels/solve';
-import { starsFor, type LevelDef, type V3 } from './levels/types';
+import { starsFor, type LevelDef, type LevelSolution, type V3 } from './levels/types';
 import type { Entity } from './core/entity';
-import { buildZone, castLimitAt, zoneAt, zoneEntry, zones } from './tasks';
+import { buildZone, castLimitAt, orderedTasks, zoneAt, zoneEntry, zones } from './tasks';
 import { worldSave } from './tasks/save';
 import { TaskTracker } from './tasks/tracker';
 import type { ZoneDef } from './tasks/types';
@@ -23,6 +23,8 @@ import { parseSpell, randomWords, suggestAdjectives } from './parser/parser';
 import { adjectives } from './adjectives';
 import { CarryPrompt } from './ui/prompt';
 import { Hud } from './ui/hud';
+import { h } from './ui/dom';
+import { isTouch } from './ui/touch';
 import { CARRY, carryHint, carryKind, handGrab, type Carry, type CarryHint } from './behaviors/lib/carry';
 import { waterSurfaceAt } from './behaviors/lib/water';
 import { Spellbook } from './ui/spellbook';
@@ -30,6 +32,19 @@ import { ease } from './engine/tween';
 import { Reactions } from './ui/reactions';
 import { pickVignette } from './surprise';
 import { Tutorial } from './ui/tutorial';
+import { settings, type Settings } from './settings';
+import { sceneUrl, type SceneCast } from './share';
+import { SideTools, type ToolId } from './ui/tools';
+import { PhotoUI } from './ui/photo';
+import { EXPERIMENTS, Trophies, TROPHIES, type Experiment, type TrophyDef } from './trophies';
+import { Waypoint } from './engine/waypoint';
+import { SKY_LABEL, SKY_NAMES, type SkyName } from './engine/skies';
+import { WEATHER_LABEL, WEATHER_NAMES, type WeatherName } from './engine/weather';
+import { finalePanel } from './ui/finale-panel';
+import { trophiesPanel } from './ui/trophies-panel';
+import { settingsPanel } from './ui/settings-panel';
+import { GamepadInput } from './ui/gamepad';
+import { cssFilter, filterById } from './photo-filters';
 
 /** Wires renderer, world, input, parser, levels and HUD together. */
 export class Game {
@@ -68,9 +83,33 @@ export class Game {
   zone: ZoneDef | null = null;
   /** Open world: checks every task instead of a single level goal. */
   readonly tracker: TaskTracker;
+  readonly trophies: Trophies;
+  private waypoint!: Waypoint;
+  /** Open world: where the tracked task starts (world space), for the beam and the arrow. */
+  private waypointAt: V3 | null = null;
+  /** Simulation speed: 1 normal, below 1 slow motion, 0 paused (the ⏱ button; photo mode's freeze). */
+  timeScale = 1;
+  /** Photo mode: HUD hidden, camera free, snap saves a PNG. */
+  photo = false;
+  private readonly tools: SideTools;
+  private photoUI: PhotoUI;
+  private toolMode: 'free' | 'hero' | 'world' | null | undefined;
+  /** Free Play casts, newest last: what Undo takes back and what a shared link replays. */
+  private history: { log: SceneCast; entities: Entity[]; pending: { cancelled: boolean } }[] = [];
   private keys = new Set<string>();
   /** Hero action keys pressed since the last tick: a tap shorter than a frame still counts. */
   private taps = new Set<string>();
+  private pad = new GamepadInput();
+  /** Real seconds since the last frame (unscaled by slow-mo): the gamepad camera turns at the same speed on any display. */
+  private frameDt = 1 / 60;
+  private cycleWasOn = settings.get().cycle;
+  /** Frame-rate watch: the on-screen counter and the automatic sharpness drop on slow devices. */
+  private fpsEl = h('div.fps-meter.hidden', { 'aria-hidden': 'true' });
+  private fpsEma = 60;
+  private fpsShownAt = 0;
+  private slowFor = 0;
+  private autoScale = 1;
+  private lastResolution = -1;
   private failed = false;
   private winTimer = 0;
   private terrainKey = '';
@@ -88,6 +127,15 @@ export class Game {
     this.world = new GameWorld(this.renderer.scene, this.fx);
     this.renderer.scene.add(this.marker.group, this.carryRing.group);
     this.tracker = new TaskTracker(this);
+    this.waypoint = new Waypoint(this.renderer.scene);
+    this.trophies = new Trophies((t) => this.onTrophy(t), (x) => this.onExperiment(x));
+    this.trophies.watch(this.world.events, this.world);
+    this.world.events.on('taskComplete', ({ taskId }) => {
+      const saved = worldSave.all().tasks;
+      const total = orderedTasks().length;
+      this.trophies.noteTasks(Object.keys(saved).length, saved[taskId]?.ways.length ?? 0, total);
+      if (Object.keys(saved).length >= total) this.scheduleFinale();
+    });
 
     const levels = menuLevels();
     this.hud = new Hud(root, {
@@ -95,6 +143,7 @@ export class Game {
       onLevel: (id) => this.loadLevel(id),
       onReset: () => this.restart(),
       onLevels: () => this.showLevels(),
+      onSettings: () => this.openSettings(),
       onMute: (m) => this.fx.audio.setMuted(m),
       onStart: () => this.fx.audio.unlock(),
       onSurprise: () => this.surprise(),
@@ -108,10 +157,21 @@ export class Game {
       },
     }, levels);
     this.spellbook = new Spellbook(spellbookObjects(), adjectives.all(), (w) => this.cast(w));
+    this.hud.autocomplete.known = (id) => this.spellbook.has(id);
     root.append(this.spellbook.el);
     this.tutorial = new Tutorial(root);
     this.carryPrompt = new CarryPrompt(root);
+    settings.onChange((s) => this.applySettings(s));
     this.reactions = new Reactions(root, this.world);
+    this.tools = new SideTools((id) => this.useTool(id));
+    this.photoUI = new PhotoUI(root, {
+      onSnap: () => this.snap(),
+      onFreeze: () => this.toggleFreeze(),
+      onExit: () => this.setPhoto(false),
+      onFilter: (id) => this.setPhotoFilter(id),
+      onClip: typeof MediaRecorder !== 'undefined' ? () => this.recordClip() : undefined,
+    });
+    root.append(this.tools.el, this.fpsEl);
     this.refreshChips();
 
     this.bindInput();
@@ -139,7 +199,70 @@ export class Game {
       onExplore: () => this.explore(),
       onFreePlay: () => this.freePlay(),
       onSurprise: () => this.freePlay(true),
+      onSettings: () => this.openSettings(),
+      extra: [h('button.link-btn.trophy-link', { type: 'button', text: `🏆 Trophies ${this.trophies.unlockedCount}/${TROPHY_TOTAL}`, onClick: () => this.openTrophies() })],
     });
+  }
+
+  /** Pushes the player's settings into audio, effects, camera and tips. */
+  private applySettings(s: Settings): void {
+    this.fx.audio.setVolumes({ music: s.music, sfx: s.sfx });
+    this.fx.screen.calm = s.reduceEffects;
+    this.fx.shake.enabled = s.shake;
+    this.tutorial.setEnabled(s.tips);
+    this.renderer.controls.rotateSpeed = s.orbit;
+    this.renderer.life.enabled = s.life;
+    this.renderer.setBloom(s.bloom);
+    this.applyScale();
+    this.fpsEl.classList.toggle('hidden', !s.fps);
+    // turning the day and night cycle back on restarts it, even after a manual sky choice or a load with it off
+    if (s.cycle && !this.cycleWasOn && this.level?.tasks) this.skyAuto = true;
+    this.cycleWasOn = s.cycle;
+  }
+
+  /** The ⚙ panel. Back returns to the title screen if that's where it was opened from. */
+  openSettings(): void {
+    this.keys.clear();
+    const back = () => (this.titleMode ? this.showTitle() : this.hud.hideOverlay());
+    this.hud.showPanel(
+      settingsPanel({
+        hdOn: () => hd.enabled,
+        toggleHD: () => {
+          setHDEnabled(!hd.enabled);
+          return hd.enabled;
+        },
+        resetTips: () => this.tutorial.resetTips(),
+        journey: () => this.journeyStats(),
+        resetProgress: () => this.eraseProgress(),
+        onBack: back,
+      }),
+    );
+  }
+
+  /** Forgets everything saved on this device (levels, world, spellbook, tips) and starts over. */
+  /** The numbers in Settings → Your journey. */
+  private journeyStats(): [string, string][] {
+    const mins = Math.floor(this.trophies.stat('playSeconds') / 60);
+    const played = mins >= 60 ? `${Math.floor(mins / 60)} h ${mins % 60} min` : `${mins} min`;
+    const tasks = this.level.tasks ?? orderedLevels().find((l) => l.tasks)?.tasks ?? [];
+    return [
+      [`spells cast`, String(this.trophies.stat('casts'))],
+      [`words found`, `${this.spellbook.count} / ${this.spellbook.total}`],
+      [`tasks done`, `${Object.keys(worldSave.all().tasks).length} / ${tasks.length}`],
+      [`trophies`, `${this.trophies.unlockedCount} / ${TROPHY_TOTAL}`],
+      [`experiments`, `${this.trophies.labDone.size} / ${EXPERIMENTS.length}`],
+      [`played`, played],
+    ];
+  }
+
+  private eraseProgress(): void {
+    worldSave.reset();
+    progress.reset();
+    this.spellbook.reset();
+    this.trophies.reset();
+    this.tutorial.resetTips();
+    try { localStorage.removeItem(SURPRISED); localStorage.removeItem(FINALE); } catch { /* ignore */ }
+    window.setTimeout(() => location.reload(), 700);
   }
 
   /** Loads the open world and puts the hero where they last were (the entry of their last zone). */
@@ -214,9 +337,15 @@ export class Game {
       .map((z) => ({
         name: z.name,
         here: z === this.zone,
-        tasks: list.filter((t) => t.zone === z.id).map((t) => ({ title: t.title, hint: t.hint, done: !!saved[t.id], ways: saved[t.id]?.ways.length ?? 0 })),
+        tasks: list.filter((t) => t.zone === z.id).map((t) => ({ title: t.title, hint: t.hint, answer: firstWay(t), done: !!saved[t.id], ways: saved[t.id]?.ways.length ?? 0 })),
       }));
-    this.hud.showJournal({ zones: groups, spells: this.words, onFreePlay: () => this.freePlay(), onTitle: () => this.showTitle() });
+    this.hud.showJournal({
+      zones: groups,
+      spells: this.words,
+      onFreePlay: () => this.freePlay(),
+      onTitle: () => this.showTitle(),
+      extra: [h('button.btn.secondary', { type: 'button', text: `🏆 Trophies ${this.trophies.unlockedCount}/${TROPHY_TOTAL}`, onClick: () => this.openTrophies() })],
+    });
   }
 
   /** J: opens or closes the Journal. */
@@ -229,6 +358,13 @@ export class Game {
   loadLevel(id: string): void {
     const level = orderedLevels().find((l) => l.id === id);
     if (!level) return;
+    if (level.id !== this.level?.id) {
+      // a different level starts in daylight and clear weather; Explore starts the day and night cycle
+      this.setSky('day', 0);
+      this.setWeather('clear');
+      this.skyAuto = !!level.tasks && settings.get().cycle;
+      this.skyClock = 0;
+    }
     this.titleMode = false;
     this.level = level;
     this.won = false;
@@ -240,6 +376,9 @@ export class Game {
     this.reactions.clear();
     this.world.clear();
     this.pendingCasts.clear();
+    this.history = [];
+    this.waypointAt = null;
+    this.waypoint.target(null);
     const islands = level.islands ?? (level.terrain === null ? [] : [level.terrain ?? {}]);
     const terrain = islands.map((t) => ({ ...DEFAULT_TERRAIN, ...t }));
     const key = JSON.stringify(terrain);
@@ -252,7 +391,10 @@ export class Game {
     this.zone = level.zones && level.hero ? zoneAt(...level.hero, level.zones) : null;
     if (level.hero) this.spawnHero(level.hero);
     this.tracker.reset(level.tasks ?? []);
-    if (this.zone) this.tracker.enterZone(this.zone, false);
+    if (this.zone) {
+      this.tracker.enterZone(this.zone, false);
+      this.trophies.noteZone(this.zone.id);
+    }
     this.trackerAcc = Infinity;
     if (level.camera) this.renderer.setView(level.camera.position, level.camera.target);
     const sp = level.spawnPoint ?? [0, 0, 0];
@@ -363,6 +505,7 @@ export class Game {
     if (!Number.isFinite(g) || feet < g - 0.5) return;
     const zone = zoneAt(hero.x, feet, hero.z, this.level.zones) ?? this.zone;
     if (zone && zone !== this.zone) {
+      this.trophies.noteZone(zone.id);
       this.tracker.enterZone(zone);
       this.hud.setZoneName(zone.name);
       if (!this.runner) this.hud.showZoneBanner(zone.name);
@@ -452,6 +595,12 @@ export class Game {
     const castZone = this.level.tasks ? this.zone?.id ?? null : null;
     const pending = { zone: castZone, x: base.x, y: base.y, z: base.z, left: count, cancelled: false };
     this.pendingCasts.add(pending);
+    const entry = { log: { spell: text.trim(), x: base.x, z: base.z }, entities: [] as Entity[], pending };
+    if (this.isFreePlay) {
+      this.history.push(entry);
+      if (this.history.length > 80) this.history.shift();
+    }
+    if (this.timeScale === 0) this.setTimeScale(1); // casting is how you un-pause, in every mode
     for (let i = 0; i < count; i++) {
       const angle = (i / count) * Math.PI * 2;
       const r = (count > 1 ? 0.6 + count * 0.15 : 0) + jitter * random();
@@ -473,11 +622,14 @@ export class Game {
           });
           // a zone reset clears what was cast there, wherever it ended up
           if (castZone) e.state.castZone = castZone;
+          entry.entities.push(e);
         },
       });
     }
 
     const fresh = this.spellbook.discover(res.def.id, res.adjectives.map((a) => a.id));
+    this.trophies.noteCast({ adjectives: res.adjectives.map((a) => a.id), night: this.renderer.skyPreset === 'night' });
+    this.trophies.noteWords(this.spellbook.count, this.spellbook.total);
     if (fresh.object || fresh.adjectives.length) {
       if (!this.spellbook.isOpen) this.hud.bookBtn.classList.add('has-new');
       this.fx.sound('chime', { volume: 0.5 });
@@ -530,6 +682,367 @@ export class Game {
     this.hud.setWordChips(pool.slice(0, 7));
   }
 
+
+
+  // ------------------------------------------------------------ finale
+  private finaleTimer = 0;
+
+  /** The last task of the world is done: a few seconds of fireworks, then the summary (once per save). */
+  private scheduleFinale(): void {
+    let seen = false;
+    try { seen = !!localStorage.getItem(FINALE); } catch { /* no storage: it shows each time */ }
+    if (seen || this.runner) return;
+    const level = this.level;
+    clearTimeout(this.finaleTimer);
+    for (let i = 1; i <= 3; i++)
+      this.fx.tweens.add({ delay: i * 0.9, duration: 0.01, update: () => {}, done: () => { const h = this.world.hero; if (h?.alive) this.fx.celebrate({ x: h.x, y: h.y, z: h.z }); } });
+    this.finaleTimer = window.setTimeout(() => {
+      if (this.level !== level || this.titleMode) return;
+      try { localStorage.setItem(FINALE, '1'); } catch { /* ignore */ }
+      this.keys.clear();
+      const saved = worldSave.all().tasks;
+      this.hud.showPanel(
+        finalePanel(
+          {
+            tasks: Object.keys(saved).length,
+            ways: Object.values(saved).reduce((n, t) => n + t.ways.length, 0),
+            words: this.spellbook.count,
+            wordsTotal: this.spellbook.total,
+            casts: this.trophies.stat('casts'),
+            trophies: this.trophies.unlockedCount,
+            trophiesTotal: TROPHY_TOTAL,
+          },
+          { onKeep: () => this.hud.hideOverlay(), onFreePlay: () => this.freePlay(), onTrophies: () => this.openTrophies() },
+        ),
+      );
+      this.fx.sound('fanfare');
+    }, 3600);
+  }
+
+  /** Every frame in the open world: points the beam and the arrow at the nearest unfinished task. */
+  private updateGuide(dt: number): void {
+    const h = this.world.hero;
+    const on = settings.get().guide && !!this.level.tasks && !!this.waypointAt && !!h?.alive && !this.titleMode;
+    let angle: number | null = null, dist = 0;
+    if (on) {
+      const wp = this.waypointAt!;
+      const dx = wp[0] - h!.x, dz = wp[2] - h!.z;
+      dist = Math.hypot(dx, dz);
+      const cam = this.renderer.camera.position, tgt = this.renderer.controls.target;
+      const fx = tgt.x - cam.x, fz = tgt.z - cam.z;
+      // clockwise from "up the screen" (the camera's forward direction); right = (-fz, fx)
+      angle = Math.atan2(-dx * fz + dz * fx, dx * fx + dz * fz);
+    }
+    this.hud.setCompass(angle, dist);
+    this.waypoint.update(dt, on && dist > 5 && !this.photo && !this.hud.overlayOpen);
+  }
+
+  // ------------------------------------------------------------ tools
+  /** Free Play: no goal, no hero, no tasks. */
+  get isFreePlay(): boolean {
+    return !this.level.goal && !this.level.hero && !this.level.tasks;
+  }
+
+  private useTool(id: ToolId): void {
+    this.fx.audio.unlock();
+    this.fx.sound('uiClick', { volume: 0.5 });
+    if (id === 'photo') this.setPhoto(true);
+    else if (id === 'speed') this.cycleSpeed();
+    else if (id === 'undo') this.undo();
+    else if (id === 'clear') this.clearAll();
+    else if (id === 'share') void this.shareScene();
+    else if (id === 'trophies') this.openTrophies();
+    else if (id === 'sky') this.cycleSky();
+    else if (id === 'weather') this.cycleWeather();
+  }
+
+  // ---- sky and weather
+  /** The automatic day and night turning of Explore: seconds into the cycle, and whether it is running. */
+  private skyClock = 0;
+  private skyAuto = false;
+
+  /** 🌤: day, sunset, night, dawn. Choosing one by hand stops the automatic cycle. */
+  cycleSky(): void {
+    const next = SKY_NAMES[(SKY_NAMES.indexOf(this.renderer.skyPreset) + 1) % SKY_NAMES.length];
+    this.skyAuto = false;
+    this.setSky(next);
+    this.trophies.noteSky(next);
+    this.hud.toasts.show(SKY_LABEL[next], { duration: 1500 });
+  }
+
+  setSky(name: SkyName, seconds = 2.5): void {
+    this.renderer.setSky(name, seconds);
+    this.updateMusicMood();
+    this.tools.setBadge('sky', name === 'day' ? '' : name === 'night' ? '🌙' : name === 'sunset' ? '🌇' : '🌅');
+  }
+
+  /** Rain and snow set the music's mood; otherwise the time of day does. */
+  private updateMusicMood(): void {
+    const w = this.renderer.weather.current;
+    this.fx.audio.setMusicMood(w !== 'clear' ? w : this.renderer.skyPreset);
+  }
+
+  /** 🌦: clear, rain, snow (just for looks and mood: it does not put out fires). */
+  cycleWeather(): void {
+    const next = WEATHER_NAMES[(WEATHER_NAMES.indexOf(this.renderer.weather.current) + 1) % WEATHER_NAMES.length];
+    this.setWeather(next);
+    if (next !== 'clear') this.trophies.noteWeather(next);
+    this.hud.toasts.show(WEATHER_LABEL[next], { duration: 1500 });
+  }
+
+  setWeather(w: WeatherName): void {
+    this.renderer.weather.set(w);
+    this.updateMusicMood();
+    this.fx.audio.setAmbient(w === 'rain' ? 'rain' : w === 'snow' ? 'wind' : null);
+    this.tools.setBadge('weather', w === 'rain' ? '🌧' : w === 'snow' ? '❄' : '');
+  }
+
+  /** Explore: the sky turns slowly through day, sunset, night and dawn. */
+  private stepSkyCycle(dt: number): void {
+    if (!this.skyAuto || this.photo || this.titleMode || !settings.get().cycle) return;
+    const phases: [SkyName, number][] = [['day', 260], ['sunset', 50], ['night', 150], ['dawn', 50]];
+    const total = phases.reduce((n, p) => n + p[1], 0);
+    this.skyClock += dt;
+    let t = this.skyClock % total;
+    let now: SkyName = 'day';
+    for (const [name, len] of phases) {
+      if (t < len) { now = name; break; }
+      t -= len;
+    }
+    if (this.renderer.skyPreset !== now) this.setSky(now, 14);
+  }
+
+  /** The 🏆 panel. */
+  openTrophies(): void {
+    this.keys.clear();
+    const back = () => (this.titleMode ? this.showTitle() : this.hud.hideOverlay());
+    this.hud.showPanel(trophiesPanel(this.trophies, back));
+  }
+
+  /** A trophy was just earned: toast, chime and sparkles. */
+  private onExperiment(x: Experiment): void {
+    this.hud.toasts.show(`${x.name}. Ticked in the lab notebook (🏆 panel).`, { title: `${x.icon} Experiment done`, kind: 'success', duration: 4200 });
+    this.fx.sound('chime', { pitch: 1.3, volume: 0.7 });
+  }
+
+  private onTrophy(t: TrophyDef): void {
+    this.hud.toasts.show(t.desc, { title: `${t.icon} Trophy: ${t.name}`, kind: 'success', duration: 5000 });
+    this.fx.sound('star', { pitch: 1.2 });
+    this.fx.sound('chime', { pitch: 1.5, volume: 0.7 });
+    const h = this.world.hero;
+    this.fx.sparkle(h?.alive ? h.body.position : this.marker.position, undefined, 24);
+  }
+
+  /** Sets which tools show and whether the undo button has anything to undo. Called every frame, cheap. */
+  private refreshTools(): void {
+    const mode = this.titleMode || this.hud.overlayOpen || this.photo ? null : this.level.tasks ? 'world' : this.level.hero ? 'hero' : 'free';
+    if (mode !== this.toolMode) {
+      this.toolMode = mode;
+      this.tools.setMode(mode);
+    }
+    if (mode === 'free') {
+      this.tools.setEnabled('undo', this.history.length > 0);
+      this.tools.setEnabled('clear', this.history.length > 0 || this.world.living().some((e) => e !== this.world.hero));
+    }
+  }
+
+  setTimeScale(k: number): void {
+    this.timeScale = k;
+    this.tools.setBadge('speed', k === 1 ? '' : k === 0 ? '⏸' : k === 0.5 ? '½×' : '¼×');
+    this.tools.setActive('speed', k !== 1);
+    this.photoUI.setFrozen(k === 0);
+    if (k !== 1) this.world.events.emit('timeBent', { scale: k });
+  }
+
+  /** ⏱: normal, half speed, quarter speed, paused, and around again. */
+  cycleSpeed(): void {
+    const order = [1, 0.5, 0.25, 0];
+    this.setTimeScale(order[(order.indexOf(this.timeScale) + 1) % order.length]);
+    const label = this.timeScale === 1 ? 'Normal speed' : this.timeScale === 0 ? 'Time is paused. Casting a spell starts it again.' : `${this.timeScale === 0.5 ? 'Half' : 'Quarter'} speed`;
+    this.hud.toasts.show(label, { duration: 1600 });
+  }
+
+  /** ↶: takes back the last spell you cast in Free Play. */
+  undo(): void {
+    const last = this.history.pop();
+    if (!last) return;
+    last.pending.cancelled = true;
+    for (const p of this.pendingCasts) if (p === (last.pending as object)) this.pendingCasts.delete(p);
+    for (const e of last.entities) if (e.alive) this.world.remove(e, 'undo', 'poof');
+    this.fx.sound('poof', { volume: 0.6 });
+  }
+
+  /** 🧹: removes everything you cast (not the island). */
+  clearAll(): void {
+    for (const p of this.pendingCasts) p.cancelled = true;
+    this.pendingCasts.clear();
+    let n = 0;
+    for (const e of this.world.living()) {
+      if (e === this.world.hero) continue;
+      this.world.remove(e, 'cleared', 'poof');
+      n++;
+    }
+    this.history = [];
+    if (n) this.fx.sound('whoosh', { volume: 0.5 });
+    this.hud.toasts.show(n ? `Swept away ${n} thing${n === 1 ? '' : 's'}.` : 'Nothing to clear.', { duration: 1600 });
+  }
+
+  /** 🔗: a link that rebuilds this scene, copied to the clipboard (or the share sheet on phones). */
+  async shareScene(): Promise<void> {
+    if (!this.history.length) {
+      this.hud.toasts.show('Cast a few spells first, then share the scene.', { kind: 'info' });
+      return;
+    }
+    const url = sceneUrl(this.history.map((h) => h.log));
+    this.world.events.emit('shared', { url });
+    try {
+      if (isTouch && navigator.share) {
+        await navigator.share({ title: 'A Blockspell scene', text: 'Watch this scene build itself in Blockspell:', url });
+        return;
+      }
+      await navigator.clipboard.writeText(url);
+      this.hud.toasts.show('Anyone who opens it watches your spells cast themselves. It works offline too.', { title: '🔗 Link copied', kind: 'success', duration: 4200 });
+    } catch (err) {
+      if ((err as Error)?.name === 'AbortError') return; // closed the share sheet
+      // no clipboard (insecure page, old browser): show the link to copy by hand
+      const box = h('input.link-box', { type: 'text', readonly: 'true', value: url, 'aria-label': 'Scene link' });
+      this.hud.showPanel(h('div.panel', {}, [
+        h('h2', { text: '🔗 Share this scene' }),
+        h('p', { text: 'Copy this link:' }),
+        box,
+        h('div.panel-actions', {}, [h('button.btn', { type: 'button', text: 'Done', onClick: () => this.hud.hideOverlay() })]),
+      ]));
+      box.focus();
+      box.select();
+    }
+  }
+
+  /** Opens Free Play and replays a shared scene's casts, one every half second. */
+  playScene(casts: SceneCast[]): void {
+    const free = menuLevels().find((l) => !l.goal);
+    if (!free || !casts.length) return;
+    this.loadLevel(free.id);
+    this.startIntro();
+    this.hud.toasts.show(`${casts.length} spell${casts.length === 1 ? '' : 's'} are about to cast themselves. Then it's your island.`, { title: '🔗 A shared scene', kind: 'success', duration: 4500 });
+    casts.forEach((c, i) => {
+      this.fx.tweens.add({
+        delay: 1.2 + i * 0.5,
+        duration: 0.001,
+        update: () => {},
+        done: () => {
+          const g = this.world.groundAt(c.x, c.z);
+          this.castAt(c.spell, [c.x, Number.isFinite(g) ? g : 0, c.z]);
+        },
+      });
+    });
+  }
+
+  /** 📷: hides the HUD so the camera can roam free; Snap saves a PNG. */
+  setPhoto(on: boolean): void {
+    if (this.photo === on) return;
+    this.photo = on;
+    document.body.classList.toggle('photo-mode', on);
+    this.photoUI.show(on);
+    this.keys.clear();
+    if (on) {
+      this.hud.input.blur();
+      this.intro = null;
+    } else {
+      if (this.photoPaused) this.setTimeScale(this.photoPrev);
+      this.photoPaused = false;
+      this.photoUI.pick('natural');
+    }
+  }
+
+  private photoFilter = 'natural';
+  private clipTimer = 0;
+
+  /** The look chosen in photo mode: shown live on the canvas and baked into saved pictures. */
+  private setPhotoFilter(id: string): void {
+    this.photoFilter = id;
+    this.renderer.gl.domElement.style.filter = cssFilter(filterById(id));
+  }
+
+  /** 🎞: records six seconds of the scene as a video file (not filtered: the filter is a picture look). */
+  private recordClip(): void {
+    if (this.clipTimer) return;
+    const canvas = this.renderer.gl.domElement;
+    const mime = ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm', 'video/mp4'].find((t) => MediaRecorder.isTypeSupported(t));
+    if (!mime || !canvas.captureStream) {
+      this.hud.toasts.show("This browser can't record clips. Photos still work.", { kind: 'warn' });
+      return;
+    }
+    const chunks: Blob[] = [];
+    const rec = new MediaRecorder(canvas.captureStream(30), { mimeType: mime, videoBitsPerSecond: 6_000_000 });
+    rec.ondataavailable = (e) => e.data.size && chunks.push(e.data);
+    rec.onstop = () => {
+      const blob = new Blob(chunks, { type: mime.split(';')[0] });
+      const stamp = new Date().toISOString().replace(/[:T]/g, '-').slice(0, 19);
+      const name = `blockspell-clip-${stamp}.${mime.startsWith('video/mp4') ? 'mp4' : 'webm'}`;
+      const url = URL.createObjectURL(blob);
+      const a = h('a', { href: url, download: name });
+      document.body.append(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 15000);
+      this.hud.toasts.show(`Saved ${name}`, { title: '🎞 Clip saved', kind: 'success', duration: 4000 });
+      this.trophies.bump('clips');
+    };
+    const LENGTH = 6;
+    let left = LENGTH;
+    rec.start(250);
+    this.photoUI.setRecording(left);
+    this.clipTimer = window.setInterval(() => {
+      left -= 0.1;
+      if (left > 0) {
+        this.photoUI.setRecording(left);
+        return;
+      }
+      clearInterval(this.clipTimer);
+      this.clipTimer = 0;
+      this.photoUI.setRecording(null);
+      if (rec.state !== 'inactive') rec.stop();
+    }, 100);
+  }
+
+  private photoPaused = false;
+  private photoPrev = 1;
+
+  /** Photo mode's freeze toggle. */
+  private toggleFreeze(): void {
+    if (this.timeScale === 0) {
+      this.setTimeScale(this.photoPrev || 1);
+      this.photoPaused = false;
+    } else {
+      this.photoPrev = this.timeScale;
+      this.photoPaused = true;
+      this.setTimeScale(0);
+    }
+  }
+
+  /** Saves what the camera sees as a PNG and shows it in the corner. */
+  private snap(): void {
+    const canvas = this.renderer.capture(this.fx.shake, this.fx.screen, filterById(this.photoFilter));
+    this.photoUI.flash();
+    this.fx.sound('chime', { pitch: 1.5, volume: 0.6 });
+    if (!canvas) {
+      this.hud.toasts.show("The browser wouldn't let me read the picture.", { kind: 'warn' });
+      return;
+    }
+    const stamp = new Date().toISOString().replace(/[:T]/g, '-').slice(0, 19);
+    const name = `blockspell-${stamp}.png`;
+    canvas.toBlob((blob) => {
+      if (!blob) return;
+      const url = URL.createObjectURL(blob);
+      const a = h('a', { href: url, download: name });
+      document.body.append(a);
+      a.click();
+      a.remove();
+      this.photoUI.thumb(url, name);
+      this.world.events.emit('photo', { name });
+    }, 'image/png');
+  }
+
   // ------------------------------------------------------------ input
   private bindInput(): void {
     const canvas = this.renderer.gl.domElement;
@@ -539,7 +1052,7 @@ export class Game {
       this.fx.audio.unlock();
       down = { x: e.clientX, y: e.clientY };
       if (this.level.hero) this.hud.input.blur();
-      else if (!this.titleMode && e.button === 0 && !this.hand) {
+      else if (!this.titleMode && !this.photo && e.button === 0 && !this.hand) {
         const ent = this.entityAt(e.clientX, e.clientY);
         if (ent && carryKind(ent)) {
           this.hand = { e: ent, pointer: e.pointerId, lifted: false };
@@ -565,7 +1078,7 @@ export class Game {
       down = null;
       const dragged = this.hand?.lifted;
       this.dropHand();
-      if (moved < 6 && !dragged) this.click(e.clientX, e.clientY);
+      if (moved < 6 && !dragged && !this.photo) this.click(e.clientX, e.clientY); // photo mode: the pointer only orbits
     });
     canvas.addEventListener('pointercancel', () => this.dropHand());
     window.addEventListener('blur', () => {
@@ -575,6 +1088,21 @@ export class Game {
     window.addEventListener('keyup', (e) => this.keys.delete(e.code));
     window.addEventListener('keydown', (e) => {
       const input = this.hud.input;
+      if (this.photo) {
+        // only the shortcuts used here are consumed: Tab and a focused button's Enter/Space keep their native behavior
+        const onButton = e.target instanceof HTMLButtonElement;
+        if (e.key === 'Escape' || e.code === 'KeyP') {
+          this.setPhoto(false);
+          e.preventDefault();
+        } else if ((e.code === 'Space' || e.key === 'Enter') && !onButton) {
+          if (!e.repeat) this.snap();
+          e.preventDefault();
+        } else if (e.code === 'KeyF') {
+          if (!e.repeat) this.toggleFreeze();
+          e.preventDefault();
+        } else if (e.key !== 'Tab' && !(onButton && (e.code === 'Space' || e.key === 'Enter'))) e.preventDefault();
+        return;
+      }
       if (e.key === 'Tab') {
         e.preventDefault();
         this.spellbook.toggle();
@@ -586,6 +1114,14 @@ export class Game {
         return;
       }
       const typing = document.activeElement === input;
+      // 1-9 cast pinned spells (Alt+1-9 where plain digits belong to the spell bar)
+      const digit = /^Digit([1-9])$/.exec(e.code);
+      if (digit && !this.titleMode && !this.hud.overlayOpen && !e.metaKey && !e.ctrlKey && !e.repeat && (e.altKey || (this.level.hero && !typing))) {
+        if (this.hud.hotbar.cast(Number(digit[1]) - 1)) {
+          e.preventDefault();
+          return;
+        }
+      }
       if (this.level.tasks && !this.titleMode && !typing && !e.metaKey && !e.ctrlKey && !e.altKey && !e.repeat) {
         if (e.code === 'KeyJ' || (e.key === 'Escape' && this.hud.journalOpen)) {
           e.preventDefault();
@@ -606,6 +1142,7 @@ export class Game {
           this.keys.clear();
           input.focus();
         } else if (e.code === 'KeyR' && !e.repeat) this.restart();
+        else if (e.code === 'KeyP' && !e.repeat) this.setPhoto(true);
         return;
       }
       if (e.key.length === 1 && /\S/.test(e.key)) input.focus();
@@ -621,7 +1158,7 @@ export class Game {
     const inp = this.world.input;
     const k = this.keys;
     const typing = document.activeElement === this.hud.input;
-    const on = (...codes: string[]) => !typing && !this.titleMode && codes.some((c) => k.has(c));
+    const on = (...codes: string[]) => !typing && !this.titleMode && !this.photo && codes.some((c) => k.has(c));
     const fwd = (on('KeyW', 'ArrowUp') ? 1 : 0) - (on('KeyS', 'ArrowDown') ? 1 : 0);
     const side = (on('KeyD', 'ArrowRight') ? 1 : 0) - (on('KeyA', 'ArrowLeft') ? 1 : 0);
     const cam = this.renderer.camera.position, tgt = this.renderer.controls.target;
@@ -629,17 +1166,52 @@ export class Game {
     const fl = Math.hypot(fx, fz) || 1;
     fx /= fl;
     fz /= fl;
-    // right = forward × up
-    inp.move.x = fx * fwd - fz * side;
-    inp.move.z = fz * fwd + fx * side;
-    inp.up = fwd > 0;
-    inp.down = fwd < 0;
-    inp.jump = on('Space');
+    const polled = this.pad.poll();
+    const menuWasOpen = this.hud.overlayOpen; // a press that closes a panel must not also act in the world
+    this.padButtons();
+    // sticks and buttons steer the hero only when the keyboard could (not typing, not in a menu)
+    const pad = !typing && !this.titleMode && !this.photo && !menuWasOpen && !this.hud.overlayOpen ? polled : null;
+    const px = pad?.move.x ?? 0, pz = pad?.move.y ?? 0;
+    // right = forward × up; the stick adds to the keys, clamped so analog tilt keeps its speed
+    const mf = Math.max(-1, Math.min(1, fwd - pz)), ms = Math.max(-1, Math.min(1, side + px));
+    inp.move.x = fx * mf - fz * ms;
+    inp.move.z = fz * mf + fx * ms;
+    inp.up = mf > 0.3;
+    inp.down = mf < -0.3;
+    inp.jump = on('Space') || !!pad?.jump;
     const tapped = (code: string) => on(code) || (!typing && !this.titleMode && this.taps.has(code));
-    inp.grab = tapped('KeyE');
-    inp.toss = tapped('KeyF');
-    inp.turn = tapped('KeyQ');
+    inp.grab = tapped('KeyE') || !!pad?.grab;
+    inp.toss = tapped('KeyF') || !!pad?.toss;
+    inp.turn = tapped('KeyQ') || !!pad?.turn;
+    // right stick orbits the camera around what it looks at
+    if (pad && (pad.look.x || pad.look.y)) this.orbitBy(pad.look.x, pad.look.y, this.frameDt);
     this.taps.clear();
+  }
+
+  /** Gamepad buttons that act once per press: Start is the Journal, Back the spellbook, Y the spell bar. */
+  private padButtons(): void {
+    const pressed = this.pad.last;
+    if (!pressed.size || this.photo || this.titleMode) return;
+    if (pressed.has('start')) {
+      if (this.level.tasks) this.toggleJournal();
+      else this.spellbook.toggle();
+    } else if (pressed.has('select')) this.spellbook.toggle();
+    else if (pressed.has('y') && !this.hud.overlayOpen) this.hud.input.focus();
+    else if (pressed.has('b') && this.hud.overlayOpen) this.hud.hideOverlay();
+  }
+
+  /** Turns the camera around its target (radians per second at full tilt, scaled by the orbit setting). */
+  private orbitBy(x: number, y: number, dt: number): void {
+    const cam = this.renderer.camera, ctl = this.renderer.controls;
+    const t = ctl.target;
+    const k = 2.7 * dt * settings.get().orbit; // 0.045 per frame at 60 fps
+    const ox = cam.position.x - t.x, oz = cam.position.z - t.z;
+    const a = -x * k * 2.4;
+    cam.position.x = t.x + ox * Math.cos(a) - oz * Math.sin(a);
+    cam.position.z = t.z + ox * Math.sin(a) + oz * Math.cos(a);
+    const r = Math.hypot(cam.position.x - t.x, cam.position.y - t.y, cam.position.z - t.z);
+    cam.position.y = Math.max(t.y + 0.6, Math.min(t.y + r * 0.95, cam.position.y + y * k * 8));
+    ctl.update();
   }
 
   /** Points the raycaster through a spot on the screen. */
@@ -754,6 +1326,8 @@ export class Game {
     const saved = worldSave.all().tasks;
     const open = list.filter((t) => !saved[t.id] && !this.tracker.isDone(t.id));
     if (!open.length) {
+      this.waypointAt = null;
+      this.waypoint.target(null);
       this.hud.setTracker(null, 'Every task is done! Press J and try finding new ways.');
       return;
     }
@@ -768,6 +1342,8 @@ export class Game {
         bestD = d;
       }
     }
+    this.waypointAt = best.start;
+    this.waypoint.target({ x: best.start[0], y: best.start[1], z: best.start[2] });
     this.hud.setTracker({ title: best.title, zone: best.zone === this.zone?.id ? null : (zones.get(best.zone)?.name ?? null) });
   }
 
@@ -845,13 +1421,54 @@ export class Game {
     this.carryPrompt.update(hint, this.renderer.camera);
   }
 
+  private applyScale(): void {
+    const st = settings.get();
+    // the player's own choice wins: turning adaptation off, or moving the Sharpness slider, drops the automatic step-down
+    if (!st.autoRes || st.resolution !== this.lastResolution) this.autoScale = 1;
+    this.lastResolution = st.resolution;
+    this.renderer.setRenderScale(st.resolution * this.autoScale);
+  }
+
+  /** The fps counter, and a one-way step down in resolution if the frame rate stays low (never in headless runs). */
+  private watchFrameRate(real: number): void {
+    if (real <= 0 || real > 0.5 || document.hidden) return;
+    this.fpsEma += (1 / real - this.fpsEma) * Math.min(1, real * 2);
+    const st = settings.get();
+    if (st.fps && performance.now() - this.fpsShownAt > 500) {
+      this.fpsShownAt = performance.now();
+      this.fpsEl.textContent = `${Math.round(this.fpsEma)} fps · ${Math.round(this.renderer.scale * 100)}%`;
+    }
+    if (!st.autoRes || navigator.webdriver || this.titleMode) return;
+    this.slowFor = this.fpsEma < 26 ? this.slowFor + real : Math.max(0, this.slowFor - real);
+    if (this.slowFor > 3 && st.resolution * this.autoScale > 0.55) {
+      this.slowFor = 0;
+      this.autoScale = Math.max(0.5, this.autoScale - 0.15);
+      this.applyScale();
+      this.hud.toasts.show('Things were running slowly, so I lowered the sharpness a little. Settings → Sharpness changes it.', { title: 'Smoother, softer', kind: 'info', duration: 6000 });
+    }
+  }
+
+  private playAcc = 0;
+
   private frame = (now: number): void => {
+    this.watchFrameRate((now - this.last) / 1000);
+    if (!this.titleMode && !document.hidden) {
+      this.playAcc += Math.min(0.25, (now - this.last) / 1000);
+      if (this.playAcc >= 5) {
+        this.trophies.bump('playSeconds', Math.round(this.playAcc));
+        this.playAcc = 0;
+      }
+    }
     const dt = Math.min(1 / 20, (now - this.last) / 1000);
     this.last = now;
-    this.tick(dt * this.fx.screen.pace(dt)); // hit-stop slows the world, not the camera or the UI
+    this.frameDt = dt;
+    this.tick(dt * this.fx.screen.pace(dt) * this.timeScale); // hit-stop and slow motion slow the world, not the camera or the UI
+    this.refreshTools();
     this.followCamera(dt);
     this.stepIntro(dt);
     this.updateCarry(dt);
+    this.updateGuide(dt);
+    this.stepSkyCycle(dt);
     this.tutorial.update(this, dt);
     this.reactions.update(dt, this.renderer.camera, !this.titleMode && !this.hud.overlayOpen);
     updateVoxelLOD(this.renderer.camera.position, (this.renderer.scene.fog as Fog).far);
@@ -861,4 +1478,11 @@ export class Game {
 }
 
 const SURPRISED = 'blockspell.surprised.v1';
+const FINALE = 'blockspell.finale.v1';
+const TROPHY_TOTAL = TROPHIES.length;
+/** The spells of a task's first scripted solution: the Journal's second hint. */
+function firstWay(t: { solutions: LevelSolution[] }): string[] {
+  return (t.solutions[0]?.steps ?? []).flatMap((st) => ('cast' in st ? [st.cast] : []));
+}
+
 const HERO_KEYS = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space', 'KeyE', 'KeyF', 'KeyQ']);

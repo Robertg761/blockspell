@@ -35,3 +35,10 @@
 }
 
 .overlay.title .surprise-link { align-self: center; display: block; margin: 12px auto 2px; font-size: 15px; font-weight: 700; color: var(--accent-dark); padding: 4px 10px; }
+
+.pwa-line { display: flex; gap: 12px; justify-content: center; align-items: center; font-size: 12.5px; margin-top: 2px; flex-wrap: wrap; }
+.pwa-line:empty { display: none; }
+.pwa-ok { color: var(--good); font-weight: 650; }
+.install-btn { font-weight: 700; }
+
+.title-links { display: flex; justify-content: center; gap: 18px; flex-wrap: wrap; }

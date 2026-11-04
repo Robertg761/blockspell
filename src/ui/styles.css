@@ -94,6 +94,27 @@ button, input, select { font: inherit; color: inherit; }
   flex: 1; min-width: 0; border: 0; outline: 0; background: transparent;
   font-size: 19px; font-weight: 600; padding: 10px 4px; user-select: text;
 }
+.spell-field { position: relative; flex: 1; min-width: 0; display: flex; }
+.spell-field .spell-input { position: relative; z-index: 1; width: 100%; }
+.spell-ghost {
+  position: absolute; inset: 0; display: flex; align-items: center; overflow: hidden; white-space: pre;
+  font-size: 19px; font-weight: 600; padding: 10px 4px; pointer-events: none; color: transparent;
+}
+.spell-ghost-rest { color: #b4b9c4; }
+.suggest {
+  position: absolute; left: 12px; right: 12px; bottom: calc(100% + 10px); z-index: 5;
+  display: flex; flex-direction: column; padding: 6px; gap: 2px;
+  background: var(--panel-solid); border-radius: 16px; box-shadow: var(--shadow);
+}
+.suggest.hidden { display: none; }
+.suggest-item {
+  display: flex; align-items: baseline; gap: 8px; border: 0; background: transparent; text-align: left; cursor: pointer;
+  padding: 7px 12px; border-radius: 10px; font-size: 15px; font-weight: 500;
+}
+.suggest-item b { font-weight: 800; color: var(--accent-dark); }
+.suggest-item:hover, .suggest-item.active { background: #fff1dc; }
+.suggest-tag { font-size: 11px; opacity: 0.55; text-transform: uppercase; letter-spacing: 0.05em; }
+.suggest-new { margin-left: auto; font-size: 11.5px; font-weight: 750; color: var(--accent-dark); }
 .spell-input::placeholder { color: #9aa0ad; font-weight: 500; }
 .cast-btn {
   border: 0; border-radius: 999px; padding: 0 22px; height: 44px; cursor: pointer;
@@ -315,6 +336,7 @@ body.touch .chip, body.touch .icon-btn { min-height: 40px; }
   .hud-bottom { bottom: max(12px, env(safe-area-inset-bottom)); gap: 6px; width: calc(100vw - 16px); }
   .spell-bar { padding-left: 14px; }
   .spell-input { font-size: 16px; padding: 8px 2px; } /* 16px stops iOS zoom-on-focus */
+  .spell-ghost { font-size: 16px; padding: 8px 2px; }
   .cast-btn { height: 40px; padding: 0 16px; font-size: 15px; }
   .word-chips { gap: 5px; max-height: 76px; overflow: hidden; }
   .chip { padding: 4px 10px; font-size: 12.5px; }
@@ -340,6 +362,7 @@ body.touch .chip, body.touch .icon-btn { min-height: 40px; }
   .level-card:not(.expanded) .words-line { display: none; }
   .hud-bottom { bottom: 8px; gap: 4px; }
   .spell-input { font-size: 16px; padding: 6px 2px; }
+  .spell-ghost { font-size: 16px; padding: 6px 2px; }
   .cast-btn { height: 38px; }
   .word-chips { display: none; }
   .spellbook { top: 52px; bottom: 8px; width: min(380px, 55vw); }
@@ -359,3 +382,41 @@ body.touch .chip, body.touch .icon-btn { min-height: 40px; }
   body.touch .hud-bottom { width: min(520px, calc(100vw - 340px)); }
   body.touch-hero .toasts { bottom: auto; }
 }
+
+/* ---------- task compass ---------- */
+.goal-compass { margin-left: auto; display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 700; color: #1f7fa8; flex: none; }
+.goal-compass.hidden { display: none; }
+.compass-arrow { display: inline-block; font-size: 15px; line-height: 1; transition: transform 0.12s linear; }
+
+/* ---------- pinned spells ---------- */
+.hotbar { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; max-width: 100%; }
+.hotbar.hidden { display: none; }
+.hot {
+  display: inline-flex; align-items: center; gap: 6px; border: 0; border-radius: 12px; padding: 4px 6px 4px 5px; cursor: pointer;
+  background: rgba(30, 38, 60, 0.78); color: #fff; font-size: 13px; font-weight: 650;
+  box-shadow: 0 2px 8px rgba(20, 30, 60, 0.25); backdrop-filter: blur(4px);
+}
+.hot:hover { background: rgba(40, 50, 80, 0.92); transform: translateY(-1px); }
+.hot kbd {
+  display: inline-grid; place-items: center; min-width: 20px; height: 20px; border-radius: 6px; font: inherit; font-size: 12px; font-weight: 800;
+  background: var(--accent); color: #fff;
+}
+.hot-text { max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hot-x { opacity: 0; width: 16px; text-align: center; border-radius: 50%; font-size: 15px; line-height: 16px; }
+.hot:hover .hot-x, .hot:focus-visible .hot-x { opacity: 0.7; }
+.hot-x:hover { opacity: 1 !important; background: rgba(255, 255, 255, 0.2); }
+.hot.pop { animation: pulse 0.35s; }
+.pin-btn {
+  border: 0; background: transparent; cursor: pointer; font-size: 20px; line-height: 1; padding: 6px 4px; color: #b9bdc8;
+}
+.pin-btn:hover { color: var(--accent); transform: scale(1.15); }
+@media (max-width: 640px) { .hot-text { max-width: 90px; } .hot-x { display: none; } }
+
+/* ---------- frame-rate counter ---------- */
+.fps-meter {
+  position: absolute; top: 6px; left: 50%; transform: translateX(-50%); z-index: 4; pointer-events: none;
+  padding: 2px 10px; border-radius: 999px; font: 700 12px/1.6 ui-monospace, Menlo, Consolas, monospace;
+  color: #fff; background: rgba(20, 26, 44, 0.6);
+}
+.fps-meter.hidden { display: none; }
+body.photo-mode .fps-meter { display: none; }

@@ -1,4 +1,4 @@
-import { Music } from './music';
+import { Music, type MusicMood } from './music';
 
 /**
  * All sound is synthesized with WebAudio at runtime — no audio files.
@@ -307,9 +307,15 @@ export class Audio {
   static instance: Audio | null = null;
   private synth: Synth | null = null;
   private master: GainNode | null = null;
+  private sfxBus: GainNode | null = null;
+  private musicBus: GainNode | null = null;
+  private volumes = { music: 1, sfx: 1 };
+  private amb: { src: AudioBufferSourceNode; gain: GainNode } | null = null;
+  private wantAmbient: 'rain' | 'wind' | null = null;
   private lastPlayed = new Map<SoundName, number>();
   /** Background music; available after `unlock()`. */
   music: Music | null = null;
+  private mood: MusicMood = 'day';
   muted = loadMuted();
 
   constructor() {
@@ -335,9 +341,68 @@ export class Audio {
     const buf = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
     const d = buf.getChannelData(0);
     for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
-    this.synth = new Synth(ctx, this.master, buf);
-    this.music = new Music(this.synth, this.master);
+    // two buses so the settings sliders can set music and effects apart
+    this.sfxBus = ctx.createGain();
+    this.sfxBus.connect(this.master);
+    this.musicBus = ctx.createGain();
+    this.musicBus.connect(this.master);
+    this.applyVolumes();
+    this.synth = new Synth(ctx, this.sfxBus, buf);
+    this.music = new Music(new Synth(ctx, this.musicBus, buf), this.musicBus);
+    this.music.setMood(this.mood);
     this.music.start();
+    this.applyAmbient();
+  }
+
+  /** A quiet looping bed of rain or wind noise under everything (null: none). Works before `unlock()` too. */
+  /** The music's feel follows the time of day and weather (applied at the next phrase). */
+  setMusicMood(m: MusicMood): void {
+    this.mood = m;
+    this.music?.setMood(m);
+  }
+
+  setAmbient(kind: 'rain' | 'wind' | null): void {
+    this.wantAmbient = kind;
+    this.applyAmbient();
+  }
+
+  private applyAmbient(): void {
+    const s = this.synth;
+    if (!s || !this.sfxBus) return;
+    const ctx = s.ctx;
+    if (this.amb) {
+      const old = this.amb;
+      old.gain.gain.setTargetAtTime(0, ctx.currentTime, 0.4);
+      setTimeout(() => { try { old.src.stop(); } catch { /* already stopped */ } old.src.disconnect(); }, 2500);
+      this.amb = null;
+    }
+    if (!this.wantAmbient) return;
+    const src = ctx.createBufferSource();
+    src.buffer = s.noiseBuf;
+    src.loop = true;
+    const f = ctx.createBiquadFilter();
+    const rain = this.wantAmbient === 'rain';
+    f.type = rain ? 'bandpass' : 'lowpass';
+    f.frequency.value = rain ? 3200 : 420;
+    f.Q.value = rain ? 0.5 : 0.8;
+    const g = ctx.createGain();
+    g.gain.value = 0.0001;
+    g.gain.setTargetAtTime(rain ? 0.2 : 0.14, ctx.currentTime, 0.6);
+    src.connect(f).connect(g).connect(this.sfxBus);
+    src.start();
+    this.amb = { src, gain: g };
+  }
+
+  /** Music and effects loudness, 0..1 each (the settings sliders). Works before and after `unlock()`. */
+  setVolumes(v: { music: number; sfx: number }): void {
+    this.volumes = { music: v.music, sfx: v.sfx };
+    this.applyVolumes();
+  }
+
+  private applyVolumes(): void {
+    const t = this.synth?.ctx.currentTime ?? this.sfxBus?.context.currentTime ?? 0;
+    this.sfxBus?.gain.setTargetAtTime(this.volumes.sfx, t, 0.05);
+    this.musicBus?.gain.setTargetAtTime(this.volumes.music, t, 0.05);
   }
 
   setMuted(m: boolean): void {

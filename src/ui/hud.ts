@@ -1,6 +1,9 @@
 import { spellsText, starsForPar, type LevelDef } from '../levels/types';
 import { Audio, loadMuted } from '../engine/audio';
+import { Autocomplete } from './autocomplete';
+import { Hotbar } from './hotbar';
 import { h } from './dom';
+import { pwa, type PwaState } from '../pwa';
 import { Toasts } from './toast';
 
 export interface HudCallbacks {
@@ -13,6 +16,7 @@ export interface HudCallbacks {
   /** 🎲 in Free Play: stage a random scene. */
   onSurprise: () => void;
   onLevels: () => void;
+  onSettings: () => void;
   /** Flips the voxel detail (HD / classic); returns the new state. */
   onHD: () => boolean;
 }
@@ -23,6 +27,8 @@ export interface JournalTask {
   hint: string;
   done: boolean;
   ways: number;
+  /** The spells of one known way to solve it, in order, for the second hint ("Show me a way"). */
+  answer?: string[];
 }
 
 /** What the Journal shows: tasks grouped by zone, plus the spell count (world mode keeps it here, not in the HUD). */
@@ -31,6 +37,8 @@ export interface JournalInfo {
   spells: number;
   onFreePlay: () => void;
   onTitle: () => void;
+  /** More buttons for the panel's action row (trophies...). */
+  extra?: HTMLElement[];
 }
 
 export interface WinInfo {
@@ -42,6 +50,24 @@ export interface WinInfo {
   next: LevelDef | null;
 }
 
+const HISTORY_KEY = 'blockspell.history.v1';
+function loadHistory(): string[] {
+  try {
+    const raw = JSON.parse(localStorage.getItem(HISTORY_KEY) ?? '[]');
+    return Array.isArray(raw) ? raw.filter((s): s is string => typeof s === 'string').slice(0, 30) : [];
+  } catch {
+    return [];
+  }
+}
+function saveHistory(list: string[]): void {
+  try {
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(list));
+  } catch {
+    /* ignore */
+  }
+}
+
+const OFFLINE_TOLD = 'blockspell.offlineTold.v1';
 const starText = (n: number, of = 3) => '★'.repeat(n) + '☆'.repeat(Math.max(0, of - n));
 
 /** All DOM UI: spell input, level card, toasts, overlays. */
@@ -60,12 +86,20 @@ export class Hud {
   private banner = h('div.zone-banner', { 'aria-live': 'polite' });
   private menuBtn: HTMLButtonElement;
   private surpriseBtn: HTMLButtonElement;
-  private history: string[] = [];
+  private history: string[] = loadHistory();
   private historyIdx = -1;
   private hint = '';
   private muted = loadMuted();
   readonly bookBtn: HTMLButtonElement;
   private hdBtn: HTMLButtonElement;
+  private pwaLine = h('div.pwa-line');
+  private compass = h('span.goal-compass.hidden', { title: 'Direction of the nearest task' }, [h('span.compass-arrow', { text: '➤' }), h('span.compass-dist')]);
+  private compassKey = '';
+  /** Word completion for the spell bar. */
+  readonly autocomplete: Autocomplete;
+  /** Pinned spells above the spell bar (1-9 casts them). */
+  readonly hotbar: Hotbar;
+  private pinBtn: HTMLButtonElement;
   /** Focus the spell bar after closing overlays (off in hero levels, where keys move the hero). */
   autoFocus = true;
 
@@ -81,9 +115,14 @@ export class Hud {
     });
     this.surpriseBtn = h('button.surprise-btn', { type: 'button', text: '🎲', title: 'Surprise me', 'aria-label': 'Surprise me: stage a random scene', onClick: () => cb.onSurprise() });
     this.surpriseBtn.style.display = 'none';
+    this.autocomplete = new Autocomplete(this.input);
+    this.hotbar = new Hotbar((t) => cb.onCast(t));
+    this.pinBtn = h('button.pin-btn', { type: 'button', text: '☆', title: 'Pin this spell to the hotbar (or the last one you cast)', 'aria-label': 'Pin a spell to the hotbar', onClick: () => this.pinCurrent() });
     this.form = h('form.spell-bar', { onSubmit: (ev: Event) => this.submit(ev) }, [
+      this.autocomplete.list,
       h('span.spell-icon', { text: '✦', 'aria-hidden': 'true' }),
-      this.input,
+      h('div.spell-field', {}, [this.autocomplete.ghost, this.input]),
+      this.pinBtn,
       this.surpriseBtn,
       h('button.cast-btn', { type: 'submit', text: 'Cast' }),
     ]);
@@ -121,15 +160,42 @@ export class Hud {
         this.bookBtn,
         h('button.icon-btn.reset-btn', { title: 'Restart (R)', text: '↺', onClick: () => cb.onReset() }),
         muteBtn,
-        this.hdBtn,
+        h('button.icon-btn.settings-btn', { title: 'Settings', text: '⚙', 'aria-label': 'Settings', onClick: () => cb.onSettings() }),
       ]),
       this.toasts.el,
-      h('div.hud-bottom', {}, [this.chips, this.form]),
+      h('div.hud-bottom', {}, [this.chips, this.hotbar.el, this.form]),
       this.help,
       this.banner,
       this.overlay,
     );
     this.startPlaceholderDemo();
+    this.watchPwa();
+  }
+
+  /** Install button, "saved for offline" note and update prompts, driven by src/pwa.ts. */
+  private watchPwa(): void {
+    let told = false, updateShown = false;
+    pwa.onChange((s) => {
+      this.renderPwaLine(s);
+      if (s.updateReady && !updateShown) {
+        updateShown = true;
+        this.toasts.show('A new version of Blockspell has been downloaded.', { title: 'Update ready', kind: 'info', duration: 30000, actions: [{ label: 'Reload now', onClick: () => pwa.applyUpdate() }] });
+      }
+      if (s.offlineReady && !told) {
+        told = true;
+        let seen = false;
+        try { seen = !!localStorage.getItem(OFFLINE_TOLD); localStorage.setItem(OFFLINE_TOLD, '1'); } catch { /* ignore */ }
+        if (!seen) this.toasts.show('The whole game is saved on this device now. You can turn the Wi-Fi off and keep playing.', { title: '✈ Ready for offline play', kind: 'success', duration: 7000 });
+      }
+    });
+  }
+
+  private renderPwaLine(s: PwaState): void {
+    const bits: (HTMLElement | string)[] = [];
+    if (s.offlineReady) bits.push(h('span.pwa-ok', { text: s.online ? '✓ Saved for offline play' : '✈ Playing offline' }));
+    else if (!s.online) bits.push(h('span.pwa-ok', { text: '✈ Playing offline' }));
+    if (s.canInstall) bits.push(h('button.link-btn.install-btn', { type: 'button', text: '⬇ Install as an app', onClick: () => void pwa.install() }));
+    this.pwaLine.replaceChildren(...bits);
   }
 
   /**
@@ -160,16 +226,6 @@ export class Hud {
     }, 75);
   }
 
-  /** A menu button that flips the voxel detail (HD / classic). */
-  private hdToggle(): HTMLButtonElement {
-    const label = () => (this.hdBtn.classList.contains('off') ? 'Graphics: Classic' : 'Graphics: HD');
-    const btn = h('button.btn.secondary.hd-toggle', { text: label(), title: 'HD voxels or the classic, faster look', onClick: () => {
-      this.setHD(this.cb.onHD());
-      btn.textContent = label();
-    } });
-    return btn;
-  }
-
   /** Shows the voxel detail setting on its button. */
   setHD(on: boolean): void {
     this.hdBtn.classList.toggle('off', !on);
@@ -182,27 +238,55 @@ export class Hud {
     if (!text) return;
     this.history.unshift(text);
     this.history = this.history.slice(0, 30);
+    saveHistory(this.history);
     this.historyIdx = -1;
     this.input.value = '';
+    this.autocomplete.hide();
     this.cb.onCast(text);
   }
 
   private onKey(ev: KeyboardEvent): void {
+    if (this.autocomplete.onKey(ev)) {
+      ev.preventDefault();
+      ev.stopPropagation();
+      return;
+    }
     if (ev.key === 'ArrowUp' && this.history.length) {
       this.historyIdx = Math.min(this.history.length - 1, this.historyIdx + 1);
       this.input.value = this.history[this.historyIdx];
+      this.autocomplete.hide(true);
       ev.preventDefault();
     } else if (ev.key === 'ArrowDown') {
       this.historyIdx = Math.max(-1, this.historyIdx - 1);
       this.input.value = this.historyIdx >= 0 ? this.history[this.historyIdx] : '';
+      this.autocomplete.hide(true);
       ev.preventDefault();
     } else if (ev.key === 'Escape') this.input.blur();
+  }
+
+  /** ☆: pins what is typed, or the latest spell you cast. */
+  private pinCurrent(): void {
+    const text = this.input.value.trim() || this.history[0];
+    if (!text) {
+      this.toasts.show('Type a spell first, then pin it.', { kind: 'info', duration: 2500 });
+      return;
+    }
+    if (this.hotbar.has(text)) {
+      this.hotbar.unpin(this.hotbar.all.indexOf(text.toLowerCase().replace(/\s+/g, ' ')));
+      this.toasts.show(`Unpinned “${text}”.`, { kind: 'info', duration: 2000 });
+    } else if (this.hotbar.pin(text)) {
+      this.toasts.show(`Pinned “${text}” as ${this.hotbar.all.length}. Press ${this.hotbar.all.length} to cast it.`, { title: '☆ Pinned', kind: 'success', duration: 3500 });
+    } else {
+      this.toasts.show('The hotbar is full. Right-click a slot to unpin one.', { kind: 'warn', duration: 3000 });
+    }
+    this.input.focus();
   }
 
   /** Puts text in the spell bar, ready to edit or cast. */
   prefill(text: string): void {
     this.input.value = text;
     this.input.focus();
+    this.autocomplete.hide(true);
   }
 
   setWordChips(words: string[]): void {
@@ -257,7 +341,23 @@ export class Hud {
       h('span.goal-box'),
       h('span.goal-text', { text: task.title }),
       task.zone ? h('span.goal-zone', { text: task.zone }) : '',
+      this.compass,
     );
+  }
+
+  /**
+   * The arrow next to the tracked task: `angle` is where it lies in radians clockwise from straight ahead
+   * on the screen, `dist` meters away. Null (or very close) hides it.
+   */
+  setCompass(angle: number | null, dist = 0): void {
+    const show = angle !== null && dist > 5;
+    const key = show ? `${Math.round((angle! * 180) / Math.PI / 4)}|${Math.round(dist)}` : '';
+    if (key === this.compassKey) return;
+    this.compassKey = key;
+    this.compass.classList.toggle('hidden', !show);
+    if (!show) return;
+    (this.compass.firstElementChild as HTMLElement).style.transform = `rotate(${angle! - Math.PI / 2}rad)`;
+    (this.compass.lastElementChild as HTMLElement).textContent = `${Math.round(dist)} m`;
   }
 
   /** Big zone name across the top of the screen, fading out after a couple of seconds. */
@@ -327,7 +427,8 @@ export class Hud {
     const total = info.zones.reduce((n, z) => n + z.tasks.length, 0);
     const done = info.zones.reduce((n, z) => n + z.tasks.filter((t) => t.done).length, 0);
     const row = (t: JournalTask) => {
-      const hint = h('div.journal-hint.hidden', { text: t.hint });
+      const answerLine = t.answer?.length && !t.done ? this.answerBox(t.answer) : null;
+      const hint = h('div.journal-hint.hidden', {}, [t.hint, answerLine]);
       const btn = h('button.link-btn.journal-hint-btn', {
         type: 'button',
         text: 'Hint',
@@ -361,10 +462,44 @@ export class Hud {
           h('button.btn', { text: 'Back to the world', onClick: () => this.hideOverlay() }),
           h('button.btn.secondary', { text: '✦ Free Play', onClick: () => { this.hideOverlay(); info.onFreePlay(); } }),
           h('button.btn.secondary', { text: 'Title screen', onClick: () => info.onTitle() }),
-          this.hdToggle(),
+          h('button.btn.secondary', { text: '⚙ Settings', onClick: () => this.cb.onSettings() }),
+          ...(info.extra ?? []),
         ]),
       ]),
     );
+    this.overlay.classList.remove('hidden');
+  }
+
+  /** The Journal's second hint: hidden behind a button because it gives one way away. Pinning puts its spells on the hotbar. */
+  private answerBox(spells: string[]): HTMLElement {
+    const reveal = h('div.journal-answer.hidden', {}, [
+      h('span', { text: 'One way: ' }),
+      h('b', { text: spells.join(', then ') }),
+      h('button.link-btn', {
+        type: 'button',
+        text: '☆ Pin',
+        title: 'Put these on the hotbar',
+        onClick: (ev: Event) => {
+          const added = spells.filter((sp) => this.hotbar.pin(sp)).length;
+          (ev.currentTarget as HTMLElement).textContent = added ? '✓ Pinned' : 'Already pinned';
+        },
+      }),
+    ]);
+    const btn = h('button.link-btn.journal-answer-btn', {
+      type: 'button',
+      text: 'Show me a way (spoiler)',
+      onClick: () => {
+        reveal.classList.remove('hidden');
+        btn.remove();
+      },
+    });
+    return h('div.journal-answerbox', {}, [btn, reveal]);
+  }
+
+  /** Shows any panel (settings, trophies, finale...) in the overlay. Close it with `hideOverlay()`. */
+  showPanel(panel: HTMLElement): void {
+    this.overlay.classList.remove('title');
+    this.overlay.replaceChildren(panel);
     this.overlay.classList.remove('hidden');
   }
 
@@ -388,7 +523,7 @@ export class Hud {
   }
 
   /** Title screen. `logo` is an optional animated element shown above the name. */
-  showTitle(opts: { onExplore: () => void; onFreePlay: () => void; onSurprise: () => void; exploreLabel: string; logo?: HTMLElement }): void {
+  showTitle(opts: { onExplore: () => void; onFreePlay: () => void; onSurprise: () => void; onSettings: () => void; extra?: HTMLElement[]; exploreLabel: string; logo?: HTMLElement }): void {
     const go = (fn: () => void) => () => {
       this.cb.onStart();
       this.hideOverlay();
@@ -404,8 +539,13 @@ export class Hud {
           h('button.btn.big.explore-btn', { text: opts.exploreLabel, onClick: go(opts.onExplore) }),
           h('button.btn.big.secondary.freeplay-btn', { text: '✦ Free Play', onClick: go(opts.onFreePlay) }),
         ]),
-        h('button.link-btn.surprise-link', { type: 'button', text: '🎲 Surprise me', onClick: go(opts.onSurprise) }),
+        h('div.title-links', {}, [
+          h('button.link-btn.surprise-link', { type: 'button', text: '🎲 Surprise me', onClick: go(opts.onSurprise) }),
+          ...(opts.extra ?? []),
+          h('button.link-btn.settings-link', { type: 'button', text: '⚙ Settings', onClick: opts.onSettings }),
+        ]),
         h('p.small', { text: 'Runs entirely offline. No network, no tracking.' }),
+        this.pwaLine,
       ]),
     );
     this.overlay.classList.add('title');

@@ -51,6 +51,7 @@ export class Tutorial {
   private root: HTMLElement;
   private learned: Record<string, number> = {};
   private enabled = !/[?&]notips\b/.test(location.search);
+  private readonly urlOff = !this.enabled;
   private level: LevelDef | null = null;
   private t = 0;
   private lastWords = 0;
@@ -304,6 +305,18 @@ export class Tutorial {
     const cy = Math.min(Math.max(y, hh + 8), rect.height - 8);
     this.el.style.transform = `translate(${Math.round(cx - w / 2)}px, ${Math.round(cy - hh)}px)`;
     this.el.style.setProperty('--ax', `${Math.min(Math.max(x - (cx - w / 2), 18), w - 18)}px`);
+  }
+
+  /** The Settings toggle: tips off hides the current one and stops new ones (`?notips` always wins). */
+  setEnabled(on: boolean): void {
+    this.enabled = on && !this.urlOff;
+    if (!this.enabled && this.current) this.hide(false);
+  }
+
+  /** Forgets which tips were learned, so they all show again. */
+  resetTips(): void {
+    this.save(true);
+    this.snoozed.clear();
   }
 
   // ------------------------------------------------------------ storage

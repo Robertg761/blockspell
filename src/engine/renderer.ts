@@ -1,6 +1,6 @@
 import {
   ACESFilmicToneMapping, PMREMGenerator, Color, DirectionalLight, Fog, HemisphereLight, PCFShadowMap,
-  HalfFloatType, PerspectiveCamera, Scene, SRGBColorSpace, Vector2, Vector3, WebGLRenderer, WebGLRenderTarget,
+  HalfFloatType, PerspectiveCamera, Scene, ShaderMaterial, SRGBColorSpace, Vector2, Vector3, WebGLRenderer, WebGLRenderTarget,
 } from 'three';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
@@ -13,6 +13,10 @@ import { createBackdrop } from './backdrop';
 import { createSky } from './sky';
 import { Clouds } from './clouds';
 import { createGradePass, type ScreenFx } from './grade';
+import { cloneSky, lerpSky, SKIES, type SkyName, type SkyState } from './skies';
+import { Weather } from './weather';
+import { Life } from './life';
+import { applyFilter, type PhotoFilter } from '../photo-filters';
 import type { CameraShake } from './shake';
 import type { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 
@@ -35,10 +39,21 @@ export class Renderer {
   readonly sun: DirectionalLight;
   readonly clouds: Clouds;
   private sky;
+  private hemi!: HemisphereLight;
+  readonly weather: Weather;
+  readonly life: Life;
+  /** Time of day: the preset we are heading for, the look when the change began, and how far along it is. */
+  private skyName: SkyName = 'day';
+  private skyFrom: SkyState = cloneSky(SKIES.day);
+  private skyNow: SkyState = cloneSky(SKIES.day);
+  private skyT = 1;
+  private skyDur = 2.5;
   private sunDir = new Vector3(0.55, 0.85, 0.35).normalize();
   /** Null when bloom is disabled (?nobloom) or unsupported; then we render straight to screen. */
   private composer: EffectComposer | null = null;
   private grade: ShaderPass | null = null;
+  private bloomPass: UnrealBloomPass | null = null;
+  private renderScale = 1;
   private baseFov = 50;
   private clock = 0;
 
@@ -63,7 +78,7 @@ export class Renderer {
     this.scene.add(this.sky);
     this.scene.fog = new Fog(new Color(SKY.horizon), DEFAULT_RANGE.fog[0], DEFAULT_RANGE.fog[1]);
 
-    const hemi = new HemisphereLight('#cfe8ff', '#7a6243', 1.1);
+    const hemi = (this.hemi = new HemisphereLight('#cfe8ff', '#7a6243', 1.1));
     this.scene.add(hemi);
 
     this.sun = new DirectionalLight('#fff0d8', 2.6);
@@ -79,6 +94,8 @@ export class Renderer {
 
     this.clouds = new Clouds();
     this.scene.add(this.clouds.group, createBackdrop());
+    this.weather = new Weather(this.scene);
+    this.life = new Life(this.scene);
 
     this.controls = new OrbitControls(this.camera, this.gl.domElement);
     this.controls.enableDamping = true;
@@ -105,6 +122,7 @@ export class Renderer {
       // High threshold: only HDR-bright things (fire, glowing particles, stars, specular glints) bloom.
       const bloom = new UnrealBloomPass(new Vector2(256, 256), 0.32, 0.55, 0.92);
       composer.addPass(bloom);
+      this.bloomPass = bloom;
       composer.addPass(new OutputPass()); // applies renderer tone mapping + sRGB
       this.grade = createGradePass(); // film grade, vignette and impact effects, on display colors
       composer.addPass(this.grade);
@@ -113,6 +131,42 @@ export class Renderer {
       console.warn('Bloom unavailable, falling back to direct rendering', e);
       this.composer = null;
     }
+  }
+
+  get skyPreset(): SkyName {
+    return this.skyName;
+  }
+
+  /** Changes the time of day, blending from the current look over `seconds` (0: at once). */
+  setSky(name: SkyName, seconds = 2.5): void {
+    this.skyName = name;
+    this.skyFrom = cloneSky(this.skyNow);
+    this.skyT = seconds <= 0 ? 1 : 0;
+    this.skyDur = Math.max(0.01, seconds);
+    if (seconds <= 0) this.stepSky(0);
+  }
+
+  private stepSky(dt: number): void {
+    if (this.skyT >= 1 && dt > 0) return;
+    this.skyT = Math.min(1, this.skyT + dt / this.skyDur);
+    const k = this.skyT * this.skyT * (3 - 2 * this.skyT);
+    const s = lerpSky(this.skyNow, this.skyFrom, SKIES[this.skyName], k);
+    const u = (this.sky.material as ShaderMaterial).uniforms;
+    u.top.value.copy(s.top);
+    u.horizon.value.copy(s.horizon);
+    u.bottom.value.copy(s.bottom);
+    u.sunColor.value.copy(s.sunColor);
+    u.sunDir.value.copy(s.sunDir);
+    u.stars.value = s.stars;
+    (this.scene.fog as Fog).color.copy(s.horizon);
+    this.hemi.color.copy(s.hemiSky);
+    this.hemi.groundColor.copy(s.hemiGround);
+    this.hemi.intensity = s.hemiI;
+    this.sun.color.copy(s.sunColor);
+    this.sun.intensity = s.sunI;
+    this.sunDir.copy(s.sunDir);
+    this.gl.toneMappingExposure = s.exposure;
+    this.clouds.setLight(s.cloudGlow, s.cloudTint);
   }
 
   /** Fog, far plane and zoom-out limit for a level (null restores the defaults). */
@@ -160,6 +214,24 @@ export class Renderer {
     this.controls.update();
   }
 
+  /** Renders at a share of the screen's pixels (0.5..1) and lets the browser scale it up. */
+  setRenderScale(k: number): void {
+    k = Math.min(1, Math.max(0.4, k));
+    if (Math.abs(k - this.renderScale) < 0.005) return;
+    this.renderScale = k;
+    this.gl.setPixelRatio(Math.min(window.devicePixelRatio, 2) * k);
+    this.resize();
+  }
+
+  get scale(): number {
+    return this.renderScale;
+  }
+
+  /** Turns the glow post-processing off or on. The film grade and tone mapping stay. */
+  setBloom(on: boolean): void {
+    if (this.bloomPass) this.bloomPass.enabled = on;
+  }
+
   resize(): void {
     const w = this.container.clientWidth || window.innerWidth;
     const h = this.container.clientHeight || window.innerHeight;
@@ -170,6 +242,35 @@ export class Renderer {
     }
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
+  }
+
+  /**
+   * Renders one frame and copies it into a 2D canvas with a small "Blockspell" tag in the corner
+   * (a WebGL canvas can only be read in the same task it was drawn in). Returns null if reading failed.
+   */
+  capture(shake: CameraShake, screen?: ScreenFx, filter?: PhotoFilter): HTMLCanvasElement | null {
+    this.render(0, shake, screen);
+    try {
+      const src = this.gl.domElement;
+      const out = document.createElement('canvas');
+      out.width = src.width;
+      out.height = src.height;
+      const g = out.getContext('2d');
+      if (!g) return null;
+      g.drawImage(src, 0, 0);
+      if (filter) applyFilter(out, filter);
+      const size = Math.max(14, Math.round(out.height / 46));
+      g.font = `800 ${size}px system-ui, sans-serif`;
+      g.textAlign = 'right';
+      g.textBaseline = 'bottom';
+      g.fillStyle = 'rgba(0,0,0,0.35)';
+      g.fillText('▣ Blockspell', out.width - size * 0.8 + 1.5, out.height - size * 0.7 + 1.5);
+      g.fillStyle = 'rgba(255,255,255,0.92)';
+      g.fillText('▣ Blockspell', out.width - size * 0.8, out.height - size * 0.7);
+      return out;
+    } catch {
+      return null;
+    }
   }
 
   render(dt: number, shake: CameraShake, screen?: ScreenFx): void {
@@ -187,7 +288,11 @@ export class Renderer {
       if (screen) (u.uFlash.value as Vector3).copy(screen.flashColor);
       u.uTime.value = this.clock % 10;
     }
+    this.stepSky(dt);
     this.clouds.update(dt);
+    this.weather.update(dt, this.controls.target);
+    this.life.setMood(this.skyPreset, this.weather.current);
+    this.life.update(dt, this.controls.target);
     this.followSun();
     shake.apply(this.camera);
     this.sky.position.copy(this.camera.position);

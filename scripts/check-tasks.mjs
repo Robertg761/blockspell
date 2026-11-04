@@ -7,7 +7,7 @@
 //   2. __blockspell.solveAll({ seeds: [1, 2, 3] }): every task solution once per seed.
 //   3. Offline: the network is switched off (context.setOffline) and a task is completed for real
 //      through the world, with frames rendering, while any request attempt counts as a failure.
-//   4. Persistence: back online, the page is reloaded (there is no service worker, so a reload needs
+//   4. Persistence: back online, the page is reloaded (the service worker is blocked in this check (check-pwa covers it), so a reload needs
 //      the local server), Explore is clicked, J opens the Journal and the task must show as done.
 //
 // Every non-localhost request is blocked and reported. Any FAIL, console error, page error, blocked or
@@ -119,7 +119,8 @@ async function main() {
     await waitForServer(origin + '/', server);
     console.log(`serving dist at ${origin}`);
     browser = await chromium.launch({ executablePath: CHROME, headless: true, args: CHROME_ARGS });
-    const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+    // no service worker here: it would answer requests before context.route sees them (scripts/check-pwa.mjs covers it)
+    const context = await browser.newContext({ viewport: { width: 1280, height: 800 }, serviceWorkers: 'block' });
     let offline = false;
     await context.route('**/*', (route) => {
       const url = route.request().url();

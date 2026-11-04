@@ -10,6 +10,7 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "check-offline": "node scripts/check-offline.mjs",
+    "check-pwa": "node scripts/check-pwa.mjs",
     "check-tasks": "node scripts/check-tasks.mjs"
   },
   "dependencies": {
