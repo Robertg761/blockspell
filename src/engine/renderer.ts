@@ -172,6 +172,34 @@ export class Renderer {
     this.camera.updateProjectionMatrix();
   }
 
+  /**
+   * Renders one frame and copies it into a 2D canvas with a small "Blockspell" tag in the corner
+   * (a WebGL canvas can only be read in the same task it was drawn in). Returns null if reading failed.
+   */
+  capture(shake: CameraShake, screen?: ScreenFx): HTMLCanvasElement | null {
+    this.render(0, shake, screen);
+    try {
+      const src = this.gl.domElement;
+      const out = document.createElement('canvas');
+      out.width = src.width;
+      out.height = src.height;
+      const g = out.getContext('2d');
+      if (!g) return null;
+      g.drawImage(src, 0, 0);
+      const size = Math.max(14, Math.round(out.height / 46));
+      g.font = `800 ${size}px system-ui, sans-serif`;
+      g.textAlign = 'right';
+      g.textBaseline = 'bottom';
+      g.fillStyle = 'rgba(0,0,0,0.35)';
+      g.fillText('▣ Blockspell', out.width - size * 0.8 + 1.5, out.height - size * 0.7 + 1.5);
+      g.fillStyle = 'rgba(255,255,255,0.92)';
+      g.fillText('▣ Blockspell', out.width - size * 0.8, out.height - size * 0.7);
+      return out;
+    } catch {
+      return null;
+    }
+  }
+
   render(dt: number, shake: CameraShake, screen?: ScreenFx): void {
     this.controls.update();
     this.clock += dt;

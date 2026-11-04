@@ -18,6 +18,12 @@ export interface GameEvents {
   unlocked: { entity: Entity; key: Entity };
   exploded: { at: { x: number; y: number; z: number }; source: Entity | null };
   broken: { entity: Entity };
+  /** The player used slow motion or paused time. */
+  timeBent: { scale: number };
+  /** The player copied or shared a scene link. */
+  shared: { url: string };
+  /** The player saved a photo. */
+  photo: { name: string };
 }
 
 type Handler<T> = (payload: T) => void;

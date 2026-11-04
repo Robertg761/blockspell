@@ -4,6 +4,7 @@ import { SolutionRunner } from './levels/solve';
 import type { LevelDef, LevelSolution, SolutionStep, V3 } from './levels/types';
 import { parseSpell } from './parser/parser';
 import { seedRandom } from './core/rng';
+import { decodeScene } from './share';
 import { orderedTasks, tasks, zoneEntry } from './tasks';
 import { wayKey } from './tasks/save';
 import { Mesh } from 'three';
@@ -55,6 +56,7 @@ import { clearHDSetting, geometryBytes, hdPending, hdStats, hdTop, setHDEnabled 
  *   &mute                  start muted
  *   &levels                open the menu (the title screen)
  *   &journal               with ?level=world: open the Journal
+ *   #scene=spell@x,z;...   (the URL hash) open Free Play and replay a shared scene
  */
 export interface SolveResult {
   /** Set for classic level solves. */
@@ -501,6 +503,12 @@ export function installDebug(game: Game) {
 export function applyQuery(game: Game, api: ReturnType<typeof installDebug>): boolean {
   const q = new URLSearchParams(location.search);
   if (q.has('mute')) game.fx.audio.setMuted(true);
+  // a shared scene link (#scene=...) opens Free Play and replays the casts
+  const scene = decodeScene(location.hash);
+  if (scene?.length && q.get('level') === null) {
+    game.playScene(scene);
+    return true;
+  }
   const levelKey = q.get('level');
   if (levelKey === null) {
     if (q.has('levels')) game.showLevels();

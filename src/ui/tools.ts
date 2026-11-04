@@ -1,0 +1,56 @@
+import { h } from './dom';
+import './tools.css';
+
+export type ToolId = 'photo' | 'share' | 'undo' | 'clear' | 'speed';
+
+interface ToolDef {
+  id: ToolId;
+  icon: string;
+  title: string;
+  /** Which modes show it. */
+  modes: ('free' | 'hero' | 'world')[];
+}
+
+const TOOLS: ToolDef[] = [
+  { id: 'photo', icon: '📷', title: 'Photo mode', modes: ['free', 'hero', 'world'] },
+  { id: 'share', icon: '🔗', title: 'Copy a link to this scene', modes: ['free'] },
+  { id: 'undo', icon: '↶', title: 'Undo the last spell', modes: ['free'] },
+  { id: 'clear', icon: '🧹', title: 'Clear everything you cast', modes: ['free'] },
+  { id: 'speed', icon: '⏱', title: 'Time: normal, slow, slower, paused', modes: ['free', 'hero', 'world'] },
+];
+
+/** The vertical strip of extra buttons on the right edge: photo, share, undo, clear and time. */
+export class SideTools {
+  readonly el = h('div.side-tools.hidden', { role: 'toolbar', 'aria-label': 'Extra tools' });
+  private buttons = new Map<ToolId, HTMLButtonElement>();
+  private badges = new Map<ToolId, HTMLElement>();
+
+  constructor(onTool: (id: ToolId) => void) {
+    for (const t of TOOLS) {
+      const badge = h('span.tool-badge');
+      const b = h('button.tool-btn', { type: 'button', title: t.title, 'aria-label': t.title, 'data-tool': t.id, onClick: () => onTool(t.id) }, [h('span.tool-icon', { text: t.icon }), badge]);
+      this.buttons.set(t.id, b);
+      this.badges.set(t.id, badge);
+      this.el.append(b);
+    }
+  }
+
+  /** Shows the tools that fit a mode, or hides the strip (title screen, overlays: `mode` null). */
+  setMode(mode: 'free' | 'hero' | 'world' | null): void {
+    this.el.classList.toggle('hidden', !mode);
+    if (!mode) return;
+    for (const t of TOOLS) this.buttons.get(t.id)!.style.display = t.modes.includes(mode) ? '' : 'none';
+  }
+
+  setBadge(id: ToolId, text: string): void {
+    this.badges.get(id)!.textContent = text;
+  }
+
+  setEnabled(id: ToolId, on: boolean): void {
+    this.buttons.get(id)!.disabled = !on;
+  }
+
+  setActive(id: ToolId, on: boolean): void {
+    this.buttons.get(id)!.classList.toggle('active', on);
+  }
+}

@@ -23,6 +23,8 @@ import { parseSpell, randomWords, suggestAdjectives } from './parser/parser';
 import { adjectives } from './adjectives';
 import { CarryPrompt } from './ui/prompt';
 import { Hud } from './ui/hud';
+import { h } from './ui/dom';
+import { isTouch } from './ui/touch';
 import { CARRY, carryHint, carryKind, handGrab, type Carry, type CarryHint } from './behaviors/lib/carry';
 import { waterSurfaceAt } from './behaviors/lib/water';
 import { Spellbook } from './ui/spellbook';
@@ -31,6 +33,9 @@ import { Reactions } from './ui/reactions';
 import { pickVignette } from './surprise';
 import { Tutorial } from './ui/tutorial';
 import { settings, type Settings } from './settings';
+import { sceneUrl, type SceneCast } from './share';
+import { SideTools, type ToolId } from './ui/tools';
+import { PhotoUI } from './ui/photo';
 import { settingsPanel } from './ui/settings-panel';
 
 /** Wires renderer, world, input, parser, levels and HUD together. */
@@ -70,6 +75,15 @@ export class Game {
   zone: ZoneDef | null = null;
   /** Open world: checks every task instead of a single level goal. */
   readonly tracker: TaskTracker;
+  /** Simulation speed: 1 normal, below 1 slow motion, 0 paused (the ⏱ button; photo mode's freeze). */
+  timeScale = 1;
+  /** Photo mode: HUD hidden, camera free, snap saves a PNG. */
+  photo = false;
+  private readonly tools: SideTools;
+  private photoUI: PhotoUI;
+  private toolMode: 'free' | 'hero' | 'world' | null | undefined;
+  /** Free Play casts, newest last: what Undo takes back and what a shared link replays. */
+  private history: { log: SceneCast; entities: Entity[]; pending: { cancelled: boolean } }[] = [];
   private keys = new Set<string>();
   /** Hero action keys pressed since the last tick: a tap shorter than a frame still counts. */
   private taps = new Set<string>();
@@ -117,6 +131,9 @@ export class Game {
     this.carryPrompt = new CarryPrompt(root);
     settings.onChange((s) => this.applySettings(s));
     this.reactions = new Reactions(root, this.world);
+    this.tools = new SideTools((id) => this.useTool(id));
+    this.photoUI = new PhotoUI(root, { onSnap: () => this.snap(), onFreeze: () => this.toggleFreeze(), onExit: () => this.setPhoto(false) });
+    root.append(this.tools.el);
     this.refreshChips();
 
     this.bindInput();
@@ -283,6 +300,7 @@ export class Game {
     this.reactions.clear();
     this.world.clear();
     this.pendingCasts.clear();
+    this.history = [];
     const islands = level.islands ?? (level.terrain === null ? [] : [level.terrain ?? {}]);
     const terrain = islands.map((t) => ({ ...DEFAULT_TERRAIN, ...t }));
     const key = JSON.stringify(terrain);
@@ -495,6 +513,12 @@ export class Game {
     const castZone = this.level.tasks ? this.zone?.id ?? null : null;
     const pending = { zone: castZone, x: base.x, y: base.y, z: base.z, left: count, cancelled: false };
     this.pendingCasts.add(pending);
+    const entry = { log: { spell: text.trim(), x: base.x, z: base.z }, entities: [] as Entity[], pending };
+    if (this.isFreePlay) {
+      this.history.push(entry);
+      if (this.history.length > 80) this.history.shift();
+      if (this.timeScale === 0) this.setTimeScale(1); // casting is how you un-pause
+    }
     for (let i = 0; i < count; i++) {
       const angle = (i / count) * Math.PI * 2;
       const r = (count > 1 ? 0.6 + count * 0.15 : 0) + jitter * random();
@@ -516,6 +540,7 @@ export class Game {
           });
           // a zone reset clears what was cast there, wherever it ended up
           if (castZone) e.state.castZone = castZone;
+          entry.entities.push(e);
         },
       });
     }
@@ -573,6 +598,181 @@ export class Game {
     this.hud.setWordChips(pool.slice(0, 7));
   }
 
+
+  // ------------------------------------------------------------ tools
+  /** Free Play: no goal, no hero, no tasks. */
+  get isFreePlay(): boolean {
+    return !this.level.goal && !this.level.hero && !this.level.tasks;
+  }
+
+  private useTool(id: ToolId): void {
+    this.fx.audio.unlock();
+    this.fx.sound('uiClick', { volume: 0.5 });
+    if (id === 'photo') this.setPhoto(true);
+    else if (id === 'speed') this.cycleSpeed();
+    else if (id === 'undo') this.undo();
+    else if (id === 'clear') this.clearAll();
+    else if (id === 'share') void this.shareScene();
+  }
+
+  /** Sets which tools show and whether the undo button has anything to undo. Called every frame, cheap. */
+  private refreshTools(): void {
+    const mode = this.titleMode || this.hud.overlayOpen || this.photo ? null : this.level.tasks ? 'world' : this.level.hero ? 'hero' : 'free';
+    if (mode !== this.toolMode) {
+      this.toolMode = mode;
+      this.tools.setMode(mode);
+    }
+    if (mode === 'free') {
+      this.tools.setEnabled('undo', this.history.length > 0);
+      this.tools.setEnabled('clear', this.history.length > 0 || this.world.living().some((e) => e !== this.world.hero));
+    }
+  }
+
+  setTimeScale(k: number): void {
+    this.timeScale = k;
+    this.tools.setBadge('speed', k === 1 ? '' : k === 0 ? '⏸' : k === 0.5 ? '½×' : '¼×');
+    this.tools.setActive('speed', k !== 1);
+    this.photoUI.setFrozen(k === 0);
+    if (k !== 1) this.world.events.emit('timeBent', { scale: k });
+  }
+
+  /** ⏱: normal, half speed, quarter speed, paused, and around again. */
+  cycleSpeed(): void {
+    const order = [1, 0.5, 0.25, 0];
+    this.setTimeScale(order[(order.indexOf(this.timeScale) + 1) % order.length]);
+    const label = this.timeScale === 1 ? 'Normal speed' : this.timeScale === 0 ? 'Time is paused. Casting a spell starts it again.' : `${this.timeScale === 0.5 ? 'Half' : 'Quarter'} speed`;
+    this.hud.toasts.show(label, { duration: 1600 });
+  }
+
+  /** ↶: takes back the last spell you cast in Free Play. */
+  undo(): void {
+    const last = this.history.pop();
+    if (!last) return;
+    last.pending.cancelled = true;
+    for (const p of this.pendingCasts) if (p === (last.pending as object)) this.pendingCasts.delete(p);
+    for (const e of last.entities) if (e.alive) this.world.remove(e, 'undo', 'poof');
+    this.fx.sound('poof', { volume: 0.6 });
+  }
+
+  /** 🧹: removes everything you cast (not the island). */
+  clearAll(): void {
+    for (const p of this.pendingCasts) p.cancelled = true;
+    this.pendingCasts.clear();
+    let n = 0;
+    for (const e of this.world.living()) {
+      if (e === this.world.hero) continue;
+      this.world.remove(e, 'cleared', 'poof');
+      n++;
+    }
+    this.history = [];
+    if (n) this.fx.sound('whoosh', { volume: 0.5 });
+    this.hud.toasts.show(n ? `Swept away ${n} thing${n === 1 ? '' : 's'}.` : 'Nothing to clear.', { duration: 1600 });
+  }
+
+  /** 🔗: a link that rebuilds this scene, copied to the clipboard (or the share sheet on phones). */
+  async shareScene(): Promise<void> {
+    if (!this.history.length) {
+      this.hud.toasts.show('Cast a few spells first, then share the scene.', { kind: 'info' });
+      return;
+    }
+    const url = sceneUrl(this.history.map((h) => h.log));
+    this.world.events.emit('shared', { url });
+    try {
+      if (isTouch && navigator.share) {
+        await navigator.share({ title: 'A Blockspell scene', text: 'Watch this scene build itself in Blockspell:', url });
+        return;
+      }
+      await navigator.clipboard.writeText(url);
+      this.hud.toasts.show('Anyone who opens it watches your spells cast themselves. It works offline too.', { title: '🔗 Link copied', kind: 'success', duration: 4200 });
+    } catch (err) {
+      if ((err as Error)?.name === 'AbortError') return; // closed the share sheet
+      // no clipboard (insecure page, old browser): show the link to copy by hand
+      const box = h('input.link-box', { type: 'text', readonly: 'true', value: url, 'aria-label': 'Scene link' });
+      this.hud.showPanel(h('div.panel', {}, [
+        h('h2', { text: '🔗 Share this scene' }),
+        h('p', { text: 'Copy this link:' }),
+        box,
+        h('div.panel-actions', {}, [h('button.btn', { type: 'button', text: 'Done', onClick: () => this.hud.hideOverlay() })]),
+      ]));
+      box.focus();
+      box.select();
+    }
+  }
+
+  /** Opens Free Play and replays a shared scene's casts, one every half second. */
+  playScene(casts: SceneCast[]): void {
+    const free = menuLevels().find((l) => !l.goal);
+    if (!free || !casts.length) return;
+    this.loadLevel(free.id);
+    this.startIntro();
+    this.hud.toasts.show(`${casts.length} spell${casts.length === 1 ? '' : 's'} are about to cast themselves. Then it's your island.`, { title: '🔗 A shared scene', kind: 'success', duration: 4500 });
+    casts.forEach((c, i) => {
+      this.fx.tweens.add({
+        delay: 1.2 + i * 0.5,
+        duration: 0.001,
+        update: () => {},
+        done: () => {
+          const g = this.world.groundAt(c.x, c.z);
+          this.castAt(c.spell, [c.x, Number.isFinite(g) ? g : 0, c.z]);
+        },
+      });
+    });
+  }
+
+  /** 📷: hides the HUD so the camera can roam free; Snap saves a PNG. */
+  setPhoto(on: boolean): void {
+    if (this.photo === on) return;
+    this.photo = on;
+    document.body.classList.toggle('photo-mode', on);
+    this.photoUI.show(on);
+    this.keys.clear();
+    if (on) {
+      this.hud.input.blur();
+      this.intro = null;
+    } else {
+      if (this.photoPaused) this.setTimeScale(this.photoPrev);
+      this.photoPaused = false;
+    }
+  }
+
+  private photoPaused = false;
+  private photoPrev = 1;
+
+  /** Photo mode's freeze toggle. */
+  private toggleFreeze(): void {
+    if (this.timeScale === 0) {
+      this.setTimeScale(this.photoPrev || 1);
+      this.photoPaused = false;
+    } else {
+      this.photoPrev = this.timeScale;
+      this.photoPaused = true;
+      this.setTimeScale(0);
+    }
+  }
+
+  /** Saves what the camera sees as a PNG and shows it in the corner. */
+  private snap(): void {
+    const canvas = this.renderer.capture(this.fx.shake, this.fx.screen);
+    this.photoUI.flash();
+    this.fx.sound('chime', { pitch: 1.5, volume: 0.6 });
+    if (!canvas) {
+      this.hud.toasts.show("The browser wouldn't let me read the picture.", { kind: 'warn' });
+      return;
+    }
+    const stamp = new Date().toISOString().replace(/[:T]/g, '-').slice(0, 19);
+    const name = `blockspell-${stamp}.png`;
+    canvas.toBlob((blob) => {
+      if (!blob) return;
+      const url = URL.createObjectURL(blob);
+      const a = h('a', { href: url, download: name });
+      document.body.append(a);
+      a.click();
+      a.remove();
+      this.photoUI.thumb(url, name);
+      this.world.events.emit('photo', { name });
+    }, 'image/png');
+  }
+
   // ------------------------------------------------------------ input
   private bindInput(): void {
     const canvas = this.renderer.gl.domElement;
@@ -618,6 +818,13 @@ export class Game {
     window.addEventListener('keyup', (e) => this.keys.delete(e.code));
     window.addEventListener('keydown', (e) => {
       const input = this.hud.input;
+      if (this.photo) {
+        if (e.key === 'Escape' || e.code === 'KeyP') this.setPhoto(false);
+        else if ((e.code === 'Space' || e.key === 'Enter') && !e.repeat && !(e.target instanceof HTMLButtonElement)) this.snap();
+        else if (e.code === 'KeyF' && !e.repeat) this.toggleFreeze();
+        e.preventDefault();
+        return;
+      }
       if (e.key === 'Tab') {
         e.preventDefault();
         this.spellbook.toggle();
@@ -649,6 +856,7 @@ export class Game {
           this.keys.clear();
           input.focus();
         } else if (e.code === 'KeyR' && !e.repeat) this.restart();
+        else if (e.code === 'KeyP' && !e.repeat) this.setPhoto(true);
         return;
       }
       if (e.key.length === 1 && /\S/.test(e.key)) input.focus();
@@ -664,7 +872,7 @@ export class Game {
     const inp = this.world.input;
     const k = this.keys;
     const typing = document.activeElement === this.hud.input;
-    const on = (...codes: string[]) => !typing && !this.titleMode && codes.some((c) => k.has(c));
+    const on = (...codes: string[]) => !typing && !this.titleMode && !this.photo && codes.some((c) => k.has(c));
     const fwd = (on('KeyW', 'ArrowUp') ? 1 : 0) - (on('KeyS', 'ArrowDown') ? 1 : 0);
     const side = (on('KeyD', 'ArrowRight') ? 1 : 0) - (on('KeyA', 'ArrowLeft') ? 1 : 0);
     const cam = this.renderer.camera.position, tgt = this.renderer.controls.target;
@@ -891,7 +1099,8 @@ export class Game {
   private frame = (now: number): void => {
     const dt = Math.min(1 / 20, (now - this.last) / 1000);
     this.last = now;
-    this.tick(dt * this.fx.screen.pace(dt)); // hit-stop slows the world, not the camera or the UI
+    this.tick(dt * this.fx.screen.pace(dt) * this.timeScale); // hit-stop and slow motion slow the world, not the camera or the UI
+    this.refreshTools();
     this.followCamera(dt);
     this.stepIntro(dt);
     this.updateCarry(dt);
