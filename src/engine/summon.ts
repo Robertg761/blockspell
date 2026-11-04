@@ -79,4 +79,12 @@ export class Summons {
       },
     });
   }
+
+  /** Hides every column and frees its slot (a level change drops the tweens that would have). */
+  clear(): void {
+    for (const s of this.slots) {
+      s.group.visible = false;
+      s.busy = false;
+    }
+  }
 }

@@ -598,6 +598,7 @@ export class GameWorld {
     this.fx.particles.clear();
     this.fx.flames.clear();
     this.fx.tweens.clear();
+    this.fx.summons.clear();
   }
 
   // ---------------------------------------------------------------- loop
