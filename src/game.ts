@@ -739,7 +739,14 @@ export class Game {
 
   setSky(name: SkyName, seconds = 2.5): void {
     this.renderer.setSky(name, seconds);
+    this.updateMusicMood();
     this.tools.setBadge('sky', name === 'day' ? '' : name === 'night' ? '🌙' : name === 'sunset' ? '🌇' : '🌅');
+  }
+
+  /** Rain and snow set the music's mood; otherwise the time of day does. */
+  private updateMusicMood(): void {
+    const w = this.renderer.weather.current;
+    this.fx.audio.setMusicMood(w !== 'clear' ? w : this.renderer.skyPreset);
   }
 
   /** 🌦: clear, rain, snow (just for looks and mood: it does not put out fires). */
@@ -752,6 +759,7 @@ export class Game {
 
   setWeather(w: WeatherName): void {
     this.renderer.weather.set(w);
+    this.updateMusicMood();
     this.fx.audio.setAmbient(w === 'rain' ? 'rain' : w === 'snow' ? 'wind' : null);
     this.tools.setBadge('weather', w === 'rain' ? '🌧' : w === 'snow' ? '❄' : '');
   }

@@ -1,4 +1,4 @@
-import { Music } from './music';
+import { Music, type MusicMood } from './music';
 
 /**
  * All sound is synthesized with WebAudio at runtime — no audio files.
@@ -315,6 +315,7 @@ export class Audio {
   private lastPlayed = new Map<SoundName, number>();
   /** Background music; available after `unlock()`. */
   music: Music | null = null;
+  private mood: MusicMood = 'day';
   muted = loadMuted();
 
   constructor() {
@@ -348,11 +349,18 @@ export class Audio {
     this.applyVolumes();
     this.synth = new Synth(ctx, this.sfxBus, buf);
     this.music = new Music(new Synth(ctx, this.musicBus, buf), this.musicBus);
+    this.music.setMood(this.mood);
     this.music.start();
     this.applyAmbient();
   }
 
   /** A quiet looping bed of rain or wind noise under everything (null: none). Works before `unlock()` too. */
+  /** The music's feel follows the time of day and weather (applied at the next phrase). */
+  setMusicMood(m: MusicMood): void {
+    this.mood = m;
+    this.music?.setMood(m);
+  }
+
   setAmbient(kind: 'rain' | 'wind' | null): void {
     this.wantAmbient = kind;
     this.applyAmbient();
