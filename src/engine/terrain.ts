@@ -171,6 +171,14 @@ export function buildTerrain(opts: Partial<TerrainOptions>, physMat: PhysMateria
   const SUB = DV / DECOR_VOXEL;
   const looks = makeRng(o.seed + 7001);
   const decor = new VoxelBuilder();
+  // Match the same voxel-space translation used when merging scenery into the mesh.
+  const solidDecor = (model: VoxelBuilder, x: number, y: number, z: number) => {
+    const m = model.build();
+    const body = new Body({ mass: 0, material: physMat, type: Body.STATIC });
+    body.addShape(new Box(new Vec3(m.sx * DECOR_VOXEL / 2, m.sy * DECOR_VOXEL / 2, m.sz * DECOR_VOXEL / 2)));
+    body.position.set(o.cx + (x + m.min[0] + m.sx / 2) * DECOR_VOXEL, (y + m.min[1] + m.sy / 2) * DECOR_VOXEL, o.cz + (z + m.min[2] + m.sz / 2) * DECOR_VOXEL);
+    bodies.push(body);
+  };
   const placeRing = (minFrac: number, random: Rng = rng) => {
     for (let tries = 0; tries < 50; tries++) {
       const a = random() * Math.PI * 2;
@@ -193,8 +201,9 @@ export function buildTerrain(opts: Partial<TerrainOptions>, physMat: PhysMateria
     const tree = species < 0.5 ? buildOak(looks, height) : species < 0.8 ? buildPine(looks, height) : buildBirch(looks, height);
     decor.merge(tree, (cx + 1) * SUB, Math.round(p.h / DECOR_VOXEL), (cz + 1) * SUB);
     const tb = new Body({ mass: 0, material: physMat, type: Body.STATIC });
-    tb.addShape(new Box(new Vec3(DV, (trunkH * DV) / 2, DV)));
-    tb.position.set(o.cx + (cx + 1) * DV, p.h + (trunkH * DV) / 2, o.cz + (cz + 1) * DV);
+    const solidHeight = (species < 0.5 ? height : species < 0.8 ? Math.round(height * 1.9) + 8 : Math.round(height * 1.3)) * DECOR_VOXEL;
+    tb.addShape(new Box(new Vec3(DV, solidHeight / 2, DV)));
+    tb.position.set(o.cx + (cx + 1) * DV, p.h + solidHeight / 2, o.cz + (cz + 1) * DV);
     bodies.push(tb);
   }
   for (let r = 0; r < o.rocks; r++) {
@@ -202,14 +211,19 @@ export function buildTerrain(opts: Partial<TerrainOptions>, physMat: PhysMateria
     if (!p) continue;
     const s = 1 + rng() * 1.6;
     rng(); // used to pick the rock's color
-    decor.merge(buildBoulder(looks, s * SUB), Math.round(p.x / DECOR_VOXEL), Math.round(p.h / DECOR_VOXEL), Math.round(p.z / DECOR_VOXEL));
+    const model = buildBoulder(looks, s * SUB);
+    const x = Math.round(p.x / DECOR_VOXEL), y = Math.round(p.h / DECOR_VOXEL), z = Math.round(p.z / DECOR_VOXEL);
+    decor.merge(model, x, y, z);
+    solidDecor(model, x, y, z);
   }
   for (let k = 0; k < o.shrubs; k++) {
     const p = placeRing(0.92, looks);
     if (!p) continue;
     const roll = looks();
     const model = roll < 0.62 ? buildShrub(looks, pick(looks, [undefined, '#d8413f', '#f4f1ea', '#f0a6c0'])) : roll < 0.82 ? buildStump(looks) : buildFallenLog(looks);
-    decor.merge(model, Math.round(p.x / DECOR_VOXEL), Math.round(p.h / DECOR_VOXEL), Math.round(p.z / DECOR_VOXEL));
+    const x = Math.round(p.x / DECOR_VOXEL), y = Math.round(p.h / DECOR_VOXEL), z = Math.round(p.z / DECOR_VOXEL);
+    decor.merge(model, x, y, z);
+    if (roll >= 0.62) solidDecor(model, x, y, z);
   }
   hangCreepers(decor, surface, T / FINE / DECOR_VOXEL);
   const pickables = [terrainMesh];
