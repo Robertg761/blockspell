@@ -51,7 +51,8 @@ export class PhotoUI {
   private clearThumb(): void {
     clearTimeout(this.thumbTimer);
     this.root.querySelectorAll('.photo-thumb').forEach((e) => e.remove());
-    if (this.lastUrl) setTimeout(() => URL.revokeObjectURL(this.lastUrl), 10000);
+    const old = this.lastUrl;
+    if (old) setTimeout(() => URL.revokeObjectURL(old), 10000);
     this.lastUrl = '';
   }
 }

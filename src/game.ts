@@ -565,8 +565,8 @@ export class Game {
     if (this.isFreePlay) {
       this.history.push(entry);
       if (this.history.length > 80) this.history.shift();
-      if (this.timeScale === 0) this.setTimeScale(1); // casting is how you un-pause
     }
+    if (this.timeScale === 0) this.setTimeScale(1); // casting is how you un-pause, in every mode
     for (let i = 0; i < count; i++) {
       const angle = (i / count) * Math.PI * 2;
       const r = (count > 1 ? 0.6 + count * 0.15 : 0) + jitter * random();
