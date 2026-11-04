@@ -18,7 +18,7 @@ export class Waypoint {
       uniforms: { uColor: { value: new Color('#8fe3ff') }, uAlpha: { value: 0 } },
       vertexShader: /* glsl */ `
         varying float vH; varying vec3 vN;
-        void main() { vH = position.y + 0.5; vN = normalize(normalMatrix * normal);
+        void main() { vH = position.y / 18.0 + 0.5; vN = normalize(normalMatrix * normal);
           gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
       fragmentShader: /* glsl */ `
         uniform vec3 uColor; uniform float uAlpha; varying float vH; varying vec3 vN;

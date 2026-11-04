@@ -109,6 +109,7 @@ export class Game {
   private fpsShownAt = 0;
   private slowFor = 0;
   private autoScale = 1;
+  private lastResolution = -1;
   private failed = false;
   private winTimer = 0;
   private terrainKey = '';
@@ -1421,7 +1422,11 @@ export class Game {
   }
 
   private applyScale(): void {
-    this.renderer.setRenderScale(settings.get().resolution * this.autoScale);
+    const st = settings.get();
+    // the player's own choice wins: turning adaptation off, or moving the Sharpness slider, drops the automatic step-down
+    if (!st.autoRes || st.resolution !== this.lastResolution) this.autoScale = 1;
+    this.lastResolution = st.resolution;
+    this.renderer.setRenderScale(st.resolution * this.autoScale);
   }
 
   /** The fps counter, and a one-way step down in resolution if the frame rate stays low (never in headless runs). */
