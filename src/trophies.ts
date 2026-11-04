@@ -46,7 +46,7 @@ export const TROPHIES: TrophyDef[] = [
   { id: 'explorer', icon: '🗺', name: 'Island Hopper', desc: 'Visit every island.', stat: 'zones', goal: 7 },
   { id: 'hero', icon: '🏆', name: 'Hero of the Islands', desc: 'Finish every task.', stat: 'allTasks', goal: 1 },
   { id: 'lab-rat', icon: '🧪', name: 'Lab Rat', desc: 'Complete 6 experiments in the lab notebook.', stat: 'lab', goal: 6 },
-  { id: 'mad-scientist', icon: '⚗', name: 'Mad Scientist', desc: 'Complete every experiment in the lab notebook.', stat: 'lab', goal: 16 },
+  { id: 'mad-scientist', icon: '⚗', name: 'Mad Scientist', desc: 'Complete every experiment in the lab notebook.', stat: 'lab', goal: 17 },
   { id: 'night', icon: '🌙', name: 'Night Owl', desc: 'Cast a spell at night.', stat: 'nightCasts', goal: 1, secret: true },
 ];
 
@@ -80,6 +80,7 @@ export const EXPERIMENTS: Experiment[] = [
   { id: 'bomb', icon: '💣', name: 'Explode a bomb', hint: 'A bomb goes off by itself, eventually.' },
   { id: 'chain', icon: '⛓', name: 'Start a chain reaction', hint: 'Two blasts close together: TNT next to TNT.' },
   { id: 'unlock', icon: '🔑', name: 'Unlock a door', hint: 'A key and a locked door.' },
+  { id: 'grow', icon: '🌱', name: 'Grow a tree from a seed', hint: 'A seed needs water. Rain from a cloud works too.' },
 ];
 
 const KEY = 'blockspell.trophies.v1';
@@ -193,6 +194,7 @@ export class Trophies {
     });
     events.on('broken', () => this.bump('broken'));
     events.on('remove', ({ entity, reason }) => {
+      if (reason === 'used' && id(entity) === 'seed') this.discover('grow');
       if (reason !== 'melted' || !live()) return;
       this.discover('melt');
       if (id(entity) === 'snowman') this.discover('snowman');
