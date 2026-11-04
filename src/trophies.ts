@@ -36,6 +36,7 @@ export const TROPHIES: TrophyDef[] = [
   { id: 'pop', icon: '🎈', name: 'Pop Star', desc: 'Pop 5 balloons.', stat: 'popped', goal: 5 },
   { id: 'butter', icon: '🔨', name: 'Butterfingers', desc: 'Break 5 fragile things.', stat: 'broken', goal: 5 },
   { id: 'photo', icon: '📷', name: 'Photographer', desc: 'Take a photo.', stat: 'photos', goal: 1 },
+  { id: 'director', icon: '🎬', name: 'Director', desc: 'Record a short clip in photo mode.', stat: 'clips', goal: 1 },
   { id: 'share', icon: '🔗', name: 'Show and Tell', desc: 'Copy a link to a scene.', stat: 'shares', goal: 1 },
   { id: 'bender', icon: '⏱', name: 'Time Bender', desc: 'Slow down or pause time.', stat: 'timeBent', goal: 1 },
   { id: 'sky', icon: '🌅', name: 'Sky Painter', desc: 'Try every time of day.', stat: 'skies', goal: 4 },

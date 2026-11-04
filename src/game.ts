@@ -44,6 +44,7 @@ import { finalePanel } from './ui/finale-panel';
 import { trophiesPanel } from './ui/trophies-panel';
 import { settingsPanel } from './ui/settings-panel';
 import { GamepadInput } from './ui/gamepad';
+import { cssFilter, filterById } from './photo-filters';
 
 /** Wires renderer, world, input, parser, levels and HUD together. */
 export class Game {
@@ -162,7 +163,13 @@ export class Game {
     settings.onChange((s) => this.applySettings(s));
     this.reactions = new Reactions(root, this.world);
     this.tools = new SideTools((id) => this.useTool(id));
-    this.photoUI = new PhotoUI(root, { onSnap: () => this.snap(), onFreeze: () => this.toggleFreeze(), onExit: () => this.setPhoto(false) });
+    this.photoUI = new PhotoUI(root, {
+      onSnap: () => this.snap(),
+      onFreeze: () => this.toggleFreeze(),
+      onExit: () => this.setPhoto(false),
+      onFilter: (id) => this.setPhotoFilter(id),
+      onClip: typeof MediaRecorder !== 'undefined' ? () => this.recordClip() : undefined,
+    });
     root.append(this.tools.el, this.fpsEl);
     this.refreshChips();
 
@@ -942,7 +949,59 @@ export class Game {
     } else {
       if (this.photoPaused) this.setTimeScale(this.photoPrev);
       this.photoPaused = false;
+      this.photoUI.pick('natural');
     }
+  }
+
+  private photoFilter = 'natural';
+  private clipTimer = 0;
+
+  /** The look chosen in photo mode: shown live on the canvas and baked into saved pictures. */
+  private setPhotoFilter(id: string): void {
+    this.photoFilter = id;
+    this.renderer.gl.domElement.style.filter = cssFilter(filterById(id));
+  }
+
+  /** 🎞: records six seconds of the scene as a video file (not filtered: the filter is a picture look). */
+  private recordClip(): void {
+    if (this.clipTimer) return;
+    const canvas = this.renderer.gl.domElement;
+    const mime = ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm', 'video/mp4'].find((t) => MediaRecorder.isTypeSupported(t));
+    if (!mime || !canvas.captureStream) {
+      this.hud.toasts.show("This browser can't record clips. Photos still work.", { kind: 'warn' });
+      return;
+    }
+    const chunks: Blob[] = [];
+    const rec = new MediaRecorder(canvas.captureStream(30), { mimeType: mime, videoBitsPerSecond: 6_000_000 });
+    rec.ondataavailable = (e) => e.data.size && chunks.push(e.data);
+    rec.onstop = () => {
+      const blob = new Blob(chunks, { type: mime.split(';')[0] });
+      const stamp = new Date().toISOString().replace(/[:T]/g, '-').slice(0, 19);
+      const name = `blockspell-clip-${stamp}.${mime.startsWith('video/mp4') ? 'mp4' : 'webm'}`;
+      const url = URL.createObjectURL(blob);
+      const a = h('a', { href: url, download: name });
+      document.body.append(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 15000);
+      this.hud.toasts.show(`Saved ${name}`, { title: '🎞 Clip saved', kind: 'success', duration: 4000 });
+      this.trophies.bump('clips');
+    };
+    const LENGTH = 6;
+    let left = LENGTH;
+    rec.start(250);
+    this.photoUI.setRecording(left);
+    this.clipTimer = window.setInterval(() => {
+      left -= 0.1;
+      if (left > 0) {
+        this.photoUI.setRecording(left);
+        return;
+      }
+      clearInterval(this.clipTimer);
+      this.clipTimer = 0;
+      this.photoUI.setRecording(null);
+      if (rec.state !== 'inactive') rec.stop();
+    }, 100);
   }
 
   private photoPaused = false;
@@ -962,7 +1021,7 @@ export class Game {
 
   /** Saves what the camera sees as a PNG and shows it in the corner. */
   private snap(): void {
-    const canvas = this.renderer.capture(this.fx.shake, this.fx.screen);
+    const canvas = this.renderer.capture(this.fx.shake, this.fx.screen, filterById(this.photoFilter));
     this.photoUI.flash();
     this.fx.sound('chime', { pitch: 1.5, volume: 0.6 });
     if (!canvas) {

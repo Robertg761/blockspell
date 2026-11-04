@@ -16,6 +16,7 @@ import { createGradePass, type ScreenFx } from './grade';
 import { cloneSky, lerpSky, SKIES, type SkyName, type SkyState } from './skies';
 import { Weather } from './weather';
 import { Life } from './life';
+import { applyFilter, type PhotoFilter } from '../photo-filters';
 import type { CameraShake } from './shake';
 import type { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 
@@ -247,7 +248,7 @@ export class Renderer {
    * Renders one frame and copies it into a 2D canvas with a small "Blockspell" tag in the corner
    * (a WebGL canvas can only be read in the same task it was drawn in). Returns null if reading failed.
    */
-  capture(shake: CameraShake, screen?: ScreenFx): HTMLCanvasElement | null {
+  capture(shake: CameraShake, screen?: ScreenFx, filter?: PhotoFilter): HTMLCanvasElement | null {
     this.render(0, shake, screen);
     try {
       const src = this.gl.domElement;
@@ -257,6 +258,7 @@ export class Renderer {
       const g = out.getContext('2d');
       if (!g) return null;
       g.drawImage(src, 0, 0);
+      if (filter) applyFilter(out, filter);
       const size = Math.max(14, Math.round(out.height / 46));
       g.font = `800 ${size}px system-ui, sans-serif`;
       g.textAlign = 'right';

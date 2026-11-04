@@ -34,7 +34,7 @@ body.photo-mode .tutorial-tip, body.photo-mode .carry-prompt { display: none !im
 }
 .photo-bar.hidden { display: none; }
 .photo-bar .btn { padding: 10px 18px; }
-.photo-hint { position: absolute; left: 50%; bottom: 84px; transform: translateX(-50%); z-index: 6; font-size: 12.5px; color: #fff; text-shadow: 0 1px 5px rgba(0, 0, 0, 0.6); white-space: nowrap; pointer-events: none; }
+.photo-hint { position: absolute; left: 50%; bottom: 126px; transform: translateX(-50%); z-index: 6; font-size: 12.5px; color: #fff; text-shadow: 0 1px 5px rgba(0, 0, 0, 0.6); white-space: nowrap; pointer-events: none; }
 .photo-hint.hidden { display: none; }
 .photo-flash { position: absolute; inset: 0; z-index: 7; background: #fff; opacity: 0; pointer-events: none; }
 .photo-flash.go { animation: photo-flash 0.45s ease-out; }
@@ -49,3 +49,16 @@ body.photo-mode .tutorial-tip, body.photo-mode .carry-prompt { display: none !im
 @keyframes thumb-in { from { transform: translateY(160px) rotate(8deg); opacity: 0; } }
 .photo-thumb.out { opacity: 0; transition: opacity 0.4s; }
 .link-box { width: 100%; font-size: 14px; padding: 10px 12px; border-radius: 10px; border: 1.5px solid #d9dee8; user-select: text; }
+
+.photo-filters {
+  position: absolute; left: 50%; bottom: 84px; transform: translateX(-50%); z-index: 6;
+  display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; max-width: calc(100vw - 24px);
+}
+.photo-filters.hidden { display: none; }
+.photo-filter {
+  border: 0; cursor: pointer; padding: 6px 14px; border-radius: 999px; font-size: 13px; font-weight: 700;
+  background: rgba(255, 255, 255, 0.85); color: var(--ink, #1f2433); box-shadow: 0 2px 8px rgba(20, 30, 60, 0.2);
+}
+.photo-filter:hover { background: #fff; }
+.photo-filter.on { background: var(--accent); color: #fff; }
+.btn.recording { color: #d12f2f; }
