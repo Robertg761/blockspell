@@ -22,11 +22,16 @@ function blocked(e: Entity, world: GameWorld, y: number, dx: number, dz: number,
 }
 
 export const HERO = {
-  speed: 3.6,
+  speed: 2.5,
+  /** Air control drifts toward this: faster than the run, which is what sets how far a jump carries. */
+  airSpeed: 3.6,
   jump: 5.2,
   climb: 2.6,
+  /** Upward speed while stepping onto something, and what's left of it on clearing the top. */
+  stepRise: 2.6,
+  stepSettle: 0.8,
   /** Per-substep velocity blend on the ground / in the air. */
-  groundAccel: 0.28,
+  groundAccel: 0.16,
   airAccel: 0.07,
   coyote: 0.12,
   jumpBuffer: 0.14,
@@ -34,13 +39,26 @@ export const HERO = {
 
 const feet = (e: Entity) => e.body.position.y - e.size.y / 2;
 
-/** True if the last physics step left the hero resting on something (terrain, static or entity). */
-function onGround(e: Entity, world: GameWorld): boolean {
+/**
+ * True if the last physics step left the hero resting on something (terrain,
+ * static or entity), or wedged motionless against it with nothing underfoot,
+ * as when squeezed between the top of some stairs and a cliff. The wait keeps
+ * the instant at the top of a jump beside a wall from counting as standing.
+ */
+function onGround(e: Entity, world: GameWorld, h: number): boolean {
+  let touching = false;
   for (const c of world.physics.contacts) {
-    if (c.bi === e.body && c.ni.y < -0.5) return true;
-    if (c.bj === e.body && c.ni.y > 0.5) return true;
+    if (c.bi === e.body) {
+      if (c.ni.y < -0.5) return true;
+      touching = true;
+    } else if (c.bj === e.body) {
+      if (c.ni.y > 0.5) return true;
+      touching = true;
+    }
   }
-  return false;
+  const wedged = touching && Math.abs(e.body.velocity.y) < 0.05 ? ((e.state.wedged as number) || 0) + h : 0;
+  e.state.wedged = wedged;
+  return wedged > 0.1;
 }
 
 /** The climbable thing the hero is overlapping (ladder, rope, tree, stairs), if any. */
@@ -70,6 +88,10 @@ export default defineBehavior({
   attach(e) {
     e.body.angularFactor.set(0, 0, 0);
     e.body.angularVelocity.set(0, 0, 0);
+    // No rotational inertia in the solver: otherwise friction at the feet tips the
+    // body, the contacts kick back upward, and running turns into a stutter of hops.
+    e.body.fixedRotation = true;
+    e.body.updateMassProperties();
     e.body.allowSleep = false;
     e.body.linearDamping = 0;
     const q = e.body.quaternion;
@@ -77,36 +99,23 @@ export default defineBehavior({
     e.state.airTime = 0;
     e.state.jumpBuf = 0;
     e.state.climbing = false;
+    e.state.footGrip = e.body.material?.friction ?? 0;
   },
   detach(e) {
+    if (e.body.material) e.body.material.friction = e.state.footGrip as number;
     e.body.angularFactor.set(0, 1, 0);
+    e.body.fixedRotation = false;
+    e.body.updateMassProperties();
     e.body.collisionFilterMask = -1;
-  },
-  update(e, world, dt) {
-    // cosmetic: walk bob and climb wiggle
-    const v = e.body.velocity;
-    const sp = Math.hypot(v.x, v.z);
-    const climbing = e.state.climbing as boolean;
-    const bob = climbing ? Math.sin(world.time * 16) * 0.03 : sp > 0.4 && (e.state.airTime as number) < 0.1 ? Math.abs(Math.sin(world.time * 13)) * 0.06 : 0;
-    e.visual.position.y += (bob - e.visual.position.y) * Math.min(1, dt * 20);
-    // footstep dust
-    if (sp > 1.5 && (e.state.airTime as number) === 0 && !climbing) {
-      e.state.stepT = ((e.state.stepT as number) || 0) + dt * Math.min(1.4, sp / 3);
-      if ((e.state.stepT as number) > 0.32) {
-        e.state.stepT = 0;
-        world.fx.sound('step', { volume: 0.6 });
-      }
-    }
-    if (sp > 1.5 && (e.state.airTime as number) === 0 && Math.random() < dt * 7)
-      world.fx.burst({ x: e.x, y: feet(e) + 0.05, z: e.z }, { count: 3, color: ['#e8dcc0', '#cdbf9f'], speed: 0.8, up: 0.6, size: 0.07, life: 0.4, gravity: 1, grow: true });
   },
   fixedUpdate(e, world, h) {
     const b = e.body;
     if (e.has('frozen')) return;
     const inp = world.input;
-    const grounded = onGround(e, world);
+    const grounded = onGround(e, world, h);
     const wasAir = e.state.airTime as number;
     e.state.airTime = grounded ? 0 : wasAir + h;
+    if (grounded && wasAir > 0.08 && (e.state.lastVy as number) < -1.5) e.state.squashKick = Math.max(-5, (e.state.lastVy as number) * 0.6);
     if (grounded && wasAir > 0.35 && (e.state.lastVy as number) < -4) {
       world.fx.burst({ x: e.x, y: feet(e) + 0.05, z: e.z }, { count: 12, color: ['#e8dcc0', '#ffffff'], speed: 2.2, up: 0.8, size: 0.1, life: 0.5, gravity: 1, grow: true });
       world.fx.sound('land', { volume: 0.8 });
@@ -119,11 +128,15 @@ export default defineBehavior({
     let mx = inp.move.x, mz = inp.move.z;
     const ml = Math.hypot(mx, mz);
     if (ml > 1) { mx /= ml; mz /= ml; }
+    // the walking code sets the speed, so friction only gets in the way until the hero stands still
+    const settled = ml <= 0.05 && (e.state.jumpBuf as number) === 0 && b.velocity.y <= 0.5 && Math.hypot(b.velocity.x, b.velocity.z) <= 0.3;
+    if (b.material) b.material.friction = settled ? (e.state.footGrip as number) : 0;
 
     // ---- climbing
     // once on a ladder, hold on a little more generously so sideways input doesn't drop you
     const ladder = climbableAt(e, world, e.state.climbing ? 0.5 : 0.4);
-    const wantsUp = inp.up || inp.jump;
+    // Space jumps when standing, even on stairs; it only grabs on once properly airborne and no longer rising
+    const wantsUp = inp.up || (inp.jump && (!!e.state.climbing || ((e.state.airTime as number) > HERO.coyote && b.velocity.y < 1)));
     if (ladder && (wantsUp || (e.state.climbing && inp.down))) {
       if (!e.state.climbing) world.fx.sound('climb', { volume: 0.8 });
       e.state.climbing = true;
@@ -155,14 +168,22 @@ export default defineBehavior({
 
     // ---- walking
     const k = grounded ? HERO.groundAccel : HERO.airAccel;
+    const speed = grounded ? HERO.speed : HERO.airSpeed;
     if (grounded || ml > 0.05) {
-      b.velocity.x += (mx * HERO.speed - b.velocity.x) * k;
-      b.velocity.z += (mz * HERO.speed - b.velocity.z) * k;
+      b.velocity.x += (mx * speed - b.velocity.x) * k;
+      b.velocity.z += (mz * speed - b.velocity.z) * k;
     }
-    // step-up: walking into something knee-high (a stair, a log) hops onto it
-    if (grounded && ml > 0.5 && b.velocity.y < 1) {
+    // step-up: walking into something knee-high (a stair, a log) rises onto it as if up a slope
+    const stepping = e.state.stepping as boolean | undefined;
+    e.state.stepping = false;
+    if ((grounded || stepping) && ml > 0.15 && b.velocity.y <= HERO.stepRise) {
       const f = feet(e), len = e.size.z / 2 + 0.3, ux = mx / Math.hypot(mx, mz), uz = mz / Math.hypot(mx, mz);
-      if (blocked(e, world, f + 0.06, ux, uz, len) && !blocked(e, world, f + 0.6, ux, uz, len + 0.15)) b.velocity.y = 3.6;
+      // once rising, feel for the lip right at the feet so they clear it, not just the shins
+      if (blocked(e, world, f + (stepping ? 0.015 : 0.06), ux, uz, len) && !blocked(e, world, f + 0.6, ux, uz, len + 0.15)) {
+        b.velocity.y = HERO.stepRise;
+        e.state.stepping = true;
+        e.state.airTime = 0;
+      } else if (stepping) b.velocity.y = Math.min(b.velocity.y, HERO.stepSettle); // over the lip: no leftover hop
     }
 
     // ---- jumping
@@ -170,6 +191,7 @@ export default defineBehavior({
       b.velocity.y = HERO.jump;
       e.state.airTime = HERO.coyote; // no double jumps off coyote time
       e.state.jumpBuf = 0;
+      e.state.squashKick = 2.6;
       world.fx.sound('jump', { volume: 0.7 });
       world.fx.burst({ x: e.x, y: feet(e) + 0.05, z: e.z }, { count: 8, color: ['#e8dcc0', '#ffffff'], speed: 1.6, up: 0.5, size: 0.08, life: 0.4, gravity: 1, grow: true });
     }

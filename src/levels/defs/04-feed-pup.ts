@@ -40,15 +40,17 @@ export default defineLevel({
         { walkTo: [0, 1.5] }, { cast: 'ladder', at: [0, 0.4] }, { wait: 1.5 },
         { walkTo: [0, 0.95] }, { hold: { dir: [0, -1], up: true }, for: 1.85 },
         { wait: 1 },
+        { walkTo: [-1, -3], timeout: 3 }, // inside the pen, clear of the pup's path to the bone
         { cast: 'bone', at: [0, 0, -1.9] },
       ],
     },
     {
       name: 'stairs up and jump, then a bone',
       steps: [
-        { walkTo: [0, 3.0] }, { cast: 'stairs', at: [0, 1.3] }, { wait: 1.5 },
-        { walkTo: [0, -0.5], jump: true, timeout: 8 },
-        { wait: 1 },
+        { walkTo: [0, 3.4] }, { cast: 'stairs', at: [0, 1.3] }, { wait: 1.5 },
+        { walkTo: [0, 0.35], timeout: 5 },
+        { walkTo: [0, -2.9], jump: true, timeout: 5 },
+        { walkTo: [-1, -3], timeout: 3 },
         { cast: 'bone', at: [0, 0, -1.9] },
       ],
     },
@@ -66,9 +68,8 @@ export default defineLevel({
       steps: [
         { walkTo: [0, 2.5] }, { cast: 'big box', at: [0, 0.85] }, { wait: 1.5 },
         { cast: 'box', at: [0, 1.85] }, { wait: 1 },
-        { hold: { dir: [0, -1], jump: true }, for: 5 },
-        { walkTo: [0, -0.5], timeout: 3 },
-        { wait: 1 },
+        { walkTo: [0, -2.9], jump: true, timeout: 9 },
+        { walkTo: [-1, -3], timeout: 3 },
         { cast: 'bone', at: [0, 0, -1.9] },
       ],
     },

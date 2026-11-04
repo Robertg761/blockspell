@@ -1,5 +1,5 @@
 import { Body, Box, Material as PhysMaterial, Sphere, Vec3 } from 'cannon-es';
-import { Group, Mesh, MeshBasicMaterial, MeshStandardMaterial, type Material } from 'three';
+import { Group, Mesh, MeshBasicMaterial, MeshStandardMaterial, Vector3, type Material } from 'three';
 import type { SpawnModifiers } from '../adjectives/types';
 import type { ObjectDef } from '../objects/types';
 import { VoxelBuilder } from '../voxel/builder';
@@ -17,13 +17,27 @@ export function createEntity(def: ObjectDef, mods: SpawnModifiers, label: string
   const rng = makeRng(seed);
   const builder = new VoxelBuilder();
   def.build(builder, rng);
-  let model = builder.build();
+  const partBuilders = (def.parts ?? []).map((part) => {
+    const pb = new VoxelBuilder();
+    part.build(pb, rng);
+    return { part, pb };
+  });
+  const visible = builder.build();
+  // the whole body: what the object measures and collides as, solid parts included
+  const solidParts = partBuilders.filter(({ part }) => part.solid);
+  let model = solidParts.length ? solidParts.reduce((b, { pb }) => b.merge(pb), new VoxelBuilder().merge(builder)).build() : visible;
 
   const tintMap = mods.tint ? makeTintMap(def.tintKeys ?? model.keys.filter((k) => !resolveColor(k).emissive), mods.tint) : null;
   if (tintMap) model = remapModel(model, tintMap);
 
   const vs = (def.voxelSize ?? 0.1) * mods.scale;
-  const { geometry, size } = meshVoxels(model, { voxelSize: vs });
+  const size = new Vector3(model.sx * vs, model.sy * vs, model.sz * vs);
+  const { geometry } = meshVoxels(tintMap ? remapModel(visible, tintMap) : visible, { voxelSize: vs });
+  // with solid parts split off, the main mesh no longer spans the whole body: keep it where it was
+  if (solidParts.length) {
+    const off = (axis: 0 | 1 | 2, n: 'sx' | 'sy' | 'sz') => (visible.min[axis] + visible[n] / 2 - model.min[axis] - model[n] / 2) * vs;
+    geometry.translate(off(0, 'sx'), off(1, 'sy'), off(2, 'sz'));
+  }
   const materials: Material[] = [
     new MeshStandardMaterial({
       vertexColors: true,
@@ -47,15 +61,14 @@ export function createEntity(def: ObjectDef, mods: SpawnModifiers, label: string
 
   const partGroups: [string, Group][] = [];
   const mainAt = (v: number, axis: 0 | 1 | 2) => (v - model.min[axis]) * vs - ([size.x, size.y, size.z][axis]) / 2;
-  for (const part of def.parts ?? []) {
-    const pb = new VoxelBuilder();
-    part.build(pb, rng);
+  for (const { part, pb } of partBuilders) {
     let pm = pb.build();
     if (tintMap) pm = remapModel(pm, tintMap);
     const center: [number, number, number] = [pm.min[0] + pm.sx / 2, pm.min[1] + pm.sy / 2, pm.min[2] + pm.sz / 2];
     const pivot = part.pivot ?? center;
     const pMesh = new Mesh(meshVoxels(pm, { voxelSize: vs }).geometry, materials);
     pMesh.castShadow = true;
+    pMesh.receiveShadow = true;
     pMesh.position.set((center[0] - pivot[0]) * vs, (center[1] - pivot[1]) * vs, (center[2] - pivot[2]) * vs);
     const g = new Group();
     g.position.set(mainAt(pivot[0], 0), mainAt(pivot[1], 1), mainAt(pivot[2], 2));

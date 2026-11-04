@@ -50,7 +50,7 @@ export default defineLevel({
         { cast: 'stairs', at: [0, 0] },
         { wait: 1.5 },
         { walkTo: [0, -1.3], jump: true, timeout: 8 },
-        { walkTo: [0, -4.5], timeout: 6 },
+        { walkTo: [0, -4.5], jump: true, timeout: 6 },
       ],
     },
     { name: 'bomb on the ledge', steps: [{ cast: 'bomb', at: [0, 2.5, -2.3] }, { wait: 6 }] },

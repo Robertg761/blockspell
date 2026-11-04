@@ -18,9 +18,9 @@ A level is one file in `src/levels/defs/NN-id.ts` default-exporting `defineLevel
 
 ## The hero and the player
 - `hero: [x, y, z]` spawns the keyboard hero (feet position). WASD/arrows move (camera-relative),
-  Space jumps (~1.25 m), holding W/Space while overlapping a `climbable` (ladder, rope, stairs,
-  tree) climbs it, and at the top it hops over the lip. Walking into a knee-high (< ~0.5 m) step
-  hops onto it. It stands on anything solid. Falls below `killY` (default -6) respawn it at start.
+  Space jumps (~1.25 m), holding W while overlapping a `climbable` (ladder, rope, stairs, tree),
+  or Space from the air, climbs it, and at the top it hops over the lip. Walking into a knee-high (< ~0.5 m) step
+  rises onto it. It stands on anything solid. Falls below `killY` (default -6) respawn it at start.
   Tuning: `HERO` in `src/behaviors/defs/controlled.ts`.
 - The player casts at the aim marker (click a surface). `castRange` limits casts to N m from the
   hero, so the puzzle can't be skipped by summoning things next to the goal.

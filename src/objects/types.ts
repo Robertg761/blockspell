@@ -43,6 +43,12 @@ export interface PartDef {
   name: string;
   build: (b: VoxelBuilder, rng: Rng) => void;
   pivot?: [number, number, number];
+  /**
+   * Counts as part of the body: its voxels still shape the object's size and
+   * collider, as if built in the main model. For limbs split off a character,
+   * so animating them never changes how it stands or collides.
+   */
+  solid?: boolean;
 }
 
 /**

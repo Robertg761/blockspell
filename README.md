@@ -20,8 +20,8 @@ reach it, using as few spells as you can.
 | Key / action | What it does |
 | --- | --- |
 | **WASD** / **arrows** | Walk (relative to the camera) |
-| **Space** | Jump. Walking into knee-high steps hops onto them |
-| **W** (or Space) next to a ladder, rope, tree or stairs | Climb. At the top you hop over the edge |
+| **Space** | Jump. Walking into knee-high steps climbs onto them |
+| **W** next to a ladder, rope, tree or stairs | Climb. At the top you hop over the edge. Space grabs on from the air |
 | **Enter** (or **T**, **/**) | Open the spell bar. Type a spell and press Enter to cast it. Esc closes it |
 | **Click the ground** | Choose where the next spell appears (the glowing marker) |
 | **Click an object** | Poke it |
