@@ -7,6 +7,9 @@ import { behaviorsFor } from '../behaviors';
 import type { BehaviorDef } from '../behaviors/types';
 import type { Effects } from '../engine/fx';
 import { ease } from '../engine/tween';
+import { GroundCover, scatterTufts } from '../engine/cover';
+import { addGrain } from '../engine/grain';
+import { blockDetail, buildBlock, inferBlockStyle, type BlockStyle } from '../engine/scenery';
 import { buildTerrain, type Terrain, type TerrainOptions } from '../engine/terrain';
 import { objects } from '../objects';
 import type { ObjectDef } from '../objects/types';
@@ -14,6 +17,7 @@ import { VoxelBuilder } from '../voxel/builder';
 import { meshVoxels } from '../voxel/mesher';
 import type { Entity } from './entity';
 import { EventBus, type GameEvents } from './events';
+import { makeRng } from './rng';
 import { createEntity } from './spawn';
 import type { Tag } from './tags';
 
@@ -66,6 +70,20 @@ export interface StaticBoxOptions {
   size: [number, number, number];
   color?: string;
   topColor?: string;
+  /**
+   * How it's drawn. Default: from `color` (stone is rock, dirt is earth, wood is
+   * planks, anything else is flat color). The collider is the same box either way.
+   */
+  style?: BlockStyle;
+}
+
+export interface SceneryOptions {
+  /** Where the model's voxel origin goes. */
+  position: [number, number, number];
+  /** Default 1/16 m. */
+  voxelSize?: number;
+  /** Turns around Y, in radians. */
+  rotationY?: number;
 }
 
 /**
@@ -97,6 +115,8 @@ export class GameWorld {
   private levelSubs: (() => void)[] = [];
   private acc = 0;
   private staticMat = new MeshStandardMaterial({ vertexColors: true, roughness: 0.9 });
+  private scenery: Mesh[] = [];
+  private covers: GroundCover[] = [];
   private ropeMat = new LineBasicMaterial({ color: '#f4f1ea' });
 
   constructor(readonly scene: Scene, readonly fx: Effects) {
@@ -110,6 +130,7 @@ export class GameWorld {
     this.groundMaterial.restitution = 1;
     const solver = this.physics.solver as unknown as { iterations: number };
     solver.iterations = 12;
+    addGrain(this.staticMat);
   }
 
   // ---------------------------------------------------------------- events
@@ -339,14 +360,27 @@ export class GameWorld {
   addStaticBox(o: StaticBoxOptions): Mesh {
     const V = 0.25;
     const [sx, sy, sz] = o.size.map((s) => Math.max(1, Math.round(s / V)));
+    const [px, py, pz] = o.position;
+    const hx = (sx * V) / 2, hy = (sy * V) / 2, hz = (sz * V) / 2;
+    const color = o.color ?? 'stone';
+    const style = o.style ?? inferBlockStyle(color);
+    const detail = blockDetail(style);
+    const seed = Math.abs(Math.round(px * 17 + py * 131 + pz * 59));
     const b = new VoxelBuilder();
-    const side = o.color ?? 'stone';
-    b.box(0, 0, 0, sx - 1, sy - 1, sz - 1, side);
-    if (o.topColor) b.box(0, sy - 1, 0, sx - 1, sy - 1, sz - 1, o.topColor);
-    const mesh = new Mesh(meshVoxels(b.build(), { voxelSize: V }).geometry, this.staticMat);
-    mesh.position.set(...o.position);
+    buildBlock(b, sx * detail, sy * detail, sz * detail, { style, color, topColor: o.topColor, seed });
+    const mesh = new Mesh(meshVoxels(b.build(), { voxelSize: V / detail, origin: 'model' }).geometry, this.staticMat);
+    mesh.position.set(px - hx, py - hy, pz - hz);
     mesh.castShadow = mesh.receiveShadow = true;
+    mesh.visible = style !== 'hidden';
     mesh.name = 'static';
+    // Keep the meadow's grass from poking through anything that stands on it.
+    const terrain = this.terrain;
+    if (terrain && py - hy <= terrain.heightAt(px, pz) + 0.5) terrain.clearCover(px - hx, pz - hz, px + hx, pz + hz);
+    if (o.topColor === 'grass' && style !== 'hidden') {
+      const cover = new GroundCover(scatterTufts(makeRng(seed), px - hx + 0.1, pz - hz + 0.1, px + hx - 0.2, pz + hz - 0.2, py + hy));
+      this.scene.add(cover.group);
+      this.covers.push(cover);
+    }
     const body = new Body({ mass: 0, type: Body.STATIC, material: this.groundMaterial });
     body.addShape(new Box(new Vec3((sx * V) / 2, (sy * V) / 2, (sz * V) / 2)));
     body.position.set(...o.position);
@@ -356,13 +390,23 @@ export class GameWorld {
     return mesh;
   }
 
+  /** Adds a voxel model with no collision and no click target: level dressing. Removed with the level. */
+  addScenery(build: (b: VoxelBuilder) => void, o: SceneryOptions): Mesh {
+    const b = new VoxelBuilder();
+    build(b);
+    const mesh = new Mesh(meshVoxels(b.build(), { voxelSize: o.voxelSize ?? 1 / 16, origin: 'model' }).geometry, this.staticMat);
+    mesh.position.set(...o.position);
+    mesh.rotation.y = o.rotationY ?? 0;
+    mesh.castShadow = mesh.receiveShadow = true;
+    mesh.name = 'scenery';
+    this.scene.add(mesh);
+    this.scenery.push(mesh);
+    return mesh;
+  }
+
   /** Meshes the player can click to place the spawn marker. */
   pickables(): Mesh[] {
-    const list: Mesh[] = this.statics.map((s) => s.mesh);
-    this.terrain?.group.traverse((c) => {
-      if (c instanceof Mesh) list.push(c);
-    });
-    return list;
+    return [...this.statics.map((s) => s.mesh), ...(this.terrain?.pickables ?? [])];
   }
 
   entityFromObject(obj: { parent: unknown }): Entity | null {
@@ -384,6 +428,17 @@ export class GameWorld {
       this.physics.removeBody(s.body);
     }
     this.statics.length = 0;
+    for (const m of this.scenery) {
+      this.scene.remove(m);
+      m.geometry.dispose();
+    }
+    this.scenery.length = 0;
+    for (const c of this.covers) {
+      this.scene.remove(c.group);
+      c.dispose();
+    }
+    this.covers.length = 0;
+    this.terrain?.restoreCover();
     for (const off of this.levelSubs) off();
     this.levelSubs.length = 0;
     this.flags = {};

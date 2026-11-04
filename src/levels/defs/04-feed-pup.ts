@@ -1,5 +1,6 @@
 import { defineLevel } from '../types';
 import { fed, place, watchFed } from '../goals';
+import { buildBowl, buildKennel, buildSign, SIGN_PAW } from '../../engine/scenery';
 
 // Pen: interior x -3..3, z -1.6..-6, walls 2.2 m high (hero jumps ~1.25 m). Front wall z -1..0.
 const WALL_H = 2.2;
@@ -24,11 +25,14 @@ export default defineLevel({
     world.addStaticBox({ position: [3.25, WALL_H / 2, -4.05], size: [0.5, WALL_H, 4.9], ...wall });
     world.addStaticBox({ position: [0, WALL_H / 2, -6.25], size: [7, WALL_H, 0.5], ...wall });
     // Kennel and bowl inside the pen.
-    world.addStaticBox({ position: [-2.1, 0.55, -5.3], size: [1.4, 1.1, 1.2], color: 'woodDark', topColor: 'wood' });
-    world.addStaticBox({ position: [-0.8, 0.1, -4.6], size: [0.5, 0.2, 0.5], color: 'stone' });
+    world.addStaticBox({ position: [-2.1, 0.55, -5.3], size: [1.4, 1.1, 1.2], style: 'hidden' });
+    world.addStaticBox({ position: [-0.8, 0.1, -4.6], size: [0.5, 0.2, 0.5], style: 'hidden' });
+    world.addScenery((b) => buildKennel(b, 24, 16, 20), { position: [-2.1, 0, -5.3] });
+    world.addScenery(buildBowl, { position: [-0.8, 0, -4.6] });
     // Decorative sign outside.
-    world.addStaticBox({ position: [-2.6, 0.4, 1.2], size: [0.2, 0.8, 0.2], color: 'woodDark' });
-    world.addStaticBox({ position: [-2.6, 0.9, 1.2], size: [1.1, 0.5, 0.15], color: 'wood' });
+    world.addStaticBox({ position: [-2.6, 0.4, 1.2], size: [0.2, 0.8, 0.2], style: 'hidden' });
+    world.addStaticBox({ position: [-2.6, 0.9, 1.2], size: [1.1, 0.5, 0.15], style: 'hidden' });
+    world.addScenery((b) => buildSign(b, SIGN_PAW), { position: [-2.6, 0, 1.2], rotationY: 0.35 });
     watchFed(world, 'pup');
     place(world, 'dog', [1.5, 0, -4], 'pup');
   },
@@ -68,6 +72,7 @@ export default defineLevel({
       steps: [
         { walkTo: [0, 2.5] }, { cast: 'big box', at: [0, 0.85] }, { wait: 1.5 },
         { cast: 'box', at: [0, 1.85] }, { wait: 1 },
+        { walkTo: [0, 3.1], timeout: 2 }, // a run-up: walking in from touching range shoves the box out sideways
         { walkTo: [0, -2.9], jump: true, timeout: 9 },
         { walkTo: [-1, -3], timeout: 3 },
         { cast: 'bone', at: [0, 0, -1.9] },

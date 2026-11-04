@@ -9,6 +9,7 @@ import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { setEnvMap } from './env';
+import { createBackdrop } from './backdrop';
 import { createSky } from './sky';
 import { Clouds } from './clouds';
 import type { CameraShake } from './shake';
@@ -62,7 +63,7 @@ export class Renderer {
     this.scene.add(this.sun, this.sun.target);
 
     this.clouds = new Clouds();
-    this.scene.add(this.clouds.group);
+    this.scene.add(this.clouds.group, createBackdrop());
 
     this.controls = new OrbitControls(this.camera, this.gl.domElement);
     this.controls.enableDamping = true;

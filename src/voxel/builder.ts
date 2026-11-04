@@ -95,15 +95,15 @@ export class VoxelBuilder {
     return this;
   }
 
-  /** Copies every voxel of `other` into this builder. */
-  merge(other: VoxelBuilder): this {
-    for (const v of other.cells.values()) this.set(v.x, v.y, v.z, v.c);
-    return this;
-  }
-
   /** Mirror all voxels across the plane x = axis (useful for symmetric models). */
   mirrorX(axis: number): this {
     for (const v of [...this.cells.values()]) this.set(Math.round(2 * axis - v.x), v.y, v.z, v.c);
+    return this;
+  }
+
+  /** Copies every voxel of `other` into this builder, shifted by (dx, dy, dz). */
+  merge(other: VoxelBuilder, dx = 0, dy = 0, dz = 0): this {
+    for (const v of other.cells.values()) this.set(v.x + dx, v.y + dy, v.z + dz, v.c);
     return this;
   }
 
