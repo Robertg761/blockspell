@@ -27,7 +27,7 @@ export class Summons {
           void main() {
             float edge = pow(abs(vN.z), 1.4);
             float a = pow(1.0 - vH, 1.6) * (0.35 + 0.65 * edge) * uAlpha;
-            gl_FragColor = vec4(mix(uColor, vec3(1.0), 0.3 * (1.0 - vH)) * 2.0, a);
+            gl_FragColor = vec4(mix(uColor, vec3(1.0), 0.3 * (1.0 - vH)) * 1.2, a);
           }`,
       }));
       const ring = new Mesh(this.ringGeo, new ShaderMaterial({
@@ -52,7 +52,7 @@ export class Summons {
     const s = this.slots[this.next++ % SLOTS];
     if (s.busy) return;
     s.busy = true;
-    const w = Math.max(0.35, Math.min(2.2, size * 0.5));
+    const w = Math.max(0.3, Math.min(0.75, size * 0.3));
     const height = 12;
     for (const m of [s.beam, s.ring]) {
       const u = (m.material as ShaderMaterial).uniforms;
@@ -67,7 +67,7 @@ export class Summons {
         // the beam snaps wide, then narrows to a thread as it fades; the ring keeps spreading
         const open = ease.outBack(Math.min(1, t * 6), 2) * (1 - ease.outCubic(Math.max(0, (t - 0.12) / 0.88)) * 0.85);
         s.beam.scale.set(w * open, height, w * open);
-        (s.beam.material as ShaderMaterial).uniforms.uAlpha.value = (1 - t) * (1 - t) * 0.7;
+        (s.beam.material as ShaderMaterial).uniforms.uAlpha.value = (1 - t) * (1 - t) * 0.5;
         const r = w * (0.6 + ease.outCubic(t) * 2.4);
         s.ring.scale.setScalar(r);
         s.ring.rotation.z = t * 1.8;

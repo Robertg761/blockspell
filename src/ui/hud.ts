@@ -142,7 +142,8 @@ export class Hud {
     const lines = ['big red ball', 'flaming box', '3 tiny balloons', 'giant ladder', 'frozen dragon', 'bouncy golden ball', 'heavy anvil', 'rainbow cat'];
     let line = Math.floor(Math.random() * lines.length), n = 0, hold = 0, erasing = false;
     setInterval(() => {
-      const idle = !this.input.value && !this.overlayOpen && !document.hidden;
+      // once the player has cast a few spells of their own they know how it works: stop the show
+      const idle = !this.input.value && !this.overlayOpen && !document.hidden && this.history.length < 3;
       if (!idle) {
         if (this.input.placeholder !== base) this.input.placeholder = base;
         n = 0; hold = 0; erasing = false;
