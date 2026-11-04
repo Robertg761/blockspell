@@ -32,3 +32,8 @@
 .finale-stat { background: #fff7e6; border-radius: 12px; padding: 10px; text-align: center; }
 .finale-stat b { display: block; font-size: 24px; color: var(--accent-dark); }
 .finale-stat span { font-size: 12.5px; opacity: 0.75; }
+
+/* ---------- journal: second hint ---------- */
+.journal-answerbox { margin-top: 6px; }
+.journal-answer { margin-top: 4px; padding: 6px 10px; border-radius: 10px; background: #fff1dc; font-size: 13.5px; display: flex; flex-wrap: wrap; gap: 6px; align-items: baseline; }
+.journal-answer b { color: var(--accent-dark); }

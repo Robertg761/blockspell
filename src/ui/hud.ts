@@ -27,6 +27,8 @@ export interface JournalTask {
   hint: string;
   done: boolean;
   ways: number;
+  /** The spells of one known way to solve it, in order, for the second hint ("Show me a way"). */
+  answer?: string[];
 }
 
 /** What the Journal shows: tasks grouped by zone, plus the spell count (world mode keeps it here, not in the HUD). */
@@ -425,7 +427,8 @@ export class Hud {
     const total = info.zones.reduce((n, z) => n + z.tasks.length, 0);
     const done = info.zones.reduce((n, z) => n + z.tasks.filter((t) => t.done).length, 0);
     const row = (t: JournalTask) => {
-      const hint = h('div.journal-hint.hidden', { text: t.hint });
+      const answerLine = t.answer?.length && !t.done ? this.answerBox(t.answer) : null;
+      const hint = h('div.journal-hint.hidden', {}, [t.hint, answerLine]);
       const btn = h('button.link-btn.journal-hint-btn', {
         type: 'button',
         text: 'Hint',
@@ -465,6 +468,32 @@ export class Hud {
       ]),
     );
     this.overlay.classList.remove('hidden');
+  }
+
+  /** The Journal's second hint: hidden behind a button because it gives one way away. Pinning puts its spells on the hotbar. */
+  private answerBox(spells: string[]): HTMLElement {
+    const reveal = h('div.journal-answer.hidden', {}, [
+      h('span', { text: 'One way: ' }),
+      h('b', { text: spells.join(', then ') }),
+      h('button.link-btn', {
+        type: 'button',
+        text: '☆ Pin',
+        title: 'Put these on the hotbar',
+        onClick: (ev: Event) => {
+          const added = spells.filter((sp) => this.hotbar.pin(sp)).length;
+          (ev.currentTarget as HTMLElement).textContent = added ? '✓ Pinned' : 'Already pinned';
+        },
+      }),
+    ]);
+    const btn = h('button.link-btn.journal-answer-btn', {
+      type: 'button',
+      text: 'Show me a way (spoiler)',
+      onClick: () => {
+        reveal.classList.remove('hidden');
+        btn.remove();
+      },
+    });
+    return h('div.journal-answerbox', {}, [btn, reveal]);
   }
 
   /** Shows any panel (settings, trophies, finale...) in the overlay. Close it with `hideOverlay()`. */

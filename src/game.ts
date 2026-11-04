@@ -10,7 +10,7 @@ import { menuLevels, orderedLevels } from './levels';
 import { mark } from './levels/goals';
 import { progress } from './levels/progress';
 import { SolutionRunner } from './levels/solve';
-import { starsFor, type LevelDef, type V3 } from './levels/types';
+import { starsFor, type LevelDef, type LevelSolution, type V3 } from './levels/types';
 import type { Entity } from './core/entity';
 import { buildZone, castLimitAt, orderedTasks, zoneAt, zoneEntry, zones } from './tasks';
 import { worldSave } from './tasks/save';
@@ -303,7 +303,7 @@ export class Game {
       .map((z) => ({
         name: z.name,
         here: z === this.zone,
-        tasks: list.filter((t) => t.zone === z.id).map((t) => ({ title: t.title, hint: t.hint, done: !!saved[t.id], ways: saved[t.id]?.ways.length ?? 0 })),
+        tasks: list.filter((t) => t.zone === z.id).map((t) => ({ title: t.title, hint: t.hint, answer: firstWay(t), done: !!saved[t.id], ways: saved[t.id]?.ways.length ?? 0 })),
       }));
     this.hud.showJournal({
       zones: groups,
@@ -1335,4 +1335,9 @@ export class Game {
 const SURPRISED = 'blockspell.surprised.v1';
 const FINALE = 'blockspell.finale.v1';
 const TROPHY_TOTAL = TROPHIES.length;
+/** The spells of a task's first scripted solution: the Journal's second hint. */
+function firstWay(t: { solutions: LevelSolution[] }): string[] {
+  return (t.solutions[0]?.steps ?? []).flatMap((st) => ('cast' in st ? [st.cast] : []));
+}
+
 const HERO_KEYS = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space', 'KeyE', 'KeyF', 'KeyQ']);
