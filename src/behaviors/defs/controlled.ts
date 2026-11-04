@@ -2,6 +2,7 @@ import { Quaternion, Ray, RaycastResult, Vec3 } from 'cannon-es';
 import type { Entity } from '../../core/entity';
 import { GROUP } from '../../core/groups';
 import type { GameWorld } from '../../core/world';
+import { carryLoad } from '../lib/carry';
 import { defineBehavior } from '../types';
 
 const UP = new Vec3(0, 1, 0);
@@ -155,9 +156,10 @@ export default defineBehavior({
 
     // ---- walking
     const k = grounded ? HERO.groundAccel : HERO.airAccel;
+    const load = carryLoad(e);
     if (grounded || ml > 0.05) {
-      b.velocity.x += (mx * HERO.speed - b.velocity.x) * k;
-      b.velocity.z += (mz * HERO.speed - b.velocity.z) * k;
+      b.velocity.x += (mx * HERO.speed * load.speed - b.velocity.x) * k;
+      b.velocity.z += (mz * HERO.speed * load.speed - b.velocity.z) * k;
     }
     // step-up: walking into something knee-high (a stair, a log) hops onto it
     if (grounded && ml > 0.5 && b.velocity.y < 1) {
@@ -166,8 +168,8 @@ export default defineBehavior({
     }
 
     // ---- jumping
-    if ((e.state.jumpBuf as number) > 0 && (e.state.airTime as number) < HERO.coyote) {
-      b.velocity.y = HERO.jump;
+    if ((e.state.jumpBuf as number) > 0 && (e.state.airTime as number) < HERO.coyote && load.jump > 0) {
+      b.velocity.y = HERO.jump * load.jump;
       e.state.airTime = HERO.coyote; // no double jumps off coyote time
       e.state.jumpBuf = 0;
       world.fx.sound('jump', { volume: 0.7 });

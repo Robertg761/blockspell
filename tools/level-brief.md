@@ -41,7 +41,7 @@ A level is one file in `src/levels/defs/NN-id.ts` default-exporting `defineLevel
 `solutions: [{ name, steps, timeout? }]` with steps:
 `{ cast: 'giant plank', at: [x, z] }` (or `[x, y, z]` to aim at a raised surface),
 `{ wait: s }`, `{ walkTo: [x, z], jump?, up?, timeout? }`, `{ hold: { dir: [x, z], up?, jump? }, for: s }`,
-`{ poke: 'ball', near?: [x, z] }`. They run exactly like a player would (castRange applies).
+`{ poke: 'ball', near?: [x, z] }`, `{ press: 'grab' | 'toss' | 'turn' }` (tap E, F or Q). They run exactly like a player would (castRange applies).
 
 Verify with the dev server running (`npx vite --port 5199 --strictPort`):
 `tools/check-levels.sh "level=<id>&dump"` → PASS/FAIL per solution + final entity state, and

@@ -817,8 +817,17 @@ export default [
     tintKeys: ['heroShirt', 'heroShirtDark'],
     burstColor: '#3b82d9',
     voxelSize: 0.065,
-    physics: { mass: 30, shape: 'auto', maxBoxes: 5, uprightOnly: true, friction: 0.2, linearDamping: 0.1 },
+    physics: { mass: 30, shape: 'auto', boxes: [[3, 6, 0, 9, 19, 6], [3, 0, 3, 9, 6, 6], [0, 6, 3, 3, 12, 6], [9, 6, 3, 12, 12, 6], [3, 12, 6, 9, 19, 7]], uprightOnly: true, friction: 0.2, linearDamping: 0.1 },
     props: { speed: 2.6, sight: 12 },
+    // the arms swing up to hold things (behaviors/defs/carry.ts); the shoulders stay in the body
+    parts: [-2, 8].map((x, i) => ({
+      name: i ? 'armR' : 'armL',
+      pivot: [x + 1, 10, 3.5] as [number, number, number],
+      build(b: VoxelBuilder) {
+        b.box(x, 6, 2, x + 1, 9, 4, 'heroShirt');
+        b.box(x, 5, 2, x + 1, 5, 4, 'heroSkin');
+      },
+    })),
     build(b, rng) {
       const W = 8;
       const hair = rng() > 0.5;
@@ -830,9 +839,8 @@ export default [
       b.box(0, 7, 1, 7, 7, 5, 'heroBelt');
       b.box(3, 7, 5, 4, 7, 5, 'heroPants');
       b.box(0, 11, 1, 7, 11, 5, 'heroShirtDark');
-      // arms
-      sym(b, W, -2, 6, 2, -1, 10, 4, 'heroShirt');
-      sym(b, W, -2, 5, 2, -1, 5, 4, 'heroSkin'); // hands
+      // shoulders
+      sym(b, W, -2, 10, 2, -1, 10, 4, 'heroShirt');
       // head
       b.box(1, 12, 0, 6, 17, 6, 'heroSkin');
       b.box(3, 12, 6, 4, 13, 6, 'heroSkin');

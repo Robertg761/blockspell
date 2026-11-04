@@ -36,10 +36,11 @@ import { clearHDSetting, geometryBytes, hdPending, hdStats, hdTop, setHDEnabled 
  *   __blockspell.renderStats()                last frame's draw calls/triangles, scene triangles and bytes (HD vs classic)
  *   __blockspell.resetZone()                  reset the hero's zone (like pressing R in the world)
  *   __blockspell.leakCheck()                  cast things and reset each zone a few times; counts must match
+ *   __blockspell.fragileCheck()               a cast mug lands, is carried and put down whole, then breaks when thrown
  *   __blockspell.solveAll()                   every level solution, every task solution, a "3 distinct
  *                                             ways" check and a "solves again after a zone reset" check per
- *                                             task, an idle check per zone and the leak check (the save is
- *                                             restored after)
+ *                                             task, an idle check per zone, the leak check and a fragile thing
+ *                                             carried from landing to breaking (the save is restored after)
  *   __blockspell.solveAll({ seeds: [1, 2, 3] })  the same, with every task solution run once per seed
  *                                             (every task solve also fails if a task in another zone completes)
  *
@@ -303,6 +304,43 @@ export function installDebug(game: Game) {
     return out;
   }
 
+  /** A cast mug lands whole, can be picked up once it has gone to sleep, can be put down, and still breaks when thrown. */
+  function fragileCheck(): SolveResult {
+    const name = 'a fragile thing lands, carries and breaks';
+    const world = orderedLevels().find((l) => l.tasks);
+    if (!world) return check('fragile', name, true, '');
+    game.hud.hideOverlay();
+    game.loadLevel(world.id);
+    const hero = game.world.hero!;
+    const press = (key: 'grab' | 'toss') => api.run([{ press: key }, { wait: 0.1 }], 3);
+    const seen = new Set<string>();
+    let doubled = false;
+    const off = game.world.events.on('contact', ({ a, b }) => {
+      const key = `${a.body.id}:${b?.body.id}:${game.world.time}`;
+      doubled ||= seen.has(key);
+      seen.add(key);
+    });
+    game.castAt('mug', [hero.x + 2.5, hero.y - hero.size.y / 2, hero.z]);
+    game.step(4);
+    off();
+    const mug = game.world.living((e) => e.def.id === 'mug').pop();
+    if (!mug) return check('fragile', name, false, 'it broke on landing');
+    if (doubled) return check('fragile', name, false, 'one impact reached behaviors more than once');
+    game.teleportHero([mug.x, mug.z + 1]);
+    game.step(0.2);
+    press('grab');
+    game.step(0.6);
+    if (hero.state.held !== mug || !mug.alive) return check('fragile', name, false, 'it broke or slipped when picked up');
+    press('grab');
+    game.step(1.5);
+    if (hero.state.held || !mug.alive) return check('fragile', name, false, 'it broke when put down');
+    press('grab');
+    game.step(0.6);
+    press('toss');
+    game.step(2);
+    return check('fragile', name, !mug.alive, 'it survived being thrown');
+  }
+
   const api = {
     game,
     get world() {
@@ -319,6 +357,7 @@ export function installDebug(game: Game) {
     tasks: () => orderedTasks().map((t) => ({ id: t.id, zone: t.zone, title: t.title, done: game.tracker.isDone(t.id), solutions: t.solutions.map((s) => s.name) })),
     resetZone: () => game.resetZone(),
     leakCheck: (rounds = 4) => keepingSave(() => leakCheck(rounds)),
+    fragileCheck: () => keepingSave(() => fragileCheck()),
     cast(text: string, at?: [number, number] | V3) {
       if (!at) return game.cast(text);
       const g = game.world.groundAt(at[0], at[1]);
@@ -379,7 +418,7 @@ export function installDebug(game: Game) {
         zone: game.zone?.id ?? null,
         counts: game.world.counts(),
         tasksDone: game.tracker.tasks.filter((t) => game.tracker.isDone(t.id)).map((t) => t.id),
-        hero: h?.alive ? { x: +h.x.toFixed(2), y: +(h.y - h.size.y / 2).toFixed(2), z: +h.z.toFixed(2), climbing: !!h.state.climbing } : null,
+        hero: h?.alive ? { x: +h.x.toFixed(2), y: +(h.y - h.size.y / 2).toFixed(2), z: +h.z.toFixed(2), climbing: !!h.state.climbing, held: (h.state.held as { alive: boolean; label: string } | null)?.alive ? (h.state.held as { label: string }).label : null } : null,
         entities: game.world.living().map((e) => ({ id: e.def.id, label: e.label, role: e.state.role ?? null, x: +e.x.toFixed(2), y: +e.y.toFixed(2), z: +e.z.toFixed(2), size: [+e.size.x.toFixed(2), +e.size.y.toFixed(2), +e.size.z.toFixed(2)], mass: +e.body.mass.toFixed(1), burning: e.state.burning })),
       };
     },
@@ -416,7 +455,7 @@ export function installDebug(game: Game) {
      * when `seeds` is given), then per task: at least 3 solutions passed (in
      * every seed) with distinct sets of cast object ids, and it solves again
      * after a zone reset. Then an idle check per zone (nothing completes by
-     * itself) and the zone reset leak check. Restores the player's save afterwards.
+     * itself), the zone reset leak check and the fragile check. Restores the player's save afterwards.
      */
     solveAll(opts: SolveAllOptions = {}): SolveResult[] {
       const seeds: (number | undefined)[] = opts.seeds?.length ? opts.seeds : [undefined];
@@ -449,7 +488,7 @@ export function installDebug(game: Game) {
           });
           out.push(solveAfterReset(task.id));
         }
-        out.push(...idleChecks(), ...leakCheck());
+        out.push(...idleChecks(), ...leakCheck(), fragileCheck());
         return out;
       });
     },

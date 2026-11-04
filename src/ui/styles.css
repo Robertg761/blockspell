@@ -276,6 +276,8 @@ button.sb-word:hover { background: #ffe0b0; }
   box-shadow: 0 4px 0 #b86400, 0 6px 16px rgba(0, 0, 0, 0.25); touch-action: none; user-select: none; -webkit-user-select: none;
 }
 .touch-btn.climb { width: 64px; height: 64px; font-size: 13px; background: linear-gradient(180deg, #6fd08a, var(--good)); box-shadow: 0 4px 0 #2a7c40, 0 6px 16px rgba(0, 0, 0, 0.25); }
+.touch-btn.carry { width: 64px; height: 64px; font-size: 13px; background: linear-gradient(180deg, #7fd6f0, #2f9bc4); box-shadow: 0 4px 0 #1f6f8f, 0 6px 16px rgba(0, 0, 0, 0.25); }
+.touch-btn.off { display: none; }
 .touch-btn.active { transform: translateY(3px); box-shadow: 0 1px 0 #b86400; }
 body.touch-hero .toasts { bottom: 290px; }
 body.touch button, body.touch .level-card { -webkit-tap-highlight-color: transparent; }
@@ -345,7 +347,7 @@ body.touch .chip, body.touch .icon-btn { min-height: 40px; }
   .joy { bottom: 16px; width: 112px; height: 112px; }
   .touch-actions { bottom: 16px; flex-direction: row; align-items: flex-end; }
   .touch-btn { width: 68px; height: 68px; }
-  .touch-btn.climb { width: 56px; height: 56px; }
+  .touch-btn.climb, .touch-btn.carry { width: 56px; height: 56px; }
   body.touch .hud-bottom { width: min(520px, calc(100vw - 340px)); }
   body.touch-hero .toasts { bottom: auto; }
 }

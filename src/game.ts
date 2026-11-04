@@ -21,7 +21,9 @@ import { prewarmObjects } from './core/spawn';
 import { hd, onHDChange, setHDEnabled, updateVoxelLOD } from './voxel/hd';
 import { parseSpell, randomWords, suggestAdjectives } from './parser/parser';
 import { adjectives } from './adjectives';
+import { CarryPrompt } from './ui/prompt';
 import { Hud } from './ui/hud';
+import { CARRY, carryHint, carryKind, handGrab, type Carry, type CarryHint } from './behaviors/lib/carry';
 import { waterSurfaceAt } from './behaviors/lib/water';
 import { Spellbook } from './ui/spellbook';
 import { Tutorial } from './ui/tutorial';
@@ -35,6 +37,13 @@ export class Game {
   readonly spellbook: Spellbook;
   readonly tutorial: Tutorial;
   private marker = new SpawnMarker();
+  /** Under what the hero would grab, or where what they hold would be set down. */
+  private carryRing = new SpawnMarker('#7fe3ff');
+  /** Free Play: what the pointer is on, and whether it has picked it up yet (a press that doesn't move is a poke). */
+  private hand: { e: Entity; pointer: number; lifted: boolean } | null = null;
+  private carryPrompt: CarryPrompt;
+  /** What the hero can do with the things around them right now; null when the player can't act on it. */
+  carryHint: CarryHint | null = null;
   level!: LevelDef;
   won = false;
   /**
@@ -54,6 +63,8 @@ export class Game {
   /** Open world: checks every task instead of a single level goal. */
   readonly tracker: TaskTracker;
   private keys = new Set<string>();
+  /** Hero action keys pressed since the last tick: a tap shorter than a frame still counts. */
+  private taps = new Set<string>();
   private failed = false;
   private winTimer = 0;
   private terrainKey = '';
@@ -69,7 +80,7 @@ export class Game {
     this.renderer = new Renderer(root);
     this.fx = new Effects(this.renderer.scene);
     this.world = new GameWorld(this.renderer.scene, this.fx);
-    this.renderer.scene.add(this.marker.group);
+    this.renderer.scene.add(this.marker.group, this.carryRing.group);
     this.tracker = new TaskTracker(this);
 
     const levels = menuLevels();
@@ -92,6 +103,7 @@ export class Game {
     this.spellbook = new Spellbook(spellbookObjects(), adjectives.all(), (w) => this.cast(w));
     root.append(this.spellbook.el);
     this.tutorial = new Tutorial(root);
+    this.carryPrompt = new CarryPrompt(root);
     this.refreshChips();
 
     this.bindInput();
@@ -476,18 +488,44 @@ export class Game {
   private bindInput(): void {
     const canvas = this.renderer.gl.domElement;
     let down: { x: number; y: number } | null = null;
+    // capturing, to get in before the camera controls: dragging a thing mustn't orbit too
     canvas.addEventListener('pointerdown', (e) => {
       this.fx.audio.unlock();
       down = { x: e.clientX, y: e.clientY };
       if (this.level.hero) this.hud.input.blur();
+      else if (!this.titleMode && e.button === 0 && !this.hand) {
+        const ent = this.entityAt(e.clientX, e.clientY);
+        if (ent && carryKind(ent)) {
+          this.hand = { e: ent, pointer: e.pointerId, lifted: false };
+          canvas.setPointerCapture(e.pointerId);
+          e.stopImmediatePropagation();
+        }
+      }
+    }, { capture: true });
+    canvas.addEventListener('pointermove', (e) => {
+      const hand = this.hand;
+      if (!hand || e.pointerId !== hand.pointer || !down) return;
+      if (!hand.e.alive) this.hand = null;
+      else if (hand.lifted) this.moveHand(hand.e, e.clientX, e.clientY);
+      else if (Math.hypot(e.clientX - down.x, e.clientY - down.y) >= 6) {
+        hand.lifted = true;
+        handGrab(this.world, hand.e);
+        this.moveHand(hand.e, e.clientX, e.clientY);
+      }
     });
     canvas.addEventListener('pointerup', (e) => {
-      if (!down || e.button !== 0) return;
+      if (!down || e.button !== 0 || (this.hand && e.pointerId !== this.hand.pointer)) return;
       const moved = Math.hypot(e.clientX - down.x, e.clientY - down.y);
       down = null;
-      if (moved < 6) this.click(e.clientX, e.clientY);
+      const dragged = this.hand?.lifted;
+      this.dropHand();
+      if (moved < 6 && !dragged) this.click(e.clientX, e.clientY);
     });
-    window.addEventListener('blur', () => this.keys.clear());
+    canvas.addEventListener('pointercancel', () => this.dropHand());
+    window.addEventListener('blur', () => {
+      this.keys.clear();
+      this.dropHand();
+    });
     window.addEventListener('keyup', (e) => this.keys.delete(e.code));
     window.addEventListener('keydown', (e) => {
       const input = this.hud.input;
@@ -514,6 +552,7 @@ export class Game {
         // hero levels: keys move the hero; Enter (or T or /) opens the spell bar
         if (HERO_KEYS.has(e.code)) {
           this.keys.add(e.code);
+          if (!e.repeat) this.taps.add(e.code);
           e.preventDefault();
           this.fx.audio.unlock();
         } else if (e.key === 'Enter' || e.code === 'KeyT' || e.key === '/') {
@@ -550,12 +589,44 @@ export class Game {
     inp.up = fwd > 0;
     inp.down = fwd < 0;
     inp.jump = on('Space');
+    const tapped = (code: string) => on(code) || (!typing && !this.titleMode && this.taps.has(code));
+    inp.grab = tapped('KeyE');
+    inp.toss = tapped('KeyF');
+    inp.turn = tapped('KeyQ');
+    this.taps.clear();
   }
 
-  private click(cx: number, cy: number): void {
+  /** Points the raycaster through a spot on the screen. */
+  private aimRay(cx: number, cy: number): void {
     const rect = this.renderer.gl.domElement.getBoundingClientRect();
     const ndc = new Vector2(((cx - rect.left) / rect.width) * 2 - 1, -((cy - rect.top) / rect.height) * 2 + 1);
     this.raycaster.setFromCamera(ndc, this.renderer.camera);
+  }
+
+  /** The thing under a spot on the screen, unless the ground is in front of it. */
+  private entityAt(cx: number, cy: number): Entity | null {
+    this.aimRay(cx, cy);
+    const hit = this.raycaster.intersectObjects(this.world.living().map((e) => e.mesh), false)[0];
+    const ground = this.raycaster.intersectObjects(this.world.pickables(), false)[0];
+    return hit && (!ground || hit.distance < ground.distance) ? this.world.entityFromObject(hit.object) : null;
+  }
+
+  /** Free Play: sends what's in the pointer's hold to hover above whatever is under the pointer. */
+  private moveHand(e: Entity, cx: number, cy: number): void {
+    this.aimRay(cx, cy);
+    const others = this.world.living((o) => o !== e).map((o) => o.mesh);
+    const hit = this.raycaster.intersectObjects([...others, ...this.world.pickables()], false)[0];
+    if (hit) (e.state.carry as Carry).at = { x: hit.point.x, y: hit.point.y + e.size.y / 2 + CARRY.hover, z: hit.point.z };
+  }
+
+  /** Free Play: lets go of what's in the pointer's hold. It keeps its speed, so a flick throws it. */
+  private dropHand(): void {
+    if (this.hand?.lifted && this.hand.e.alive) (this.hand.e.state.carry as Carry).mode = 'loose';
+    this.hand = null;
+  }
+
+  private click(cx: number, cy: number): void {
+    this.aimRay(cx, cy);
 
     const meshes = this.world.living().map((e) => e.mesh);
     const hitEntity = this.raycaster.intersectObjects(meshes, false)[0];
@@ -697,11 +768,33 @@ export class Game {
     this.renderer.camera.position.add(d);
   }
 
+  /** Refreshes what the hero could grab or is holding, and the ring and prompt that show it. */
+  private updateCarry(dt: number): void {
+    const h = this.world.hero;
+    const playing = !this.titleMode && !this.runner && !this.hud.overlayOpen && document.activeElement !== this.hud.input;
+    const prev = this.carryHint?.entity;
+    const hint = (this.carryHint = h?.alive && playing ? carryHint(this.world, h) : null);
+    const ring = this.carryRing;
+    const inHand = this.hand?.lifted && this.hand.e.alive ? this.hand.e : null;
+    const e = inHand ?? hint?.entity;
+    const hover = inHand && (inHand.state.carry as Carry).at!;
+    const at = hover ? { ...hover, y: hover.y - CARRY.hover } : hint?.verb === 'holding' ? hint.spot : e && { x: e.x, y: e.y, z: e.z };
+    ring.group.visible = !!at && !!e && hint?.verb !== 'heavy' && hint?.verb !== 'dragging';
+    if (at && e) {
+      const half = e.size.y / 2 + (hint?.verb === 'holding' ? 0.04 : 0);
+      ring.follow(at.x, at.y - half, at.z, Math.max(0.6, Math.hypot(e.size.x, e.size.z) * 1.25));
+      if (e !== prev) ring.set(ring.position);
+    }
+    ring.update(dt);
+    this.carryPrompt.update(hint, this.renderer.camera);
+  }
+
   private frame = (now: number): void => {
     const dt = Math.min(1 / 20, (now - this.last) / 1000);
     this.last = now;
     this.tick(dt);
     this.followCamera(dt);
+    this.updateCarry(dt);
     this.tutorial.update(this, dt);
     updateVoxelLOD(this.renderer.camera.position, (this.renderer.scene.fog as Fog).far);
     this.renderer.render(dt, this.fx.shake);
@@ -709,4 +802,4 @@ export class Game {
   };
 }
 
-const HERO_KEYS = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space']);
+const HERO_KEYS = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space', 'KeyE', 'KeyF', 'KeyQ']);

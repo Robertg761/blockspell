@@ -61,6 +61,12 @@ export interface HeroInput {
   down: boolean;
   /** Space held. */
   jump: boolean;
+  /** E held: grab what's in reach, or put down what's held. */
+  grab: boolean;
+  /** F held: throw what's held. */
+  toss: boolean;
+  /** Q held: turn what's held. */
+  turn: boolean;
 }
 
 export interface SpawnOptions {
@@ -109,7 +115,7 @@ export class GameWorld {
   readonly links: Link[] = [];
   /** The keyboard-controlled hero of the current level (null in free play). */
   hero: Entity | null = null;
-  readonly input: HeroInput = { move: { x: 0, z: 0 }, up: false, down: false, jump: false };
+  readonly input: HeroInput = { move: { x: 0, z: 0 }, up: false, down: false, jump: false, grab: false, toss: false, turn: false };
   /** Open world: while set, spawned entities are stamped with this zone id (state.zone), so a zone reset finds its props. */
   spawnZone: string | null = null;
   /** While true, `addStaticBox` does nothing (a zone reset re-runs setup code but keeps the statics it built). */
@@ -195,7 +201,12 @@ export class GameWorld {
     e.body.addEventListener('collide', (ev: { body: Body; contact: { getImpactVelocityAlongNormal(): number } }) => {
       if (!e.alive) return;
       const other = this.bodyMap.get(ev.body.id) ?? null;
-      this.pendingContacts.push({ e, other, speed: Math.abs(ev.contact.getImpactVelocityAlongNormal()) });
+      // positive when closing. A body waking from sleep counts as a new contact, even moving away
+      const speed = Math.max(0, ev.contact.getImpactVelocityAlongNormal());
+      // this fires per contact point, and a flat landing has several: to behaviors it's one impact
+      const same = this.pendingContacts.find((c) => c.e === e && c.other === other);
+      if (same) same.speed = Math.max(same.speed, speed);
+      else this.pendingContacts.push({ e, other, speed });
     });
     if (this.spawnZone) e.state.zone = this.spawnZone;
     this.scene.add(e.root);
@@ -522,7 +533,7 @@ export class GameWorld {
     this.aim = null;
     this.hero = null;
     this.input.move.x = this.input.move.z = 0;
-    this.input.up = this.input.down = this.input.jump = false;
+    this.input.up = this.input.down = this.input.jump = this.input.grab = this.input.toss = this.input.turn = false;
     this.waterLevel = null;
     this.acc = 0;
     this.fx.anims.clear();

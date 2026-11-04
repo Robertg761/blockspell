@@ -1,6 +1,6 @@
 import { AdditiveBlending, Group, Mesh, MeshBasicMaterial, RingGeometry, Vector3 } from 'three';
 
-/** Pulsing ring that shows where the next spell lands. */
+/** Pulsing ring on the ground: where the next spell lands, or what the hero would grab. */
 export class SpawnMarker {
   readonly group = new Group();
   readonly position = new Vector3();
@@ -8,8 +8,8 @@ export class SpawnMarker {
   private inner: Mesh;
   private t = 0;
 
-  constructor() {
-    const mat = new MeshBasicMaterial({ color: '#ffd84a', transparent: true, opacity: 0.85, depthWrite: false, blending: AdditiveBlending, fog: false });
+  constructor(color = '#ffd84a') {
+    const mat = new MeshBasicMaterial({ color, transparent: true, opacity: 0.85, depthWrite: false, blending: AdditiveBlending, fog: false });
     this.ring = new Mesh(new RingGeometry(0.42, 0.55, 4, 1), mat);
     this.ring.rotation.x = -Math.PI / 2;
     this.inner = new Mesh(new RingGeometry(0.12, 0.2, 4, 1), mat.clone());
@@ -22,6 +22,13 @@ export class SpawnMarker {
     this.position.copy(p);
     this.group.position.set(p.x, p.y + 0.03, p.z);
     this.t = 0;
+  }
+
+  /** Moves the ring without replaying its pop. `size` scales it (1 = about a meter across). */
+  follow(x: number, y: number, z: number, size = 1): void {
+    this.position.set(x, y, z);
+    this.group.position.set(x, y + 0.03, z);
+    this.group.scale.setScalar(size);
   }
 
   update(dt: number): void {

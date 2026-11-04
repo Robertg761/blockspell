@@ -42,7 +42,8 @@ export const KNOWN_TAGS = {
   key: 'Unlocks `locked` things it touches.',
   locked: 'Opens when touched by a key.',
   player: 'A summoned hero: walks to where you click and climbs climbable things.',
-  controlled: 'The level hero: moved with WASD/arrows + Space, climbs climbables, stands on anything.',
+  controlled: 'The level hero: moved with WASD/arrows + Space, climbs climbables, stands on anything, grabs and throws things.',
+  held: 'In the hero\'s hands, or just let go and passing through them until they part (state.carry).',
 } as const;
 
 export type KnownTag = keyof typeof KNOWN_TAGS;

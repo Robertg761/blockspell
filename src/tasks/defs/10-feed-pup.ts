@@ -50,6 +50,22 @@ const solutions: LevelSolution[] = [
       { cast: 'bone', at: [0, 0, -1.9] },
     ],
   },
+  {
+    name: 'throw a bone over the wall',
+    steps: [
+      { walkTo: [0, 5] }, { cast: 'bone', at: [0, 4.6] }, { wait: 1.2 }, { walkTo: [0, 0.5], of: 'bone' },
+      { press: 'grab' }, { wait: 0.4 }, { hold: { dir: [0, -1] }, for: 0.2 }, { wait: 0.5 }, { press: 'toss' },
+    ],
+  },
+  {
+    name: 'carry a bone up the ladder and over the wall',
+    steps: [
+      { walkTo: [0, 1.6] }, { cast: 'bone', at: [0, 1.2] }, { wait: 1.2 }, { press: 'grab' }, { wait: 0.4 },
+      { cast: 'ladder', at: [0, 0.4] }, { wait: 1.5 },
+      { walkTo: [0, 0.95] }, { hold: { dir: [0, -1], up: true }, for: 1.85 },
+      { hold: { dir: [0, -1] }, for: 1.2 }, { wait: 0.6 }, { press: 'grab' },
+    ],
+  },
   // "big box" plus a "box" as a step also works for players, but the boxes land at random angles and the
   // hero shoves the big one aside about 1 time in 20, too often for a scripted check.
 ];

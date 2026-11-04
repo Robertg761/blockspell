@@ -24,15 +24,30 @@ reach it, using as few spells as you can.
 | **W** (or Space) next to a ladder, rope, tree or stairs | Climb. At the top you hop over the edge |
 | **Enter** (or **T**, **/**) | Open the spell bar. Type a spell and press Enter to cast it. Esc closes it |
 | **Click the ground** | Choose where the next spell appears (the glowing marker) |
+| **E** near an object | Grab it: light things go overhead, heavy ones are dragged. **E** again sets it down |
+| **F** while carrying | Throw it the way you're facing |
+| **Q** while carrying | Turn it 45° before you set it down |
 | **Click an object** | Poke it |
 | **Drag / scroll** | Orbit / zoom the camera, which follows the hero |
 | **R** or ↺ | Restart the level |
 | **Tab** or 📖 | Spellbook of discovered words |
 | ♪ | Mute music and sound (remembered) |
 
-In **Free Play** there's no hero, so typing anywhere goes straight to the spell bar. On
-touch screens, hero levels show a joystick with Jump and Climb buttons. Tips about the
-controls pop up the first time you need them.
+In **Free Play** there's no hero, so typing anywhere goes straight to the spell bar, and
+your pointer is the hand: drag a thing to move it, let go to drop it, and flick to throw it.
+It hovers over whatever is under the pointer, so you can stack things too. On
+touch screens, hero levels show a joystick with Jump and Climb buttons, plus Grab, Throw
+and Turn when they apply. Tips about the controls pop up the first time you need them.
+
+**Carrying things.** Walk up to almost anything you've cast and a prompt names it, with a
+ring under what **E** would grab. Things up to 16 kg (a box, a dog, a plank, a bridge) go
+over your head, and heavier loads slow you down more. While you carry one, the ring shows
+where it will land, so you can stack it on something or stand a ladder up against a ledge.
+You can carry things up ladders too. Things up to 45 kg (stairs, a ramp, a rock) are
+dragged: you pull or push them along the ground, slowly and without jumping. Animals and
+engines over 16 kg won't be dragged, and anything heavier is too heavy to move. A low
+ceiling knocks a carried thing out of your hands, and thrown things hit as hard as they
+fly, so a thrown crystal shatters. Ghostly things can't be held.
 
 **Stars.** Every successful cast counts as one spell, however many words it has:
 "ladder", "giant plank" and "3 tiny balloons" are 1 spell each, and spells that fail to
@@ -133,7 +148,8 @@ double-clicking `index.html`.)
 
 `window.__blockspell` is available in every build (see `src/debug.ts`):
 `load(n)`, `cast('giant balloon', [x, z])`, `step(seconds)` (synchronous simulation),
-`render()`, `state()`, `solve(level, i)` and `solveAll()`.
+`render()`, `state()`, `run(steps)`, `solve(level, i)` and `solveAll()`. Solutions can tap
+the hero's action keys with `{ press: 'grab' | 'toss' | 'turn' }`.
 
 URL flags for screenshots:
 
@@ -251,7 +267,8 @@ export default defineObject({
 ```
 
 The keyboard hero is the `hero` object retagged with `controlled`
-(`src/behaviors/defs/controlled.ts`).
+(`src/behaviors/defs/controlled.ts`). Grabbing, carrying and throwing live in
+`src/behaviors/defs/carry.ts` and `src/behaviors/lib/carry.ts`.
 
 ### Adding a behavior
 

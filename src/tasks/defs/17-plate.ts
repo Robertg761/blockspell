@@ -13,6 +13,7 @@ const solutions: LevelSolution[] = [
   { name: 'rock', steps: [{ cast: 'rock', at: [0, 0] }], timeout: 6 },
   { name: 'cow', steps: [{ cast: 'cow', at: [0, 0] }], timeout: 6 },
   { name: 'car', steps: [{ cast: 'car', at: [0, 0] }], timeout: 6 },
+  { name: 'drag a rock onto it', steps: [{ cast: 'rock', at: [0, 2] }, { wait: 1.5 }, { walkTo: [0, 1.3], of: 'rock' }, { press: 'grab' }, { hold: { dir: [0, -1] }, for: 1.6 }, { press: 'grab' }], timeout: 6 },
 ];
 
 export default defineTask({

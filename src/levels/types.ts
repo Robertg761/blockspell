@@ -28,6 +28,8 @@ export type SolutionStep =
    * (walk up to a trampoline wherever it came to rest).
    */
   | { walkTo: [number, number]; of?: string; timeout?: number; jump?: boolean; up?: boolean }
+  /** Tap a hero key: E grabs or puts down, F throws, Q turns what's held. */
+  | { press: 'grab' | 'toss' | 'turn' }
   /** Click (poke) the nearest entity matching an object id near a point. */
   | { poke: string; near?: [number, number] }
   /** Move the hero to a feet position (open world: jump to a task's start). */

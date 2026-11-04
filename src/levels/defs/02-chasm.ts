@@ -34,6 +34,7 @@ export default defineLevel({
     { name: 'big bridge', steps: [{ cast: 'big bridge', at: [-1, 0, 0] }, { wait: 1.5 }, { walkTo: [3, 0], timeout: 8 }] },
     { name: 'giant plank', steps: [{ cast: 'giant plank', at: [-1, 0, 0] }, { wait: 1.5 }, { walkTo: [3, 0], timeout: 8 }] },
     { name: 'trampoline', steps: [{ cast: 'trampoline', at: [-3.9, 0] }, { wait: 1.5 }, { hold: { dir: [1, 0], jump: true }, for: 4 }] },
-    { name: 'spring', steps: [{ cast: 'spring', at: [-3.9, 0] }, { wait: 1.5 }, { hold: { dir: [1, 0], jump: true }, for: 4 }] },
+    // the spring can kick along under the hero and launch them twice: steer back from an overshoot, like a player would
+    { name: 'spring', steps: [{ cast: 'spring', at: [-3.9, 0] }, { wait: 1.5 }, { hold: { dir: [1, 0], jump: true }, for: 3 }, { hold: { dir: [-1, 0] }, for: 0.8 }, { wait: 3 }] },
   ],
 });

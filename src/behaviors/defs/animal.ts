@@ -2,6 +2,7 @@ import { Quaternion, Vec3 } from 'cannon-es';
 import type { Entity } from '../../core/entity';
 import { random } from '../../core/rng';
 import type { GameWorld } from '../../core/world';
+import { inHands } from '../lib/carry';
 import { canEat } from '../lib/diet';
 import { inWater } from '../lib/water';
 import { defineBehavior } from '../types';
@@ -94,6 +95,7 @@ export default defineBehavior({
       b.angularVelocity.set(0, 0, 0);
       return;
     }
+    if (inHands(e)) return;
     const mul = (e.state.speedMul as number) ?? 1;
     const swimmer = e.prop('swims', 0) > 0;
     const wet = (swimmer || e.has('floats')) && inWater(world, e);

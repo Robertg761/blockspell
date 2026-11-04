@@ -1,15 +1,17 @@
 import type { Game } from '../game';
+import type { CarryHint } from '../behaviors/lib/carry';
 import { h } from './dom';
 
 /** True on touch-first devices, or when forced with `?touch` (for testing). */
 export const isTouch: boolean =
   (typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches) || /[?&]touch\b/.test(location.search);
 
-type Code = 'KeyW' | 'KeyA' | 'KeyS' | 'KeyD' | 'Space';
-const KEY: Record<Code, string> = { KeyW: 'w', KeyA: 'a', KeyS: 's', KeyD: 'd', Space: ' ' };
+type Code = 'KeyW' | 'KeyA' | 'KeyS' | 'KeyD' | 'Space' | 'KeyE' | 'KeyF' | 'KeyQ';
+const KEY: Record<Code, string> = { KeyW: 'w', KeyA: 'a', KeyS: 's', KeyD: 'd', Space: ' ', KeyE: 'e', KeyF: 'f', KeyQ: 'q' };
 
 /**
- * On-screen controls for hero levels (joystick + Jump + Climb). They drive the
+ * On-screen controls for hero levels (joystick, Jump, Climb, and Grab, Throw and Turn when
+ * they apply). They drive the
  * game by dispatching synthetic key events on window, so game.ts needs no
  * touch-specific code. Also makes the level card tap-to-expand on small screens.
  */
@@ -19,6 +21,9 @@ export class TouchControls {
   private sources = new Map<string, Set<Code>>();
   private shown = false;
   private heroLevel = false;
+  private grabBtn: HTMLElement;
+  private tossBtn: HTMLElement;
+  private turnBtn: HTMLElement;
 
   constructor(root: HTMLElement) {
     const knob = h('div.joy-knob');
@@ -28,7 +33,13 @@ export class TouchControls {
     const climb = h('button.touch-btn.climb', { type: 'button', text: 'Climb ▲', 'aria-label': 'Climb' });
     this.bindHold(jump, 'jump', ['Space']);
     this.bindHold(climb, 'climb', ['KeyW']);
-    this.el = h('div.touch-controls.hidden', {}, [joy, h('div.touch-actions', {}, [climb, jump])]);
+    this.grabBtn = h('button.touch-btn.carry.off', { type: 'button', text: 'Grab', 'aria-label': 'Grab' });
+    this.tossBtn = h('button.touch-btn.carry.off', { type: 'button', text: 'Throw', 'aria-label': 'Throw' });
+    this.turnBtn = h('button.touch-btn.carry.off', { type: 'button', text: 'Turn', 'aria-label': 'Turn what you hold' });
+    this.bindHold(this.grabBtn, 'grab', ['KeyE']);
+    this.bindHold(this.tossBtn, 'toss', ['KeyF']);
+    this.bindHold(this.turnBtn, 'turn', ['KeyQ']);
+    this.el = h('div.touch-controls.hidden', {}, [joy, h('div.touch-actions', {}, [this.turnBtn, this.tossBtn, this.grabBtn, climb, jump])]);
     root.append(this.el);
     if (isTouch) document.body.classList.add('touch');
 
@@ -46,11 +57,34 @@ export class TouchControls {
 
   update(game: Game): void {
     const show = isTouch && this.heroLevel && !game.titleMode && !game.hud.overlayOpen && document.activeElement !== game.hud.input;
-    if (show === this.shown) return;
-    this.shown = show;
-    this.el.classList.toggle('hidden', !show);
-    document.body.classList.toggle('touch-hero', show);
-    if (!show) this.releaseAll();
+    if (show !== this.shown) {
+      this.shown = show;
+      this.el.classList.toggle('hidden', !show);
+      document.body.classList.toggle('touch-hero', show);
+      if (!show) this.releaseAll();
+    }
+    if (show) this.syncCarry(game.carryHint);
+  }
+
+  /** Shows the buttons that apply to what the hero can reach or holds. */
+  private syncCarry(hint: CarryHint | null): void {
+    const verb = hint?.verb;
+    const holding = verb === 'holding';
+    const label = holding || verb === 'dragging' ? 'Drop' : verb === 'drag' ? 'Drag' : 'Grab';
+    if (this.grabBtn.textContent !== label) this.grabBtn.textContent = label;
+    this.setShown(this.grabBtn, 'grab', !!verb && verb !== 'heavy');
+    this.setShown(this.tossBtn, 'toss', holding);
+    this.setShown(this.turnBtn, 'turn', holding);
+  }
+
+  private setShown(btn: HTMLElement, src: string, on: boolean): void {
+    if (btn.classList.contains('off') === !on) return;
+    btn.classList.toggle('off', !on);
+    if (!on) {
+      // a hidden button never sees its pointerup
+      btn.classList.remove('active');
+      this.setSource(src, []);
+    }
   }
 
   // ---------------------------------------------------------------- keys

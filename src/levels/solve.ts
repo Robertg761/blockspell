@@ -44,7 +44,7 @@ export class SolutionRunner {
     const w = this.host.world;
     const inp = w.input;
     inp.move.x = inp.move.z = 0;
-    inp.up = inp.down = inp.jump = false;
+    inp.up = inp.down = inp.jump = inp.grab = inp.toss = inp.turn = false;
     if (this.stepsDone) {
       this.tail += dt;
       return;
@@ -109,6 +109,10 @@ export class SolutionRunner {
       inp.up = !!step.up;
       inp.jump = !!step.jump && Math.floor(this.t * 4) % 2 === 0;
       return false;
+    }
+    if ('press' in step) {
+      inp[step.press] = this.t < 0.05; // then released, so back-to-back presses each count
+      return this.t >= 0.1;
     }
     if ('poke' in step) {
       const near = step.near ?? [w.hero?.x ?? 0, w.hero?.z ?? 0];

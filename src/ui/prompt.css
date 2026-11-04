@@ -1,0 +1,10 @@
+.carry-prompt {
+  position: absolute; left: 0; top: 0; z-index: 15; display: flex; gap: 10px; padding: 5px 10px; white-space: nowrap;
+  background: rgba(20, 28, 48, 0.78); color: #fff; border-radius: 10px; font-size: 13px; font-weight: 650;
+  box-shadow: 0 4px 14px rgba(20, 30, 60, 0.3); pointer-events: none;
+}
+.carry-action { display: inline-flex; align-items: center; gap: 5px; }
+.carry-prompt kbd {
+  font: inherit; font-size: 11.5px; font-weight: 800; min-width: 18px; text-align: center; padding: 0 5px; border-radius: 5px;
+  background: #fff; color: #1d2433; box-shadow: 0 2px 0 #9fb0c8;
+}

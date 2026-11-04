@@ -183,10 +183,10 @@ export class Hud {
     else if (level.hint && !world) this.goal.append(h('span.goal-free', { text: level.hint }));
     this.goal.classList.remove('done');
     this.help.textContent = world
-      ? 'WASD / arrows: move · Space: jump · W near a ladder: climb · Enter: write a word · Click ground: aim · J: journal · R: reset this island'
+      ? 'WASD / arrows: move · Space: jump · W near a ladder: climb · E: grab · F: throw · Enter: write a word · Click ground: aim · J: journal · R: reset this island'
       : level.hero
-        ? 'WASD / arrows: move · Space: jump · W near a ladder: climb · Enter: write a word · Click ground: aim · R: restart'
-        : 'Drag to orbit · Scroll to zoom · Click ground to aim · Click things to poke';
+        ? 'WASD / arrows: move · Space: jump · W near a ladder: climb · E: grab · F: throw · Enter: write a word · Click ground: aim · R: restart'
+        : 'Drag to orbit · Drag things to move them, flick to throw · Scroll to zoom · Click ground to aim · Click things to poke';
     this.menuBtn.textContent = world ? '📓 Journal' : '☰ Menu';
     this.menuBtn.title = world ? 'Journal (J)' : 'Menu';
     this.menuBtn.dataset.icon = world ? '📓' : '☰';
