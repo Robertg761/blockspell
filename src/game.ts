@@ -36,7 +36,7 @@ import { settings, type Settings } from './settings';
 import { sceneUrl, type SceneCast } from './share';
 import { SideTools, type ToolId } from './ui/tools';
 import { PhotoUI } from './ui/photo';
-import { Trophies, TROPHIES, type TrophyDef } from './trophies';
+import { Trophies, TROPHIES, type Experiment, type TrophyDef } from './trophies';
 import { Waypoint } from './engine/waypoint';
 import { SKY_LABEL, SKY_NAMES, type SkyName } from './engine/skies';
 import { WEATHER_LABEL, WEATHER_NAMES, type WeatherName } from './engine/weather';
@@ -120,7 +120,7 @@ export class Game {
     this.renderer.scene.add(this.marker.group, this.carryRing.group);
     this.tracker = new TaskTracker(this);
     this.waypoint = new Waypoint(this.renderer.scene);
-    this.trophies = new Trophies((t) => this.onTrophy(t));
+    this.trophies = new Trophies((t) => this.onTrophy(t), (x) => this.onExperiment(x));
     this.trophies.watch(this.world.events, this.world);
     this.world.events.on('taskComplete', ({ taskId }) => {
       const saved = worldSave.all().tasks;
@@ -778,6 +778,11 @@ export class Game {
   }
 
   /** A trophy was just earned: toast, chime and sparkles. */
+  private onExperiment(x: Experiment): void {
+    this.hud.toasts.show(`${x.name}. Ticked in the lab notebook (🏆 panel).`, { title: `${x.icon} Experiment done`, kind: 'success', duration: 4200 });
+    this.fx.sound('chime', { pitch: 1.3, volume: 0.7 });
+  }
+
   private onTrophy(t: TrophyDef): void {
     this.hud.toasts.show(t.desc, { title: `${t.icon} Trophy: ${t.name}`, kind: 'success', duration: 5000 });
     this.fx.sound('star', { pitch: 1.2 });

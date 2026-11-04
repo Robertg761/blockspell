@@ -1,3 +1,4 @@
+import type { Entity } from './core/entity';
 import type { EventBus } from './core/events';
 
 /**
@@ -44,7 +45,41 @@ export const TROPHIES: TrophyDef[] = [
   { id: 'pathfinder', icon: '🧭', name: 'Pathfinder', desc: 'Solve one task three different ways.', stat: 'ways', goal: 3 },
   { id: 'explorer', icon: '🗺', name: 'Island Hopper', desc: 'Visit every island.', stat: 'zones', goal: 7 },
   { id: 'hero', icon: '🏆', name: 'Hero of the Islands', desc: 'Finish every task.', stat: 'allTasks', goal: 1 },
+  { id: 'lab-rat', icon: '🧪', name: 'Lab Rat', desc: 'Complete 6 experiments in the lab notebook.', stat: 'lab', goal: 6 },
+  { id: 'mad-scientist', icon: '⚗', name: 'Mad Scientist', desc: 'Complete every experiment in the lab notebook.', stat: 'lab', goal: 16 },
   { id: 'night', icon: '🌙', name: 'Night Owl', desc: 'Cast a spell at night.', stat: 'nightCasts', goal: 1, secret: true },
+];
+
+/**
+ * The lab notebook: things that happen when you mix things, each noticed once from game events.
+ * Shown in the trophy panel. Add one by adding a line here and a detector in `Trophies.watch`.
+ */
+export interface Experiment {
+  id: string;
+  icon: string;
+  /** What to try, phrased as a challenge. */
+  name: string;
+  /** A nudge about which words to write. */
+  hint: string;
+}
+
+export const EXPERIMENTS: Experiment[] = [
+  { id: 'fire', icon: '🔥', name: 'Set something on fire', hint: 'Try wood: a box, a plank, a tree. Or write “flaming” first.' },
+  { id: 'ashes', icon: '🪵', name: 'Burn something to ashes', hint: 'Fire is patient. Leave a flaming plank alone.' },
+  { id: 'douse', icon: '🧯', name: 'Put out a fire', hint: 'Water, a cloud, a bucket, a snowball...' },
+  { id: 'melt', icon: '💧', name: 'Melt some ice', hint: 'Ice and heat do not get along.' },
+  { id: 'snowman', icon: '⛄', name: 'Melt a snowman', hint: 'A snowman next to a torch or a campfire.' },
+  { id: 'freeze', icon: '🧊', name: 'Freeze something', hint: 'Write “frozen” in front of a word.' },
+  { id: 'wet', icon: '🌧', name: 'Get something wet', hint: 'Rain from a cloud, or just water.' },
+  { id: 'pop', icon: '🎈', name: 'Pop a balloon', hint: 'Balloons hate sharp things and flames.' },
+  { id: 'toast', icon: '🥩', name: 'Cook something tasty', hint: 'Set a steak or a burger on fire.' },
+  { id: 'dog', icon: '🐕', name: 'Feed a dog', hint: 'A dog, and a bone or a steak.' },
+  { id: 'cat', icon: '🐈', name: 'Let a cat catch a mouse', hint: 'A cat, a mouse, and a bit of patience.' },
+  { id: 'cheese', icon: '🧀', name: 'Let a mouse find cheese', hint: 'Mice follow their noses.' },
+  { id: 'tnt', icon: '🧨', name: 'Set off some TNT', hint: 'Stand back. Fire sets it off, or a bang nearby.' },
+  { id: 'bomb', icon: '💣', name: 'Explode a bomb', hint: 'A bomb goes off by itself, eventually.' },
+  { id: 'chain', icon: '⛓', name: 'Start a chain reaction', hint: 'Two blasts close together: TNT next to TNT.' },
+  { id: 'unlock', icon: '🔑', name: 'Unlock a door', hint: 'A key and a locked door.' },
 ];
 
 const KEY = 'blockspell.trophies.v1';
@@ -70,7 +105,7 @@ export class Trophies {
   private save = read();
   private blasts: number[] = [];
 
-  constructor(private onUnlock: (t: TrophyDef) => void) {}
+  constructor(private onUnlock: (t: TrophyDef) => void, private onExperiment: (x: Experiment) => void = () => {}) {}
 
   get stats(): Readonly<Record<string, number>> {
     return this.save.stats;
@@ -133,21 +168,57 @@ export class Trophies {
   watch(events: EventBus, world: { time: number; living(): unknown[] }): void {
     // things that exist when a level loads (a burning hut) don't count as the player's doing
     const live = () => world.time > 1.5;
-    events.on('ignite', () => live() && this.bump('ignites'));
-    events.on('extinguish', () => live() && this.bump('extinguishes'));
-    events.on('ate', () => this.bump('ate'));
-    events.on('popped', () => this.bump('popped'));
-    events.on('broken', () => this.bump('broken'));
-    events.on('exploded', () => {
+    const id = (e: Entity | null | undefined) => e?.def.id ?? '';
+    events.on('ignite', ({ entity }) => {
       if (!live()) return;
+      this.bump('ignites');
+      this.discover('fire');
+      if (entity.has('edible')) this.discover('toast');
+    });
+    events.on('burnedUp', () => live() && this.discover('ashes'));
+    events.on('extinguish', () => {
+      if (!live()) return;
+      this.bump('extinguishes');
+      this.discover('douse');
+    });
+    events.on('ate', ({ eater, food }) => {
+      this.bump('ate');
+      if (id(eater) === 'dog') this.discover('dog');
+      if (id(eater) === 'cat' && id(food) === 'mouse') this.discover('cat');
+      if (id(eater) === 'mouse' && id(food) === 'cheese') this.discover('cheese');
+    });
+    events.on('popped', () => {
+      this.bump('popped');
+      if (live()) this.discover('pop');
+    });
+    events.on('broken', () => this.bump('broken'));
+    events.on('remove', ({ entity, reason }) => {
+      if (reason !== 'melted' || !live()) return;
+      this.discover('melt');
+      if (id(entity) === 'snowman') this.discover('snowman');
+    });
+    events.on('tagAdded', ({ tag }) => {
+      if (!live()) return;
+      if (tag === 'frozen') this.discover('freeze');
+      else if (tag === 'wet') this.discover('wet');
+    });
+    events.on('unlocked', () => this.discover('unlock'));
+    events.on('exploded', ({ source }) => {
+      if (!live()) return;
+      if (id(source) === 'tnt') this.discover('tnt');
+      else if (id(source) === 'bomb') this.discover('bomb');
       this.bump('explosions');
       const now = performance.now() / 1000;
       this.blasts = this.blasts.filter((t) => now - t < 5);
       this.blasts.push(now);
       if (this.blasts.length >= 3) this.max('chain', 1);
+      if (this.blasts.filter((t) => now - t < 2.5).length >= 2) this.discover('chain');
     });
-    events.on('spawn', () => {
+    events.on('spawn', ({ entity }) => {
       if (world.living().length >= 12) this.max('crowd', 1);
+      // "frozen" and "wet" written in front of a word are on from the start
+      if (live() && entity.has('frozen')) this.discover('freeze');
+      if (live() && entity.has('wet')) this.discover('wet');
     });
     events.on('photo', () => this.bump('photos'));
     events.on('shared', () => this.bump('shares'));
@@ -176,6 +247,19 @@ export class Trophies {
     if (!set.includes(value)) set.push(value);
     this.max(stat, set.length);
     this.write();
+  }
+
+  /** Experiments completed so far. */
+  get labDone(): ReadonlySet<string> {
+    return new Set(this.save.sets.lab ?? []);
+  }
+
+  /** Marks an experiment of the lab notebook as done (the first time it is seen). */
+  discover(id: string): void {
+    const x = EXPERIMENTS.find((e) => e.id === id);
+    if (!x || (this.save.sets.lab ?? []).includes(id)) return;
+    this.addTo('lab', id);
+    this.onExperiment(x);
   }
 
   noteZone(id: string): void {

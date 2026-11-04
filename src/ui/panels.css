@@ -37,3 +37,5 @@
 .journal-answerbox { margin-top: 6px; }
 .journal-answer { margin-top: 4px; padding: 6px 10px; border-radius: 10px; background: #fff1dc; font-size: 13.5px; display: flex; flex-wrap: wrap; gap: 6px; align-items: baseline; }
 .journal-answer b { color: var(--accent-dark); }
+
+.lab-title { margin: 20px 0 2px; font-size: 18px; }
