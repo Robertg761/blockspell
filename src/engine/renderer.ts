@@ -12,7 +12,9 @@ import { setEnvMap } from './env';
 import { createBackdrop } from './backdrop';
 import { createSky } from './sky';
 import { Clouds } from './clouds';
+import { createGradePass, type ScreenFx } from './grade';
 import type { CameraShake } from './shake';
+import type { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 
 export interface ViewRange {
   fog: [number, number];
@@ -36,6 +38,9 @@ export class Renderer {
   private sunDir = new Vector3(0.55, 0.85, 0.35).normalize();
   /** Null when bloom is disabled (?nobloom) or unsupported; then we render straight to screen. */
   private composer: EffectComposer | null = null;
+  private grade: ShaderPass | null = null;
+  private baseFov = 50;
+  private clock = 0;
 
   constructor(readonly container: HTMLElement) {
     this.gl = new WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
@@ -101,6 +106,8 @@ export class Renderer {
       const bloom = new UnrealBloomPass(new Vector2(256, 256), 0.32, 0.55, 0.92);
       composer.addPass(bloom);
       composer.addPass(new OutputPass()); // applies renderer tone mapping + sRGB
+      this.grade = createGradePass(); // film grade, vignette and impact effects, on display colors
+      composer.addPass(this.grade);
       this.composer = composer;
     } catch (e) {
       console.warn('Bloom unavailable, falling back to direct rendering', e);
@@ -165,8 +172,21 @@ export class Renderer {
     this.camera.updateProjectionMatrix();
   }
 
-  render(dt: number, shake: CameraShake): void {
+  render(dt: number, shake: CameraShake, screen?: ScreenFx): void {
     this.controls.update();
+    this.clock += dt;
+    const fov = this.baseFov + (screen?.fov ?? 0);
+    if (Math.abs(this.camera.fov - fov) > 0.005) {
+      this.camera.fov = fov;
+      this.camera.updateProjectionMatrix();
+    }
+    if (this.grade) {
+      const u = this.grade.uniforms;
+      u.uAberr.value = screen?.aberration ?? 0;
+      u.uFlashAmt.value = screen?.flashAmt ?? 0;
+      if (screen) (u.uFlash.value as Vector3).copy(screen.flashColor);
+      u.uTime.value = this.clock % 10;
+    }
     this.clouds.update(dt);
     this.followSun();
     shake.apply(this.camera);

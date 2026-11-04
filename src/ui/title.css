@@ -33,3 +33,5 @@
 @media (prefers-reduced-motion: reduce) {
   .overlay.title, .overlay.title .panel.intro::before { animation: none; }
 }
+
+.overlay.title .surprise-link { align-self: center; display: block; margin: 12px auto 2px; font-size: 15px; font-weight: 700; color: var(--accent-dark); padding: 4px 10px; }

@@ -2,7 +2,9 @@ import { Color, PointLight, type Scene } from 'three';
 import { Audio, type SoundName } from './audio';
 import { FlameFx } from './flames';
 import { Particles, type BurstOptions } from './particles';
+import { ScreenFx } from './grade';
 import { CameraShake } from './shake';
+import { Summons } from './summon';
 import { Tweens } from './tween';
 import { VoxelAnims } from './voxanim';
 
@@ -51,10 +53,13 @@ class GlowLights {
 export class Effects {
   readonly particles: Particles;
   readonly shake = new CameraShake();
+  /** Screen-space punch: chromatic kick, color flash, FOV zoom and hit-stop. */
+  readonly screen = new ScreenFx();
   readonly audio = new Audio();
   readonly tweens = new Tweens();
   readonly glow: GlowLights;
   readonly flames: FlameFx;
+  readonly summons: Summons;
   /** Voxel spawn / change / despawn animations. */
   readonly anims: VoxelAnims;
 
@@ -62,6 +67,7 @@ export class Effects {
     this.particles = new Particles(scene);
     this.glow = new GlowLights(scene);
     this.flames = new FlameFx(scene);
+    this.summons = new Summons(scene, this.tweens);
     this.anims = new VoxelAnims(scene, this);
   }
 
@@ -88,11 +94,27 @@ export class Effects {
     this.burst(at, { count, color, speed: 5, up: 2, gravity: 4, drag: 2.5, life: 0.7, size: 0.08, glow: true, spread: 0.3 });
   }
 
+  /** The summoning column and rune ring at a cast point; `size` ~ the object's footprint in meters. */
+  summon(at: P3, color: string, size = 1): void {
+    this.summons.play(at.x, at.y, at.z, color, size);
+    this.screen.punch(Math.min(0.6, 0.15 + size * 0.1));
+  }
+
+  /** Everything a big bang adds on top of its particles: a white-hot flash, fringing and a beat of hit-stop. */
+  bigBang(power = 1): void {
+    this.screen.flash('#fff1c9', 0.12 * power);
+    this.screen.punch(0.7 * power);
+    this.screen.hitStop(0.07 + 0.05 * power, 0.1);
+  }
+
   /** Level-complete celebration: confetti, firework bursts, shake and fanfare. */
   celebrate(at: P3): void {
     this.sound('fanfare');
     this.sound('confetti', { volume: 0.8 });
     this.addShake(0.35);
+    this.screen.flash('#fff6c8', 0.16);
+    this.screen.punch(0.8);
+    this.screen.hitStop(0.35, 0.2);
     const colors = ['#ff5d6c', '#ffd84a', '#52b848', '#3d7fe0', '#9256d6', '#ff9a3c', '#ffffff'];
     // paper confetti: two pops from either side of the hero, then a lingering shower
     for (const side of [-1, 1])

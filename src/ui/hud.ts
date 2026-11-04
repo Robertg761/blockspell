@@ -10,6 +10,8 @@ export interface HudCallbacks {
   onMute: (muted: boolean) => void;
   onStart: () => void;
   onSpellbook: () => void;
+  /** 🎲 in Free Play: stage a random scene. */
+  onSurprise: () => void;
   onLevels: () => void;
   /** Flips the voxel detail (HD / classic); returns the new state. */
   onHD: () => boolean;
@@ -57,6 +59,7 @@ export class Hud {
   private overlay = h('div.overlay.hidden');
   private banner = h('div.zone-banner', { 'aria-live': 'polite' });
   private menuBtn: HTMLButtonElement;
+  private surpriseBtn: HTMLButtonElement;
   private history: string[] = [];
   private historyIdx = -1;
   private hint = '';
@@ -76,12 +79,20 @@ export class Hud {
       maxlength: '60',
       'aria-label': 'Write a word to summon it',
     });
+    this.surpriseBtn = h('button.surprise-btn', { type: 'button', text: '🎲', title: 'Surprise me', 'aria-label': 'Surprise me: stage a random scene', onClick: () => cb.onSurprise() });
+    this.surpriseBtn.style.display = 'none';
     this.form = h('form.spell-bar', { onSubmit: (ev: Event) => this.submit(ev) }, [
       h('span.spell-icon', { text: '✦', 'aria-hidden': 'true' }),
       this.input,
+      this.surpriseBtn,
       h('button.cast-btn', { type: 'submit', text: 'Cast' }),
     ]);
     this.input.addEventListener('keydown', (ev) => this.onKey(ev));
+    // each letter ticks a little higher, like a typewriter rising up the scale
+    this.input.addEventListener('input', (ev) => {
+      const n = this.input.value.length;
+      if ((ev as InputEvent).inputType?.startsWith('insert') && n) Audio.instance?.play('tick', { pitch: 0.92 + (n % 9) * 0.035 });
+    });
 
     this.hintBtn = h('button.link-btn', { text: 'Need a hint?', onClick: () => this.toasts.show(this.hint, { title: 'Hint', kind: 'info', duration: 6000 }) });
     void levels;
@@ -118,6 +129,35 @@ export class Hud {
       this.banner,
       this.overlay,
     );
+    this.startPlaceholderDemo();
+  }
+
+  /**
+   * While the spell bar sits empty and unused, its placeholder types out example spells, one letter
+   * at a time, so a new player sees what to write (and that adjectives stack) without reading a manual.
+   */
+  private startPlaceholderDemo(): void {
+    if (typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const base = this.input.placeholder;
+    const lines = ['big red ball', 'flaming box', '3 tiny balloons', 'giant ladder', 'frozen dragon', 'bouncy golden ball', 'heavy anvil', 'rainbow cat'];
+    let line = Math.floor(Math.random() * lines.length), n = 0, hold = 0, erasing = false;
+    setInterval(() => {
+      // once the player has cast a few spells of their own they know how it works: stop the show
+      const idle = !this.input.value && !this.overlayOpen && !document.hidden && this.history.length < 3;
+      if (!idle) {
+        if (this.input.placeholder !== base) this.input.placeholder = base;
+        n = 0; hold = 0; erasing = false;
+        return;
+      }
+      const text = lines[line];
+      if (hold > 0) hold--;
+      else if (!erasing && n < text.length) n++;
+      else if (!erasing) { erasing = true; hold = 14; }
+      else if (n > 0) n -= 2;
+      else { erasing = false; line = (line + 1) % lines.length; hold = 6; n = 0; }
+      n = Math.max(0, n);
+      this.input.placeholder = n ? `Try “${text.slice(0, n)}”` : base;
+    }, 75);
   }
 
   /** A menu button that flips the voxel detail (HD / classic). */
@@ -187,6 +227,7 @@ export class Hud {
       : level.hero
         ? 'WASD / arrows: move · Space: jump · W near a ladder: climb · E: grab · F: throw · Enter: write a word · Click ground: aim · R: restart'
         : 'Drag to orbit · Drag things to move them, flick to throw · Scroll to zoom · Click ground to aim · Click things to poke';
+    this.surpriseBtn.style.display = !level.goal && !level.hero && !world ? '' : 'none';
     this.menuBtn.textContent = world ? '📓 Journal' : '☰ Menu';
     this.menuBtn.title = world ? 'Journal (J)' : 'Menu';
     this.menuBtn.dataset.icon = world ? '📓' : '☰';
@@ -347,7 +388,7 @@ export class Hud {
   }
 
   /** Title screen. `logo` is an optional animated element shown above the name. */
-  showTitle(opts: { onExplore: () => void; onFreePlay: () => void; exploreLabel: string; logo?: HTMLElement }): void {
+  showTitle(opts: { onExplore: () => void; onFreePlay: () => void; onSurprise: () => void; exploreLabel: string; logo?: HTMLElement }): void {
     const go = (fn: () => void) => () => {
       this.cb.onStart();
       this.hideOverlay();
@@ -363,6 +404,7 @@ export class Hud {
           h('button.btn.big.explore-btn', { text: opts.exploreLabel, onClick: go(opts.onExplore) }),
           h('button.btn.big.secondary.freeplay-btn', { text: '✦ Free Play', onClick: go(opts.onFreePlay) }),
         ]),
+        h('button.link-btn.surprise-link', { type: 'button', text: '🎲 Surprise me', onClick: go(opts.onSurprise) }),
         h('p.small', { text: 'Runs entirely offline. No network, no tracking.' }),
       ]),
     );
