@@ -12,7 +12,7 @@ import { progress } from './levels/progress';
 import { SolutionRunner } from './levels/solve';
 import { starsFor, type LevelDef, type V3 } from './levels/types';
 import type { Entity } from './core/entity';
-import { buildZone, castLimitAt, zoneAt, zoneEntry, zones } from './tasks';
+import { buildZone, castLimitAt, orderedTasks, zoneAt, zoneEntry, zones } from './tasks';
 import { worldSave } from './tasks/save';
 import { TaskTracker } from './tasks/tracker';
 import type { ZoneDef } from './tasks/types';
@@ -36,6 +36,8 @@ import { settings, type Settings } from './settings';
 import { sceneUrl, type SceneCast } from './share';
 import { SideTools, type ToolId } from './ui/tools';
 import { PhotoUI } from './ui/photo';
+import { Trophies, TROPHIES, type TrophyDef } from './trophies';
+import { trophiesPanel } from './ui/trophies-panel';
 import { settingsPanel } from './ui/settings-panel';
 
 /** Wires renderer, world, input, parser, levels and HUD together. */
@@ -75,6 +77,7 @@ export class Game {
   zone: ZoneDef | null = null;
   /** Open world: checks every task instead of a single level goal. */
   readonly tracker: TaskTracker;
+  readonly trophies: Trophies;
   /** Simulation speed: 1 normal, below 1 slow motion, 0 paused (the ⏱ button; photo mode's freeze). */
   timeScale = 1;
   /** Photo mode: HUD hidden, camera free, snap saves a PNG. */
@@ -104,6 +107,12 @@ export class Game {
     this.world = new GameWorld(this.renderer.scene, this.fx);
     this.renderer.scene.add(this.marker.group, this.carryRing.group);
     this.tracker = new TaskTracker(this);
+    this.trophies = new Trophies((t) => this.onTrophy(t));
+    this.trophies.watch(this.world.events, this.world);
+    this.world.events.on('taskComplete', ({ taskId }) => {
+      const saved = worldSave.all().tasks;
+      this.trophies.noteTasks(Object.keys(saved).length, saved[taskId]?.ways.length ?? 0, orderedTasks().length);
+    });
 
     const levels = menuLevels();
     this.hud = new Hud(root, {
@@ -162,6 +171,7 @@ export class Game {
       onFreePlay: () => this.freePlay(),
       onSurprise: () => this.freePlay(true),
       onSettings: () => this.openSettings(),
+      extra: [h('button.link-btn.trophy-link', { type: 'button', text: `🏆 Trophies ${this.trophies.unlockedCount}/${TROPHY_TOTAL}`, onClick: () => this.openTrophies() })],
     });
   }
 
@@ -197,6 +207,7 @@ export class Game {
     worldSave.reset();
     progress.reset();
     this.spellbook.reset();
+    this.trophies.reset();
     this.tutorial.resetTips();
     try { localStorage.removeItem(SURPRISED); } catch { /* ignore */ }
     window.setTimeout(() => location.reload(), 700);
@@ -276,7 +287,13 @@ export class Game {
         here: z === this.zone,
         tasks: list.filter((t) => t.zone === z.id).map((t) => ({ title: t.title, hint: t.hint, done: !!saved[t.id], ways: saved[t.id]?.ways.length ?? 0 })),
       }));
-    this.hud.showJournal({ zones: groups, spells: this.words, onFreePlay: () => this.freePlay(), onTitle: () => this.showTitle() });
+    this.hud.showJournal({
+      zones: groups,
+      spells: this.words,
+      onFreePlay: () => this.freePlay(),
+      onTitle: () => this.showTitle(),
+      extra: [h('button.btn.secondary', { type: 'button', text: `🏆 Trophies ${this.trophies.unlockedCount}/${TROPHY_TOTAL}`, onClick: () => this.openTrophies() })],
+    });
   }
 
   /** J: opens or closes the Journal. */
@@ -313,7 +330,10 @@ export class Game {
     this.zone = level.zones && level.hero ? zoneAt(...level.hero, level.zones) : null;
     if (level.hero) this.spawnHero(level.hero);
     this.tracker.reset(level.tasks ?? []);
-    if (this.zone) this.tracker.enterZone(this.zone, false);
+    if (this.zone) {
+      this.tracker.enterZone(this.zone, false);
+      this.trophies.noteZone(this.zone.id);
+    }
     this.trackerAcc = Infinity;
     if (level.camera) this.renderer.setView(level.camera.position, level.camera.target);
     const sp = level.spawnPoint ?? [0, 0, 0];
@@ -424,6 +444,7 @@ export class Game {
     if (!Number.isFinite(g) || feet < g - 0.5) return;
     const zone = zoneAt(hero.x, feet, hero.z, this.level.zones) ?? this.zone;
     if (zone && zone !== this.zone) {
+      this.trophies.noteZone(zone.id);
       this.tracker.enterZone(zone);
       this.hud.setZoneName(zone.name);
       if (!this.runner) this.hud.showZoneBanner(zone.name);
@@ -546,6 +567,8 @@ export class Game {
     }
 
     const fresh = this.spellbook.discover(res.def.id, res.adjectives.map((a) => a.id));
+    this.trophies.noteCast({ adjectives: res.adjectives.map((a) => a.id), night: false });
+    this.trophies.noteWords(this.spellbook.count, this.spellbook.total);
     if (fresh.object || fresh.adjectives.length) {
       if (!this.spellbook.isOpen) this.hud.bookBtn.classList.add('has-new');
       this.fx.sound('chime', { volume: 0.5 });
@@ -613,6 +636,23 @@ export class Game {
     else if (id === 'undo') this.undo();
     else if (id === 'clear') this.clearAll();
     else if (id === 'share') void this.shareScene();
+    else if (id === 'trophies') this.openTrophies();
+  }
+
+  /** The 🏆 panel. */
+  openTrophies(): void {
+    this.keys.clear();
+    const back = () => (this.titleMode ? this.showTitle() : this.hud.hideOverlay());
+    this.hud.showPanel(trophiesPanel(this.trophies, back));
+  }
+
+  /** A trophy was just earned: toast, chime and sparkles. */
+  private onTrophy(t: TrophyDef): void {
+    this.hud.toasts.show(t.desc, { title: `${t.icon} Trophy: ${t.name}`, kind: 'success', duration: 5000 });
+    this.fx.sound('star', { pitch: 1.2 });
+    this.fx.sound('chime', { pitch: 1.5, volume: 0.7 });
+    const h = this.world.hero;
+    this.fx.sparkle(h?.alive ? h.body.position : this.marker.position, undefined, 24);
   }
 
   /** Sets which tools show and whether the undo button has anything to undo. Called every frame, cheap. */
@@ -1113,4 +1153,5 @@ export class Game {
 }
 
 const SURPRISED = 'blockspell.surprised.v1';
+const TROPHY_TOTAL = TROPHIES.length;
 const HERO_KEYS = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space', 'KeyE', 'KeyF', 'KeyQ']);
