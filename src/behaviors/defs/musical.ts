@@ -8,6 +8,8 @@ export default defineBehavior({
   tags: ['musical'],
   contact(e, other, world, { speed }) {
     if (!other || speed < 0.7) return;
+    // count the notes it has rung (the piano task wants three)
+    e.state.plinks = ((e.state.plinks as number | undefined) ?? 0) + 1;
     const n = NOTES[Math.floor(Math.random() * NOTES.length)];
     world.fx.sound('chime', { pitch: 2 ** (n / 12) * 0.8, volume: Math.min(1, 0.4 + speed / 6) });
     const p = e.body.position;

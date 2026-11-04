@@ -38,7 +38,7 @@ export default defineBehavior({
         if (v > 1 || o.age > 0.5) splash(world, { x: o.x, y: top, z: o.z }, Math.min(2, 0.5 + o.radius * Math.min(1.5, v / 4)));
       }
       if (o.state.burning || (o.has('hot') && o.prop('extinguishable', 0) > 0)) extinguish(o, world);
-      if (o.has('flammable') || o.has('animal') || o.has('explosive')) soak(world, o, 6);
+      if (o.has('flammable') || o.has('animal') || o.has('explosive') || o.has('seed')) soak(world, o, 6);
     }
     e.state.inside = now;
     // gentle ripples

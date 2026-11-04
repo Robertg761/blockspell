@@ -44,7 +44,7 @@ export const TROPHIES: TrophyDef[] = [
   { id: 'helper', icon: '🤝', name: 'Helping Hand', desc: 'Finish a task in the world.', stat: 'tasks', goal: 1 },
   { id: 'neighbor', icon: '🏡', name: 'Good Neighbor', desc: 'Finish 8 tasks.', stat: 'tasks', goal: 8 },
   { id: 'pathfinder', icon: '🧭', name: 'Pathfinder', desc: 'Solve one task three different ways.', stat: 'ways', goal: 3 },
-  { id: 'explorer', icon: '🗺', name: 'Island Hopper', desc: 'Visit every island.', stat: 'zones', goal: 7 },
+  { id: 'explorer', icon: '🗺', name: 'Island Hopper', desc: 'Visit every island.', stat: 'zones', goal: 8 },
   { id: 'hero', icon: '🏆', name: 'Hero of the Islands', desc: 'Finish every task.', stat: 'allTasks', goal: 1 },
   { id: 'lab-rat', icon: '🧪', name: 'Lab Rat', desc: 'Complete 6 experiments in the lab notebook.', stat: 'lab', goal: 6 },
   { id: 'mad-scientist', icon: '⚗', name: 'Mad Scientist', desc: 'Complete every experiment in the lab notebook.', stat: 'lab', goal: 17 },
