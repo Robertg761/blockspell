@@ -387,3 +387,27 @@ body.touch .chip, body.touch .icon-btn { min-height: 40px; }
 .goal-compass { margin-left: auto; display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 700; color: #1f7fa8; flex: none; }
 .goal-compass.hidden { display: none; }
 .compass-arrow { display: inline-block; font-size: 15px; line-height: 1; transition: transform 0.12s linear; }
+
+/* ---------- pinned spells ---------- */
+.hotbar { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; max-width: 100%; }
+.hotbar.hidden { display: none; }
+.hot {
+  display: inline-flex; align-items: center; gap: 6px; border: 0; border-radius: 12px; padding: 4px 6px 4px 5px; cursor: pointer;
+  background: rgba(30, 38, 60, 0.78); color: #fff; font-size: 13px; font-weight: 650;
+  box-shadow: 0 2px 8px rgba(20, 30, 60, 0.25); backdrop-filter: blur(4px);
+}
+.hot:hover { background: rgba(40, 50, 80, 0.92); transform: translateY(-1px); }
+.hot kbd {
+  display: inline-grid; place-items: center; min-width: 20px; height: 20px; border-radius: 6px; font: inherit; font-size: 12px; font-weight: 800;
+  background: var(--accent); color: #fff;
+}
+.hot-text { max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hot-x { opacity: 0; width: 16px; text-align: center; border-radius: 50%; font-size: 15px; line-height: 16px; }
+.hot:hover .hot-x, .hot:focus-visible .hot-x { opacity: 0.7; }
+.hot-x:hover { opacity: 1 !important; background: rgba(255, 255, 255, 0.2); }
+.hot.pop { animation: pulse 0.35s; }
+.pin-btn {
+  border: 0; background: transparent; cursor: pointer; font-size: 20px; line-height: 1; padding: 6px 4px; color: #b9bdc8;
+}
+.pin-btn:hover { color: var(--accent); transform: scale(1.15); }
+@media (max-width: 640px) { .hot-text { max-width: 90px; } .hot-x { display: none; } }

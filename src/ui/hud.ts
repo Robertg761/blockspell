@@ -1,6 +1,7 @@
 import { spellsText, starsForPar, type LevelDef } from '../levels/types';
 import { Audio, loadMuted } from '../engine/audio';
 import { Autocomplete } from './autocomplete';
+import { Hotbar } from './hotbar';
 import { h } from './dom';
 import { pwa, type PwaState } from '../pwa';
 import { Toasts } from './toast';
@@ -47,6 +48,23 @@ export interface WinInfo {
   next: LevelDef | null;
 }
 
+const HISTORY_KEY = 'blockspell.history.v1';
+function loadHistory(): string[] {
+  try {
+    const raw = JSON.parse(localStorage.getItem(HISTORY_KEY) ?? '[]');
+    return Array.isArray(raw) ? raw.filter((s): s is string => typeof s === 'string').slice(0, 30) : [];
+  } catch {
+    return [];
+  }
+}
+function saveHistory(list: string[]): void {
+  try {
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(list));
+  } catch {
+    /* ignore */
+  }
+}
+
 const OFFLINE_TOLD = 'blockspell.offlineTold.v1';
 const starText = (n: number, of = 3) => '★'.repeat(n) + '☆'.repeat(Math.max(0, of - n));
 
@@ -66,7 +84,7 @@ export class Hud {
   private banner = h('div.zone-banner', { 'aria-live': 'polite' });
   private menuBtn: HTMLButtonElement;
   private surpriseBtn: HTMLButtonElement;
-  private history: string[] = [];
+  private history: string[] = loadHistory();
   private historyIdx = -1;
   private hint = '';
   private muted = loadMuted();
@@ -77,6 +95,9 @@ export class Hud {
   private compassKey = '';
   /** Word completion for the spell bar. */
   readonly autocomplete: Autocomplete;
+  /** Pinned spells above the spell bar (1-9 casts them). */
+  readonly hotbar: Hotbar;
+  private pinBtn: HTMLButtonElement;
   /** Focus the spell bar after closing overlays (off in hero levels, where keys move the hero). */
   autoFocus = true;
 
@@ -93,10 +114,13 @@ export class Hud {
     this.surpriseBtn = h('button.surprise-btn', { type: 'button', text: '🎲', title: 'Surprise me', 'aria-label': 'Surprise me: stage a random scene', onClick: () => cb.onSurprise() });
     this.surpriseBtn.style.display = 'none';
     this.autocomplete = new Autocomplete(this.input);
+    this.hotbar = new Hotbar((t) => cb.onCast(t));
+    this.pinBtn = h('button.pin-btn', { type: 'button', text: '☆', title: 'Pin this spell to the hotbar (or the last one you cast)', 'aria-label': 'Pin a spell to the hotbar', onClick: () => this.pinCurrent() });
     this.form = h('form.spell-bar', { onSubmit: (ev: Event) => this.submit(ev) }, [
       this.autocomplete.list,
       h('span.spell-icon', { text: '✦', 'aria-hidden': 'true' }),
       h('div.spell-field', {}, [this.autocomplete.ghost, this.input]),
+      this.pinBtn,
       this.surpriseBtn,
       h('button.cast-btn', { type: 'submit', text: 'Cast' }),
     ]);
@@ -137,7 +161,7 @@ export class Hud {
         h('button.icon-btn.settings-btn', { title: 'Settings', text: '⚙', 'aria-label': 'Settings', onClick: () => cb.onSettings() }),
       ]),
       this.toasts.el,
-      h('div.hud-bottom', {}, [this.chips, this.form]),
+      h('div.hud-bottom', {}, [this.chips, this.hotbar.el, this.form]),
       this.help,
       this.banner,
       this.overlay,
@@ -212,6 +236,7 @@ export class Hud {
     if (!text) return;
     this.history.unshift(text);
     this.history = this.history.slice(0, 30);
+    saveHistory(this.history);
     this.historyIdx = -1;
     this.input.value = '';
     this.autocomplete.hide();
@@ -235,6 +260,24 @@ export class Hud {
       this.autocomplete.hide(true);
       ev.preventDefault();
     } else if (ev.key === 'Escape') this.input.blur();
+  }
+
+  /** ☆: pins what is typed, or the latest spell you cast. */
+  private pinCurrent(): void {
+    const text = this.input.value.trim() || this.history[0];
+    if (!text) {
+      this.toasts.show('Type a spell first, then pin it.', { kind: 'info', duration: 2500 });
+      return;
+    }
+    if (this.hotbar.has(text)) {
+      this.hotbar.unpin(this.hotbar.all.indexOf(text.toLowerCase().replace(/\s+/g, ' ')));
+      this.toasts.show(`Unpinned “${text}”.`, { kind: 'info', duration: 2000 });
+    } else if (this.hotbar.pin(text)) {
+      this.toasts.show(`Pinned “${text}” as ${this.hotbar.all.length}. Press ${this.hotbar.all.length} to cast it.`, { title: '☆ Pinned', kind: 'success', duration: 3500 });
+    } else {
+      this.toasts.show('The hotbar is full. Right-click a slot to unpin one.', { kind: 'warn', duration: 3000 });
+    }
+    this.input.focus();
   }
 
   /** Puts text in the spell bar, ready to edit or cast. */

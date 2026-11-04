@@ -1007,6 +1007,14 @@ export class Game {
         return;
       }
       const typing = document.activeElement === input;
+      // 1-9 cast pinned spells (Alt+1-9 where plain digits belong to the spell bar)
+      const digit = /^Digit([1-9])$/.exec(e.code);
+      if (digit && !this.titleMode && !this.hud.overlayOpen && !e.metaKey && !e.ctrlKey && !e.repeat && (e.altKey || (this.level.hero && !typing))) {
+        if (this.hud.hotbar.cast(Number(digit[1]) - 1)) {
+          e.preventDefault();
+          return;
+        }
+      }
       if (this.level.tasks && !this.titleMode && !typing && !e.metaKey && !e.ctrlKey && !e.altKey && !e.repeat) {
         if (e.code === 'KeyJ' || (e.key === 'Escape' && this.hud.journalOpen)) {
           e.preventDefault();
