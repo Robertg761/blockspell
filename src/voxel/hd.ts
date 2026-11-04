@@ -93,6 +93,10 @@ export interface VoxelSpec {
   overrides?: Record<string, Cls>;
   /** Brightness jitter of the coarse mesh. */
   jitter?: number;
+  /** Coarse mesh: see MeshOptions. */
+  ao?: number;
+  openBottom?: boolean;
+  openTop?: boolean;
   /** Static scenery: coarse when far from the camera, hidden past the fog. */
   lod?: boolean;
   /** For stats: what this is (object id, 'terrain'...). */
@@ -193,7 +197,7 @@ function acquireCoarse(b: Binding): CoarseEntry {
   if (!c) {
     const t0 = performance.now();
     const s = b.spec;
-    const geo = meshVoxels(s.model, { voxelSize: s.voxelSize, origin: s.origin, jitter: s.jitter }).geometry;
+    const geo = meshVoxels(s.model, { voxelSize: s.voxelSize, origin: s.origin, jitter: s.jitter, ao: s.ao, openBottom: s.openBottom, openTop: s.openTop }).geometry;
     geo.userData.voxelCache = true;
     c = { geo, refs: 0, lastUse: 0 };
     coarseCache.set(b.coarseKey, c);

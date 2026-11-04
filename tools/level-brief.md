@@ -4,12 +4,20 @@ A level is one file in `src/levels/defs/NN-id.ts` default-exporting `defineLevel
 (see `src/levels/types.ts` for every field). It is auto-registered.
 
 ## Building the layout
-- `terrain`: island overrides (`{ flatRadius, hilliness, trees, rocks, seed }`), or `null` for no
+- `terrain`: island overrides (`{ flatRadius, hilliness, trees, rocks, shrubs, seed }`), or `null` for no
   island at all (build floating platforms from static boxes over the sky void).
   The default island is flat within ~9 m of the origin at y = 0, hilly beyond.
 - `world.addStaticBox({ position: [cx, cy, cz], size: [sx, sy, sz], color, topColor })`: static
   voxel blocks (center + size, 0.25 m voxels). Palette keys: see `src/voxel/palette.ts`
   (e.g. 'stone', 'grass', 'dirt', 'wood', 'woodDark', 'sand', 'snow').
+  `color` also picks how the block is drawn: stone becomes layered rock, dirt becomes earth, wood
+  becomes planks, and anything else stays flat. `topColor: 'grass'` adds turf and tufts. Set `style`
+  to override this (`'rock'`, `'earth'`, `'planks'`, `'cobble'`, `'plain'`). The collider is always
+  the plain box, and terrain grass under a block is cleared for you.
+- `world.addScenery((b) => ..., { position, voxelSize, rotationY })`: a voxel model with no collision
+  and no click target, removed with the level. `src/engine/scenery.ts` has ready-made ones
+  (`buildFlag`, `buildSign`, `buildKennel`, `buildBowl`, `buildUnderside`, `buildBoulder`, `buildShrub`).
+  To give a prop a collider, add a static box with `style: 'hidden'` in the same spot.
 - `place(world, 'dog', [x, y, z], 'pup')` (from `../goals`) spawns an object with its base at y,
   silently, and marks it with a role (+ pins it so the entity cap never removes it).
   Tweak it afterwards: `world.removeTag(e, 'flies')`, `e.state.burnLeft = 999`, `world.addTag(...)`.
@@ -18,9 +26,9 @@ A level is one file in `src/levels/defs/NN-id.ts` default-exporting `defineLevel
 
 ## The hero and the player
 - `hero: [x, y, z]` spawns the keyboard hero (feet position). WASD/arrows move (camera-relative),
-  Space jumps (~1.25 m), holding W/Space while overlapping a `climbable` (ladder, rope, stairs,
-  tree) climbs it, and at the top it hops over the lip. Walking into a knee-high (< ~0.5 m) step
-  hops onto it. It stands on anything solid. Falls below `killY` (default -6) respawn it at start.
+  Space jumps (~1.25 m), holding W while overlapping a `climbable` (ladder, rope, stairs, tree),
+  or Space from the air, climbs it, and at the top it hops over the lip. Walking into a knee-high (< ~0.5 m) step
+  rises onto it. It stands on anything solid. Falls below `killY` (default -6) respawn it at start.
   Tuning: `HERO` in `src/behaviors/defs/controlled.ts`.
 - The player casts at the aim marker (click a surface). `castRange` limits casts to N m from the
   hero, so the puzzle can't be skipped by summoning things next to the goal.

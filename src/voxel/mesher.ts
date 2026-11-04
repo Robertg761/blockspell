@@ -15,6 +15,10 @@ export interface MeshOptions {
   jitter?: number;
   /** Strength of baked ambient occlusion (0..1). */
   ao?: number;
+  /** Leaves off the downward faces of the lowest layer (it sits on something else). */
+  openBottom?: boolean;
+  /** Leaves off the upward faces of the highest layer. */
+  openTop?: boolean;
 }
 
 export interface VoxelMeshData {
@@ -48,7 +52,8 @@ for (let axis = 0; axis < 3; axis++) {
 
 const AO_CURVE = [0.5, 0.68, 0.84, 1];
 
-function hash3(x: number, y: number, z: number): number {
+/** Stable pseudo-random value in 0..1 for an integer cell. */
+export function hash3(x: number, y: number, z: number): number {
   let h = (x * 374761393 + y * 668265263 + z * 2147483647) | 0;
   h = Math.imul(h ^ (h >>> 13), 1274126177);
   return ((h ^ (h >>> 16)) >>> 0) / 4294967295;
@@ -89,6 +94,7 @@ export function meshVoxels(model: VoxelModel, opts: MeshOptions): VoxelMeshData 
           p[0] = x; p[1] = y; p[2] = z;
           p[f.axis] += f.sign;
           if (voxelAt(model, p[0], p[1], p[2])) continue;
+          if (f.axis === 1 && ((opts.openBottom && p[1] < 0) || (opts.openTop && p[1] >= sy))) continue;
           const base = pos.length / 3;
           const ao: number[] = [];
           for (const [cu, cv] of f.corners) {

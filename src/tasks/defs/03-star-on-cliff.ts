@@ -26,7 +26,7 @@ const solutions: LevelSolution[] = [
       { cast: 'stairs', at: [0, 0] },
       { wait: 1.5 },
       { walkTo: [0, -1.3], jump: true, timeout: 8 },
-      { walkTo: [0, -4.5], timeout: 6 },
+      { walkTo: [0, -4.5], jump: true, timeout: 6 },
     ],
   },
   // Off to the star's left, so the blast throws it right and down onto the grass (from the front it

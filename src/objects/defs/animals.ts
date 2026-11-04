@@ -1,4 +1,5 @@
 import { definePalette } from '../../voxel/palette';
+import { animateHero } from '../../behaviors/lib/hero-rig';
 import type { VoxelBuilder } from '../../voxel/builder';
 import { defineObject } from '../types';
 
@@ -76,6 +77,16 @@ function sym(b: VoxelBuilder, W: number, x0: number, y0: number, z0: number, x1:
 }
 function symSet(b: VoxelBuilder, W: number, x: number, y: number, z: number, c: string) {
   b.set(x, y, z, c).set(W - 1 - x, y, z, c);
+}
+/** One hero leg and shoe, its inner edge at `x`. */
+function heroLeg(b: VoxelBuilder, x: number) {
+  b.box(x, 3, 2, x + 2, 6, 4, 'heroPants');
+  b.box(x, 0, 2, x + 2, 2, 5, 'heroShoes');
+}
+/** One hero arm and hand, its inner edge at `x`. */
+function heroArm(b: VoxelBuilder, x: number) {
+  b.box(x, 6, 2, x + 1, 10, 4, 'heroShirt');
+  b.box(x, 5, 2, x + 1, 5, 4, 'heroSkin');
 }
 
 export default [
@@ -817,46 +828,46 @@ export default [
     tintKeys: ['heroShirt', 'heroShirtDark'],
     burstColor: '#3b82d9',
     voxelSize: 0.065,
-    physics: { mass: 30, shape: 'auto', boxes: [[3, 6, 0, 9, 19, 6], [3, 0, 3, 9, 6, 6], [0, 6, 3, 3, 12, 6], [9, 6, 3, 12, 12, 6], [3, 12, 6, 9, 19, 7]], uprightOnly: true, friction: 0.2, linearDamping: 0.1 },
+    physics: { mass: 30, shape: 'auto', maxBoxes: 4, uprightOnly: true, friction: 0.2, linearDamping: 0.1 },
     props: { speed: 2.6, sight: 12 },
-    // the arms swing up to hold things (behaviors/defs/carry.ts); the shoulders stay in the body
-    parts: [-2, 8].map((x, i) => ({
-      name: i ? 'armR' : 'armL',
-      pivot: [x + 1, 10, 3.5] as [number, number, number],
-      build(b: VoxelBuilder) {
-        b.box(x, 6, 2, x + 1, 9, 4, 'heroShirt');
-        b.box(x, 5, 2, x + 1, 5, 4, 'heroSkin');
-      },
-    })),
-    build(b, rng) {
-      const W = 8;
-      const hair = rng() > 0.5;
-      // legs & shoes
-      sym(b, W, 1, 3, 2, 3, 6, 4, 'heroPants');
-      sym(b, W, 1, 0, 2, 3, 2, 5, 'heroShoes');
+    build(b) {
       // torso
       b.box(0, 7, 1, 7, 11, 5, 'heroShirt');
       b.box(0, 7, 1, 7, 7, 5, 'heroBelt');
       b.box(3, 7, 5, 4, 7, 5, 'heroPants');
       b.box(0, 11, 1, 7, 11, 5, 'heroShirtDark');
-      // shoulders
-      sym(b, W, -2, 10, 2, -1, 10, 4, 'heroShirt');
-      // head
-      b.box(1, 12, 0, 6, 17, 6, 'heroSkin');
-      b.box(3, 12, 6, 4, 13, 6, 'heroSkin');
-      // hair
-      b.box(1, 17, 0, 6, 18, 6, 'heroHair');
-      b.box(1, 12, 0, 6, 17, 0, 'heroHair');
-      sym(b, W, 0, 14, 0, 0, 17, 6, 'heroHair');
-      b.box(1, 16, 6, 6, 17, 6, 'heroHair');
-      if (hair) b.box(1, 11, 0, 6, 13, 0, 'heroHair');
-      // face
-      symSet(b, W, 2, 15, 6, 'eye');
-      symSet(b, W, 2, 16, 6, 'eyeShine');
-      b.box(3, 13, 6, 4, 13, 6, 'tongue');
       // hat-free adventurer scarf
       b.box(1, 11, 1, 6, 11, 5, 'heroBelt');
-      b.box(5, 8, 0, 6, 10, 0, 'heroBelt');
     },
+    // jointed at the hips, shoulders and neck; animateHero poses them
+    parts: [
+      { name: 'legL', solid: true, pivot: [5.5, 7, 3.5], build: (b) => heroLeg(b, 4) },
+      { name: 'legR', solid: true, pivot: [2.5, 7, 3.5], build: (b) => heroLeg(b, 1) },
+      { name: 'armL', solid: true, pivot: [9, 10.5, 3.5], build: (b) => heroArm(b, 8) },
+      { name: 'armR', solid: true, pivot: [-1, 10.5, 3.5], build: (b) => heroArm(b, -2) },
+      {
+        name: 'head',
+        solid: true,
+        pivot: [4, 12, 3.5],
+        build(b, rng) {
+          const W = 8;
+          const hair = rng() > 0.5;
+          b.box(1, 12, 0, 6, 17, 6, 'heroSkin');
+          b.box(3, 12, 6, 4, 13, 6, 'heroSkin');
+          // hair
+          b.box(1, 17, 0, 6, 18, 6, 'heroHair');
+          b.box(1, 12, 0, 6, 17, 0, 'heroHair');
+          sym(b, W, 0, 14, 0, 0, 17, 6, 'heroHair');
+          b.box(1, 16, 6, 6, 17, 6, 'heroHair');
+          if (hair) b.box(1, 11, 0, 6, 13, 0, 'heroHair');
+          // face
+          symSet(b, W, 2, 15, 6, 'eye');
+          symSet(b, W, 2, 16, 6, 'eyeShine');
+          b.box(3, 13, 6, 4, 13, 6, 'tongue');
+        },
+      },
+      { name: 'scarf', solid: true, pivot: [6, 11, 1], build: (b) => b.box(5, 8, 0, 6, 10, 0, 'heroBelt') },
+    ],
+    update: animateHero,
   }),
 ];

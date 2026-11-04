@@ -1,5 +1,7 @@
 import { defineLevel } from '../types';
 import { heroInside } from '../goals';
+import { makeRng } from '../../core/rng';
+import { buildBoulder, buildFlag, buildShrub, buildUnderside } from '../../engine/scenery';
 
 export default defineLevel({
   id: 'chasm',
@@ -21,10 +23,19 @@ export default defineLevel({
     world.addStaticBox({ position: [-6, -2, 0], size: [6, 4, 4.5], color: 'stone', topColor: 'grass' });
     world.addStaticBox({ position: [4, -2, 0], size: [6, 4, 4.5], color: 'stone', topColor: 'grass' });
     // flagpole and goal marker on far side
-    world.addStaticBox({ position: [5.5, 1.25, 0], size: [0.25, 2.5, 0.25], color: 'woodDark' });
-    world.addStaticBox({ position: [5.9, 2.15, 0], size: [0.6, 0.5, 0.08], color: 'red' });
-    world.addStaticBox({ position: [5.4, 2.4, 0], size: [0.4, 0.2, 0.08], color: 'redDark' });
-    world.addStaticBox({ position: [5.5, 0.1, 0], size: [0.8, 0.2, 0.8], color: 'stone' });
+    world.addStaticBox({ position: [5.5, 1.25, 0], size: [0.25, 2.5, 0.25], style: 'hidden' });
+    world.addStaticBox({ position: [5.9, 2.15, 0], size: [0.6, 0.5, 0.08], style: 'hidden' });
+    world.addStaticBox({ position: [5.4, 2.4, 0], size: [0.4, 0.2, 0.08], style: 'hidden' });
+    world.addStaticBox({ position: [5.5, 0.1, 0], size: [0.8, 0.2, 0.8], style: 'cobble' });
+    world.addScenery((b) => buildFlag(b, 40, '#d93c3c', '#b02c2e', '#f6efe2'), { position: [5.5, 0, 0] });
+    // Rock hanging beneath both cliffs, so they read as floating crags, plus some dressing up top.
+    world.addScenery((b) => buildUnderside(b, 48, 36, 40, 21), { position: [-6, -4, 0], voxelSize: 0.125 });
+    world.addScenery((b) => buildUnderside(b, 48, 36, 46, 34), { position: [4, -4, 0], voxelSize: 0.125 });
+    const dress = makeRng(5);
+    world.addScenery((b) => b.merge(buildBoulder(dress, 3)), { position: [-8, 0, -1.4], voxelSize: 0.125 });
+    world.addScenery((b) => b.merge(buildShrub(dress, '#d8413f')), { position: [-4.3, 0, -1.7], voxelSize: 0.125 });
+    world.addScenery((b) => b.merge(buildShrub(dress)), { position: [2.2, 0, -1.6], voxelSize: 0.125 });
+    world.addScenery((b) => b.merge(buildBoulder(dress, 2.2)), { position: [3.6, 0, 1.6], voxelSize: 0.125 });
   },
   goal: {
     text: 'Get to the flag on the other side',

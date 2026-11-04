@@ -18,13 +18,16 @@ function buildModels(def: ObjectDef, seed: number, props: Record<string, number>
   const rng = makeRng(seed);
   const builder = new VoxelBuilder();
   def.build(builder, rng, props ?? {});
-  const model = builder.build();
-  const parts = (def.parts ?? []).map((part) => {
+  const partBuilders = (def.parts ?? []).map((part) => {
     const pb = new VoxelBuilder();
     part.build(pb, rng);
-    return { part, model: pb.build() };
+    return { part, pb };
   });
-  return { model, parts };
+  const model = builder.build();
+  // the whole body: what the object measures and collides as, solid parts included
+  const solidParts = partBuilders.filter(({ part }) => part.solid);
+  const body = solidParts.length ? solidParts.reduce((b, { pb }) => b.merge(pb), new VoxelBuilder().merge(builder)).build() : model;
+  return { model, body, parts: partBuilders.map(({ part, pb }) => ({ part, model: pb.build() })) };
 }
 
 /**
@@ -35,11 +38,16 @@ function buildModels(def: ObjectDef, seed: number, props: Record<string, number>
 export function createEntity(def: ObjectDef, mods: SpawnModifiers, label: string, seed = Math.floor(random() * MODEL_VARIANTS), propOverrides?: Record<string, number>): Entity {
   const props = { ...def.props, ...propOverrides };
   const built = buildModels(def, seed, props);
-  let model = built.model;
-  const classKeys = model.keys;
+  let model = built.body;
+  let visible = built.model;
+  const classKeys = visible.keys;
 
   const tintMap = mods.tint ? makeTintMap(def.tintKeys ?? model.keys.filter((k) => !resolveColor(k).emissive), mods.tint) : null;
-  if (tintMap) model = remapModel(model, tintMap);
+  if (tintMap) {
+    const whole = model === visible;
+    model = remapModel(model, tintMap);
+    visible = whole ? model : remapModel(visible, tintMap);
+  }
 
   const vs = (def.voxelSize ?? 0.1) * mods.scale;
   // the render mesh is HD or coarse (see src/voxel/hd.ts); size and colliders below always come from the coarse model
@@ -60,7 +68,12 @@ export function createEntity(def: ObjectDef, mods: SpawnModifiers, label: string
   }
   const anim = makeEntityAnim();
   patchEntityMaterials(materials, anim);
-  const mesh = bindVoxelMesh(new Mesh(undefined, materials), { model, voxelSize: vs, style: 'object', classKeys, overrides, label: def.id });
+  const mesh = bindVoxelMesh(new Mesh(undefined, materials), { model: visible, voxelSize: vs, style: 'object', classKeys, overrides, label: def.id });
+  // with solid parts split off, the main mesh no longer spans the whole body: keep it where it was
+  if (visible !== model) {
+    const off = (axis: 0 | 1 | 2, n: 'sx' | 'sy' | 'sz') => (visible.min[axis] + visible[n] / 2 - model.min[axis] - model[n] / 2) * vs;
+    mesh.position.set(off(0, 'sx'), off(1, 'sy'), off(2, 'sz'));
+  }
   mesh.castShadow = true;
   mesh.receiveShadow = true;
   const visual = new Group();
@@ -78,6 +91,7 @@ export function createEntity(def: ObjectDef, mods: SpawnModifiers, label: string
     const pivot = part.pivot ?? center;
     const pMesh = bindVoxelMesh(new Mesh(undefined, materials), { model: pm, voxelSize: vs, style: 'object', classKeys: partKeys, overrides, label: def.id + '.' + part.name });
     pMesh.castShadow = true;
+    pMesh.receiveShadow = true;
     pMesh.position.set((center[0] - pivot[0]) * vs, (center[1] - pivot[1]) * vs, (center[2] - pivot[2]) * vs);
     const g = new Group();
     g.position.set(mainAt(pivot[0], 0), mainAt(pivot[1], 1), mainAt(pivot[2], 2));

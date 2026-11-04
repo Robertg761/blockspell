@@ -33,21 +33,6 @@ function overlapping(a: Entity, b: Entity): boolean {
   return a.body.aabb.overlaps(b.body.aabb);
 }
 
-/** Swings the hero's arms up to what they're lifting or out to what they're dragging, stretched to reach. */
-function poseArms(hero: Entity, dt: number): void {
-  const held = heldBy(hero);
-  const mode = held && carryOf(held)?.mode;
-  const raise = mode === 'lift' ? -2.95 : mode === 'drag' ? -1.35 : 0;
-  const reach = mode === 'lift' ? 1.5 : 1;
-  const k = Math.min(1, dt * 14);
-  for (const name of ['armL', 'armR']) {
-    const arm = hero.parts.get(name);
-    if (!arm) continue;
-    arm.rotation.x += (raise - arm.rotation.x) * k;
-    arm.scale.y += (reach - arm.scale.y) * k;
-  }
-}
-
 /** True on the tick a hero input goes down. */
 function pressed(e: Entity, inp: HeroInput, key: 'grab' | 'toss' | 'turn'): boolean {
   const was = e.state[`${key}Held`];
@@ -66,8 +51,7 @@ export default [
       e.body.collisionFilterMask &= ~GROUP.HELD;
     },
     // per tick, not per substep: a tick can pass without a substep, and a quick tap only lasts one tick
-    update(e, world, dt) {
-      poseArms(e, dt);
+    update(e, world) {
       const inp = world.input;
       const wantsGrab = pressed(e, inp, 'grab'), wantsToss = pressed(e, inp, 'toss'), wantsTurn = pressed(e, inp, 'turn');
       if (e.has('frozen')) return;

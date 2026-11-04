@@ -13,7 +13,7 @@ export default defineBehavior({
       m.depthWrite = false;
       m.needsUpdate = true;
     }
-    e.mesh.castShadow = false;
+    e.visual.traverse((o) => { o.castShadow = false; });
     e.body.collisionFilterGroup = GROUP.GHOST;
     e.body.collisionFilterMask = GROUP.STATIC;
   },
@@ -24,7 +24,7 @@ export default defineBehavior({
       m.depthWrite = true;
       m.needsUpdate = true;
     }
-    e.mesh.castShadow = true;
+    e.visual.traverse((o) => { o.castShadow = true; });
     e.body.collisionFilterGroup = GROUP.ENTITY;
     e.body.collisionFilterMask = -1;
   },

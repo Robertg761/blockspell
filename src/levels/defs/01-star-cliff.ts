@@ -1,5 +1,6 @@
 import { defineLevel } from '../types';
 import { holdFor, place, restingBelow, withRole } from '../goals';
+import { buildSign, SIGN_ARROW } from '../../engine/scenery';
 
 export default defineLevel({
   id: 'star-cliff',
@@ -24,8 +25,9 @@ export default defineLevel({
     world.addStaticBox({ position: [-4.4, 1, -4.4], size: [1, 2, 1.6], color: 'stone', topColor: 'grass' });
     world.addStaticBox({ position: [3.2, 0.375, -3], size: [1.6, 0.75, 1.6], color: 'stone', topColor: 'grass' });
     // A little wooden signpost near the start.
-    world.addStaticBox({ position: [-2.2, 0.4, 0.5], size: [0.25, 0.8, 0.25], color: 'woodDark' });
-    world.addStaticBox({ position: [-2.2, 0.9, 0.5], size: [1, 0.5, 0.2], color: 'wood' });
+    world.addStaticBox({ position: [-2.2, 0.4, 0.5], size: [0.25, 0.8, 0.25], style: 'hidden' });
+    world.addStaticBox({ position: [-2.2, 0.9, 0.5], size: [1, 0.5, 0.2], style: 'hidden' });
+    world.addScenery((b) => buildSign(b, SIGN_ARROW), { position: [-2.2, 0, 0.5], rotationY: 0.7 });
     // The star, kept on the ledge (no flying).
     const star = place(world, 'star', [0, 2.5, -3.6], 'star');
     if (star) world.removeTag(star, 'flies');
@@ -52,7 +54,7 @@ export default defineLevel({
         { cast: 'stairs', at: [0, 0] },
         { wait: 1.5 },
         { walkTo: [0, -1.3], jump: true, timeout: 8 },
-        { walkTo: [0, -4.5], timeout: 6 },
+        { walkTo: [0, -4.5], jump: true, timeout: 6 },
       ],
     },
     // Off to the star's left, so the blast throws it right and down onto the grass (from the front it

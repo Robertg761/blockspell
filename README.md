@@ -20,8 +20,8 @@ reach it, using as few spells as you can.
 | Key / action | What it does |
 | --- | --- |
 | **WASD** / **arrows** | Walk (relative to the camera) |
-| **Space** | Jump. Walking into knee-high steps hops onto them |
-| **W** (or Space) next to a ladder, rope, tree or stairs | Climb. At the top you hop over the edge |
+| **Space** | Jump. Walking into knee-high steps climbs onto them |
+| **W** next to a ladder, rope, tree or stairs | Climb. At the top you hop over the edge. Space grabs on from the air |
 | **Enter** (or **T**, **/**) | Open the spell bar. Type a spell and press Enter to cast it. Esc closes it |
 | **Click the ground** | Choose where the next spell appears (the glowing marker) |
 | **E** near an object | Grab it: light things go overhead, heavy ones are dragged. **E** again sets it down |
@@ -227,7 +227,11 @@ src/
     registry.ts      id registry with import.meta.glob auto-registration
   engine/            rendering & juice
     renderer.ts      three.js scene, bloom post-processing, ACES tone mapping, soft shadows, fog, OrbitControls
-    sky.ts clouds.ts terrain.ts noise.ts   procedural sky, voxel clouds, floating island
+    sky.ts clouds.ts backdrop.ts           procedural sky, voxel clouds, far-off islets
+    terrain.ts noise.ts                    floating island: fine surface over tile-sized collision boxes
+    scenery.ts       world models (trees, rocks, shrubs, flags, signs, kennel) and level block styles
+    cover.ts         instanced grass tufts, wildflowers, toadstools and pebbles
+    grain.ts         shader patch that adds 1/16 m speckle to terrain and level blocks
     particles.ts     pooled InstancedMesh voxel particles (lit + glowing)
     audio.ts         WebAudio synth sound effects
     music.ts         generative music loop on a lookahead scheduler

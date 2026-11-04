@@ -8,6 +8,9 @@ import type { BehaviorDef } from '../behaviors/types';
 import type { Color } from 'three';
 import type { Effects } from '../engine/fx';
 import { ease } from '../engine/tween';
+import { GroundCover, scatterTufts } from '../engine/cover';
+import { addGrain } from '../engine/grain';
+import { blockDetail, buildBlock, inferBlockStyle, type BlockStyle } from '../engine/scenery';
 import { buildTerrain, type Terrain, type TerrainOptions } from '../engine/terrain';
 import { objects } from '../objects';
 import type { ObjectDef } from '../objects/types';
@@ -15,6 +18,7 @@ import { VoxelBuilder } from '../voxel/builder';
 import { bindVoxelMesh, releaseVoxelMesh } from '../voxel/hd';
 import type { Entity } from './entity';
 import { EventBus, type GameEvents } from './events';
+import { makeRng } from './rng';
 import { createEntity } from './spawn';
 import type { Tag } from './tags';
 
@@ -92,6 +96,20 @@ export interface StaticBoxOptions {
   topColor?: string;
   /** Rotation about the vertical axis in radians (diagonal bridges). */
   yaw?: number;
+  /**
+   * How it's drawn. Default: from `color` (stone is rock, dirt is earth, wood is
+   * planks, anything else is flat color). The collider is the same box either way.
+   */
+  style?: BlockStyle;
+}
+
+export interface SceneryOptions {
+  /** Where the model's voxel origin goes. */
+  position: [number, number, number];
+  /** Default 1/16 m. */
+  voxelSize?: number;
+  /** Turns around Y, in radians. */
+  rotationY?: number;
 }
 
 /**
@@ -133,6 +151,8 @@ export class GameWorld {
   private levelSubs: { off: () => void; scope: string | null }[] = [];
   private acc = 0;
   private staticMat = new MeshStandardMaterial({ vertexColors: true, roughness: 0.9 });
+  private scenery: Mesh[] = [];
+  private covers: GroundCover[] = [];
   private ropeMat = new LineBasicMaterial({ color: '#f4f1ea' });
 
   constructor(readonly scene: Scene, readonly fx: Effects) {
@@ -149,6 +169,7 @@ export class GameWorld {
     // state changes without a tag: a warm wave for catching fire, a cool one for being put out
     this.events.on('ignite', ({ entity }) => this.morphJuice(entity, '#ff9a3c', null));
     this.events.on('extinguish', ({ entity }) => this.morphJuice(entity, '#cfe6ff', null));
+    addGrain(this.staticMat);
   }
 
   // ---------------------------------------------------------------- events
@@ -446,16 +467,29 @@ export class GameWorld {
     if (this.skipStatics) return null;
     const V = 0.25;
     const [sx, sy, sz] = o.size.map((s) => Math.max(1, Math.round(s / V)));
+    const [px, py, pz] = o.position;
+    const hx = (sx * V) / 2, hy = (sy * V) / 2, hz = (sz * V) / 2;
+    const color = o.color ?? 'stone';
+    const style = o.style ?? inferBlockStyle(color);
+    const detail = blockDetail(style);
+    const seed = Math.abs(Math.round(px * 17 + py * 131 + pz * 59));
     const b = new VoxelBuilder();
-    const side = o.color ?? 'stone';
-    b.box(0, 0, 0, sx - 1, sy - 1, sz - 1, side);
-    if (o.topColor) b.box(0, sy - 1, 0, sx - 1, sy - 1, sz - 1, o.topColor);
-    const mesh = bindVoxelMesh(new Mesh(undefined, this.staticMat), { model: b.build(), voxelSize: V, style: 'decor', lod: true, label: 'static' });
+    buildBlock(b, sx * detail, sy * detail, sz * detail, { style, color, topColor: o.topColor, seed });
+    const mesh = bindVoxelMesh(new Mesh(undefined, this.staticMat), { model: b.build(), voxelSize: V / detail, style: 'decor', lod: style !== 'hidden', label: 'static' });
     mesh.position.set(...o.position);
     const yaw = o.yaw ?? 0;
     mesh.rotation.y = yaw;
     mesh.castShadow = mesh.receiveShadow = true;
+    mesh.visible = style !== 'hidden';
     mesh.name = 'static';
+    // Keep the meadow's grass from poking through anything that stands on it.
+    const ex = Math.abs(Math.cos(yaw)) * hx + Math.abs(Math.sin(yaw)) * hz, ez = Math.abs(Math.sin(yaw)) * hx + Math.abs(Math.cos(yaw)) * hz;
+    for (const t of this.terrains) if (py - hy <= t.heightAt(px, pz) + 0.5) t.clearCover(px - ex, pz - ez, px + ex, pz + ez);
+    if (o.topColor === 'grass' && style !== 'hidden' && !yaw) {
+      const cover = new GroundCover(scatterTufts(makeRng(seed), px - hx + 0.1, pz - hz + 0.1, px + hx - 0.2, pz + hz - 0.2, py + hy));
+      this.scene.add(cover.group);
+      this.covers.push(cover);
+    }
     const body = new Body({ mass: 0, type: Body.STATIC, material: this.groundMaterial });
     body.addShape(new Box(new Vec3((sx * V) / 2, (sy * V) / 2, (sz * V) / 2)));
     body.position.set(...o.position);
@@ -491,14 +525,25 @@ export class GameWorld {
     return mesh;
   }
 
+  /** Adds a voxel model with no collision and no click target: level dressing. Removed with the level. */
+  addScenery(build: (b: VoxelBuilder) => void, o: SceneryOptions): Mesh {
+    const b = new VoxelBuilder();
+    build(b);
+    const mesh = bindVoxelMesh(new Mesh(undefined, this.staticMat), { model: b.build(), voxelSize: o.voxelSize ?? 1 / 16, origin: 'model', style: 'decor', lod: true, label: 'scenery' });
+    mesh.position.set(...o.position);
+    mesh.rotation.y = o.rotationY ?? 0;
+    mesh.castShadow = mesh.receiveShadow = true;
+    mesh.name = 'scenery';
+    this.scene.add(mesh);
+    this.scenery.push(mesh);
+    return mesh;
+  }
+
   /** Meshes the player can click to place the spawn marker. */
   pickables(): Mesh[] {
     const list: Mesh[] = [];
     for (const s of this.statics) if (s.mesh) list.push(s.mesh);
-    for (const t of this.terrains)
-      t.group.traverse((c) => {
-        if (c instanceof Mesh) list.push(c);
-      });
+    for (const t of this.terrains) list.push(...t.pickables);
     return list;
   }
 
@@ -525,6 +570,17 @@ export class GameWorld {
       if (s.body) this.physics.removeBody(s.body);
     }
     this.statics.length = 0;
+    for (const m of this.scenery) {
+      this.scene.remove(m);
+      releaseVoxelMesh(m);
+    }
+    this.scenery.length = 0;
+    for (const c of this.covers) {
+      this.scene.remove(c.group);
+      c.dispose();
+    }
+    this.covers.length = 0;
+    for (const t of this.terrains) t.restoreCover();
     for (const s of this.levelSubs) s.off();
     this.levelSubs.length = 0;
     this.spawnZone = this.subScope = null;

@@ -15,10 +15,10 @@ export default defineLevel({
   par: 1,
   camera: { position: [5, 5, 11], target: [0, 1.2, -2] },
   spawnPoint: [0, 0, -1],
-  terrain: { trees: 0, rocks: 0 },
+  terrain: { trees: 0, rocks: 0, shrubs: 16 },
   setup(world) {
     // stone path to the hut
-    world.addStaticBox({ position: [0, 0.03, 1.5], size: [1.2, 0.06, 5], color: 'stone', topColor: 'stone' });
+    world.addStaticBox({ position: [0, 0.03, 1.5], size: [1.2, 0.06, 5], style: 'cobble' });
     const hut = place(world, 'hut', [0, 0, -3], 'hut');
     if (hut) {
       ignite(hut, world);

@@ -83,11 +83,13 @@ export default defineBehavior({
     if (seek && !danger) planClimb(e, world, seek);
     else e.state.climbing = e.state.climbVia = null;
 
-    // cosmetic trot bob
-    const v = e.body.velocity;
-    const sp = Math.hypot(v.x, v.z);
-    const bob = sp > 0.3 ? Math.abs(Math.sin(world.time * 14 + e.id)) * 0.05 * e.scale : 0;
-    e.visual.position.y += (bob - e.visual.position.y) * Math.min(1, dt * 20);
+    // cosmetic trot bob (characters with legs animate themselves)
+    if (!e.parts.has('legL')) {
+      const v = e.body.velocity;
+      const sp = Math.hypot(v.x, v.z);
+      const bob = sp > 0.3 ? Math.abs(Math.sin(world.time * 14 + e.id)) * 0.05 * e.scale : 0;
+      e.visual.position.y += (bob - e.visual.position.y) * Math.min(1, dt * 20);
+    }
   },
   fixedUpdate(e, world, h) {
     const b = e.body;
