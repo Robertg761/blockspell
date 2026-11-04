@@ -31,7 +31,9 @@ reach it, using as few spells as you can.
 | **Drag / scroll** | Orbit / zoom the camera, which follows the hero |
 | **R** or ↺ | Restart the level |
 | **Tab** or 📖 | Spellbook of discovered words |
-| ♪ | Mute music and sound (remembered) |
+| ⚙ | Settings: music and sound volume, effects, screen shake, tips, camera speed, day and night, guide, HD voxels, erase progress |
+| **P** or 📷 | Photo mode (see below) |
+| **Gamepad** | Left stick or d-pad walks, right stick orbits, **A** jump, **X** grab, **B** throw (or close a panel), **LB/RB** turn, **Y** spell bar, **Start** Journal, **Back** spellbook |
 
 **Surprise me.** In Free Play, the 🎲 button next to the spell bar (or "🎲 Surprise me" on the
 title screen) stages a short scene: a cat chasing a mouse chasing cheese, a snowman meeting a
@@ -79,6 +81,43 @@ snowman, bucket, fire, torch, bone, steak, cheese, dog, cat, mouse, robot, hut, 
 Objects with a direction line up with your aim: bridges and planks span from the hero
 toward the marker, ramps rise toward it, and stairs climb away from you.
 
+## The open world (Explore)
+
+**▶ Play** opens the open world: seven small islands (*zones*) joined by paths, each with a few
+tasks. Open the Journal with **J** (or **Start** on a gamepad) to see them. A task is finished by
+what happens, not by one right spell, and each has at least three ways to solve it. The Journal
+counts the ways you've found.
+
+- **Meadow Commons**, **Cliffside**, **Ember Village**, **Farmstead**, **Lily Lake** and **Sky Ruins**
+- **Windmill Hill** (new): spin the windmill sails (a *fan*, a passing *rocket* or a blast will do),
+  ring the bell on its gallows (anything flying into it, or a bang nearby), and climb the treehouse.
+- **Guide.** A soft beam and a compass arrow point to the nearest task you haven't done. Turn it off in ⚙.
+- **Finale.** Finish every task and the world celebrates. 🏆 **Trophies** (28 of them, from your
+  first spell to casting at night) are listed in the Journal and on the title screen.
+- **Day and night.** The sky drifts from day to sunset, night (with stars) and dawn while you play.
+  The 🌤 and 🌦 buttons on the right edge set the sky and weather (clear, rain, snow) by hand.
+
+## Make it yours
+
+- **Autocomplete.** The spell bar suggests words you've discovered as you type. **Tab** or **→** accepts
+  the ghost text, **↑ ↓** pick from the list.
+- **Side tools.** The strip on the right edge has 📷 photo, ⏱ time (normal, slow, slower, paused), 🌤 sky,
+  🌦 weather and 🏆 trophies everywhere, and in Free Play also ↶ undo (removes the last cast), 🧹 clear
+  and 🔗 share.
+- **Photo mode** (**P** or 📷) hides the UI, lets you orbit freely and freeze time (**F**). **Space**
+  saves a PNG with a small watermark. **Esc** leaves.
+- **Share a scene.** 🔗 copies a link like `…/#scene=ball@2,3;dog@-1,4`. Opening it replays those
+  spells in Free Play. Links hold spells only, nothing else, so they stay short.
+- **Settings** (⚙) are saved in `localStorage` and can be reset, together with your progress.
+
+## Install it
+
+Blockspell is a PWA. Open it once online and it saves itself: after that it loads with the network
+off, and you can install it from the title screen ("Install as an app") or your browser menu. When a new
+version is ready a toast offers "Reload now". The service worker (`scripts/sw-template.js`, built
+by `scripts/pwa-plugin.mjs`) precaches every file in `dist/` and only runs in production builds.
+Add `?nosw` to the URL to skip it.
+
 ## Levels (and some ways to solve them)
 
 Every level has several solutions. Those listed here are scripted in the level file and
@@ -110,12 +149,20 @@ analytics, and no audio, texture or model files to fetch:
 - `three` (including the bloom post-processing from `three/examples`) and `cannon-es` are
   bundled from npm at build time.
 
-Once you've installed dependencies, it plays fine in airplane mode. To check a build:
+Once you've installed dependencies, it plays fine in airplane mode, and once it has been opened
+online it is installable and loads offline (see *Install it*). To check a build:
 
 ```bash
 npm run build
 npm run check-offline   # scans dist/ for external URLs that would be fetched at runtime
+npm run check-pwa       # manifest, icons, precache list; reloads three URLs with the network off
+npm run check-tasks     # every open-world task solved by script, with resets, idle and leak checks
 ```
+
+`check-pwa` and `check-tasks` drive Chrome through Playwright. They use `/usr/bin/google-chrome`,
+or the path in `CHROME`. GitHub Actions runs all four on every pull request (`.github/workflows/ci.yml`),
+and `.github/workflows/pages.yml` publishes `dist/` to GitHub Pages from `main` (set *Settings → Pages →
+Source* to "GitHub Actions" once).
 
 `check-offline` fails (exit 1) on any http(s) or protocol-relative URL in a fetching
 position: HTML/SVG resource attributes, CSS `url()`/`@import`, and JS `fetch`,
@@ -168,10 +215,11 @@ URL flags for screenshots:
 - `&hd=1` / `&hd=0` forces HD voxels on or off (see below).
 - `&anim=full`, `&anim=lite` or `&anim=off` sets the voxel animations' quality (see below).
 - `?levels` opens level select.
+- `?nosw` skips the service worker. `#scene=ball@2,3;dog@-1,4` replays a shared scene.
 
 HD voxels: every voxel model is drawn with 4x finer, detailed voxels (bevels, mortar,
 wood grain, grass blades...) while physics keeps the coarse model. It is on by default
-and turns itself off on software rendering or a weak GPU; the HD button (top right) or
+and turns itself off on software rendering or a weak GPU; the ⚙ Settings panel (top right) or
 the Journal's Graphics button switches it, and the choice is saved. Headless Chrome
 renders in software, so automation that wants HD must force it with `&hd=1`
 (`BLOCKSPELL_HD=1 npm run check-tasks` does). `__blockspell.hd()` shows the setting,
@@ -258,7 +306,11 @@ src/
   levels/            goals.ts (goal helpers), progress.ts (localStorage stars), solve.ts (solution replay)
   levels/defs/       puzzle levels                      <- add levels here (see tools/level-brief.md)
   parser/            tokenize -> count -> adjectives + noun -> synonyms, fuzzy suggestions
-  ui/                DOM HUD, level select, toasts, spellbook, tutorial tips, touch controls, voxel logo
+  ui/                DOM HUD, level select, toasts, spellbook, tutorial tips, touch controls, voxel logo,
+                     settings, trophies, photo mode, side tools, autocomplete, gamepad
+  settings.ts trophies.ts share.ts pwa.ts   saved settings, trophy rules, scene links, service worker glue
+  tasks/             open-world zones, tasks, predicates and their scripted solutions
+scripts/             vite precache plugin, service worker template and the check-* scripts
 ```
 
 Objects, adjectives, behaviors and levels are discovered automatically: drop a file
