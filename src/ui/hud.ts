@@ -73,6 +73,8 @@ export class Hud {
   readonly bookBtn: HTMLButtonElement;
   private hdBtn: HTMLButtonElement;
   private pwaLine = h('div.pwa-line');
+  private compass = h('span.goal-compass.hidden', { title: 'Direction of the nearest task' }, [h('span.compass-arrow', { text: '➤' }), h('span.compass-dist')]);
+  private compassKey = '';
   /** Word completion for the spell bar. */
   readonly autocomplete: Autocomplete;
   /** Focus the spell bar after closing overlays (off in hero levels, where keys move the hero). */
@@ -294,7 +296,23 @@ export class Hud {
       h('span.goal-box'),
       h('span.goal-text', { text: task.title }),
       task.zone ? h('span.goal-zone', { text: task.zone }) : '',
+      this.compass,
     );
+  }
+
+  /**
+   * The arrow next to the tracked task: `angle` is where it lies in radians clockwise from straight ahead
+   * on the screen, `dist` meters away. Null (or very close) hides it.
+   */
+  setCompass(angle: number | null, dist = 0): void {
+    const show = angle !== null && dist > 5;
+    const key = show ? `${Math.round((angle! * 180) / Math.PI / 4)}|${Math.round(dist)}` : '';
+    if (key === this.compassKey) return;
+    this.compassKey = key;
+    this.compass.classList.toggle('hidden', !show);
+    if (!show) return;
+    (this.compass.firstElementChild as HTMLElement).style.transform = `rotate(${angle! - Math.PI / 2}rad)`;
+    (this.compass.lastElementChild as HTMLElement).textContent = `${Math.round(dist)} m`;
   }
 
   /** Big zone name across the top of the screen, fading out after a couple of seconds. */

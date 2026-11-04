@@ -37,6 +37,8 @@ import { sceneUrl, type SceneCast } from './share';
 import { SideTools, type ToolId } from './ui/tools';
 import { PhotoUI } from './ui/photo';
 import { Trophies, TROPHIES, type TrophyDef } from './trophies';
+import { Waypoint } from './engine/waypoint';
+import { finalePanel } from './ui/finale-panel';
 import { trophiesPanel } from './ui/trophies-panel';
 import { settingsPanel } from './ui/settings-panel';
 
@@ -78,6 +80,9 @@ export class Game {
   /** Open world: checks every task instead of a single level goal. */
   readonly tracker: TaskTracker;
   readonly trophies: Trophies;
+  private waypoint!: Waypoint;
+  /** Open world: where the tracked task starts (world space), for the beam and the arrow. */
+  private waypointAt: V3 | null = null;
   /** Simulation speed: 1 normal, below 1 slow motion, 0 paused (the ⏱ button; photo mode's freeze). */
   timeScale = 1;
   /** Photo mode: HUD hidden, camera free, snap saves a PNG. */
@@ -107,11 +112,14 @@ export class Game {
     this.world = new GameWorld(this.renderer.scene, this.fx);
     this.renderer.scene.add(this.marker.group, this.carryRing.group);
     this.tracker = new TaskTracker(this);
+    this.waypoint = new Waypoint(this.renderer.scene);
     this.trophies = new Trophies((t) => this.onTrophy(t));
     this.trophies.watch(this.world.events, this.world);
     this.world.events.on('taskComplete', ({ taskId }) => {
       const saved = worldSave.all().tasks;
-      this.trophies.noteTasks(Object.keys(saved).length, saved[taskId]?.ways.length ?? 0, orderedTasks().length);
+      const total = orderedTasks().length;
+      this.trophies.noteTasks(Object.keys(saved).length, saved[taskId]?.ways.length ?? 0, total);
+      if (Object.keys(saved).length >= total) this.scheduleFinale();
     });
 
     const levels = menuLevels();
@@ -209,7 +217,7 @@ export class Game {
     this.spellbook.reset();
     this.trophies.reset();
     this.tutorial.resetTips();
-    try { localStorage.removeItem(SURPRISED); } catch { /* ignore */ }
+    try { localStorage.removeItem(SURPRISED); localStorage.removeItem(FINALE); } catch { /* ignore */ }
     window.setTimeout(() => location.reload(), 700);
   }
 
@@ -318,6 +326,8 @@ export class Game {
     this.world.clear();
     this.pendingCasts.clear();
     this.history = [];
+    this.waypointAt = null;
+    this.waypoint.target(null);
     const islands = level.islands ?? (level.terrain === null ? [] : [level.terrain ?? {}]);
     const terrain = islands.map((t) => ({ ...DEFAULT_TERRAIN, ...t }));
     const key = JSON.stringify(terrain);
@@ -621,6 +631,60 @@ export class Game {
     this.hud.setWordChips(pool.slice(0, 7));
   }
 
+
+
+  // ------------------------------------------------------------ finale
+  private finaleTimer = 0;
+
+  /** The last task of the world is done: a few seconds of fireworks, then the summary (once per save). */
+  private scheduleFinale(): void {
+    let seen = false;
+    try { seen = !!localStorage.getItem(FINALE); } catch { /* no storage: it shows each time */ }
+    if (seen || this.runner) return;
+    const level = this.level;
+    clearTimeout(this.finaleTimer);
+    for (let i = 1; i <= 3; i++)
+      this.fx.tweens.add({ delay: i * 0.9, duration: 0.01, update: () => {}, done: () => { const h = this.world.hero; if (h?.alive) this.fx.celebrate({ x: h.x, y: h.y, z: h.z }); } });
+    this.finaleTimer = window.setTimeout(() => {
+      if (this.level !== level || this.titleMode) return;
+      try { localStorage.setItem(FINALE, '1'); } catch { /* ignore */ }
+      this.keys.clear();
+      const saved = worldSave.all().tasks;
+      this.hud.showPanel(
+        finalePanel(
+          {
+            tasks: Object.keys(saved).length,
+            ways: Object.values(saved).reduce((n, t) => n + t.ways.length, 0),
+            words: this.spellbook.count,
+            wordsTotal: this.spellbook.total,
+            casts: this.trophies.stat('casts'),
+            trophies: this.trophies.unlockedCount,
+            trophiesTotal: TROPHY_TOTAL,
+          },
+          { onKeep: () => this.hud.hideOverlay(), onFreePlay: () => this.freePlay(), onTrophies: () => this.openTrophies() },
+        ),
+      );
+      this.fx.sound('fanfare');
+    }, 3600);
+  }
+
+  /** Every frame in the open world: points the beam and the arrow at the nearest unfinished task. */
+  private updateGuide(dt: number): void {
+    const h = this.world.hero;
+    const on = settings.get().guide && !!this.level.tasks && !!this.waypointAt && !!h?.alive && !this.titleMode;
+    let angle: number | null = null, dist = 0;
+    if (on) {
+      const wp = this.waypointAt!;
+      const dx = wp[0] - h!.x, dz = wp[2] - h!.z;
+      dist = Math.hypot(dx, dz);
+      const cam = this.renderer.camera.position, tgt = this.renderer.controls.target;
+      const fx = tgt.x - cam.x, fz = tgt.z - cam.z;
+      // clockwise from "up the screen" (the camera's forward direction); right = (-fz, fx)
+      angle = Math.atan2(-dx * fz + dz * fx, dx * fx + dz * fz);
+    }
+    this.hud.setCompass(angle, dist);
+    this.waypoint.update(dt, on && dist > 5 && !this.photo && !this.hud.overlayOpen);
+  }
 
   // ------------------------------------------------------------ tools
   /** Free Play: no goal, no hero, no tasks. */
@@ -1045,6 +1109,8 @@ export class Game {
     const saved = worldSave.all().tasks;
     const open = list.filter((t) => !saved[t.id] && !this.tracker.isDone(t.id));
     if (!open.length) {
+      this.waypointAt = null;
+      this.waypoint.target(null);
       this.hud.setTracker(null, 'Every task is done! Press J and try finding new ways.');
       return;
     }
@@ -1059,6 +1125,8 @@ export class Game {
         bestD = d;
       }
     }
+    this.waypointAt = best.start;
+    this.waypoint.target({ x: best.start[0], y: best.start[1], z: best.start[2] });
     this.hud.setTracker({ title: best.title, zone: best.zone === this.zone?.id ? null : (zones.get(best.zone)?.name ?? null) });
   }
 
@@ -1144,6 +1212,7 @@ export class Game {
     this.followCamera(dt);
     this.stepIntro(dt);
     this.updateCarry(dt);
+    this.updateGuide(dt);
     this.tutorial.update(this, dt);
     this.reactions.update(dt, this.renderer.camera, !this.titleMode && !this.hud.overlayOpen);
     updateVoxelLOD(this.renderer.camera.position, (this.renderer.scene.fog as Fog).far);
@@ -1153,5 +1222,6 @@ export class Game {
 }
 
 const SURPRISED = 'blockspell.surprised.v1';
+const FINALE = 'blockspell.finale.v1';
 const TROPHY_TOTAL = TROPHIES.length;
 const HERO_KEYS = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space', 'KeyE', 'KeyF', 'KeyQ']);

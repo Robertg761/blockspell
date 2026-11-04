@@ -382,3 +382,8 @@ body.touch .chip, body.touch .icon-btn { min-height: 40px; }
   body.touch .hud-bottom { width: min(520px, calc(100vw - 340px)); }
   body.touch-hero .toasts { bottom: auto; }
 }
+
+/* ---------- task compass ---------- */
+.goal-compass { margin-left: auto; display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 700; color: #1f7fa8; flex: none; }
+.goal-compass.hidden { display: none; }
+.compass-arrow { display: inline-block; font-size: 15px; line-height: 1; transition: transform 0.12s linear; }

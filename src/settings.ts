@@ -15,6 +15,8 @@ export interface Settings {
   tips: boolean;
   /** Camera orbit speed multiplier. */
   orbit: number;
+  /** Explore: a beam of light and an arrow point to the nearest unfinished task. */
+  guide: boolean;
   /** Explore: the sky slowly turns through day, sunset, night and dawn. */
   cycle: boolean;
 }
@@ -29,6 +31,7 @@ const defaults = (): Settings => ({
   tips: true,
   orbit: 1,
   cycle: true,
+  guide: true,
 });
 
 const clamp = (n: unknown, lo: number, hi: number, fallback: number) => (typeof n === 'number' && Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : fallback);
@@ -45,6 +48,7 @@ function load(): Settings {
       tips: typeof raw.tips === 'boolean' ? raw.tips : d.tips,
       orbit: clamp(raw.orbit, 0.4, 2.5, d.orbit),
       cycle: typeof raw.cycle === 'boolean' ? raw.cycle : d.cycle,
+      guide: typeof raw.guide === 'boolean' ? raw.guide : d.guide,
     };
   } catch {
     return d;
