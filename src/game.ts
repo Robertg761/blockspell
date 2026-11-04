@@ -38,6 +38,8 @@ import { SideTools, type ToolId } from './ui/tools';
 import { PhotoUI } from './ui/photo';
 import { Trophies, TROPHIES, type TrophyDef } from './trophies';
 import { Waypoint } from './engine/waypoint';
+import { SKY_LABEL, SKY_NAMES, type SkyName } from './engine/skies';
+import { WEATHER_LABEL, WEATHER_NAMES, type WeatherName } from './engine/weather';
 import { finalePanel } from './ui/finale-panel';
 import { trophiesPanel } from './ui/trophies-panel';
 import { settingsPanel } from './ui/settings-panel';
@@ -314,6 +316,13 @@ export class Game {
   loadLevel(id: string): void {
     const level = orderedLevels().find((l) => l.id === id);
     if (!level) return;
+    if (level.id !== this.level?.id) {
+      // a different level starts in daylight and clear weather; Explore starts the day and night cycle
+      this.setSky('day', 0);
+      this.setWeather('clear');
+      this.skyAuto = !!level.tasks && settings.get().cycle;
+      this.skyClock = 0;
+    }
     this.titleMode = false;
     this.level = level;
     this.won = false;
@@ -577,7 +586,7 @@ export class Game {
     }
 
     const fresh = this.spellbook.discover(res.def.id, res.adjectives.map((a) => a.id));
-    this.trophies.noteCast({ adjectives: res.adjectives.map((a) => a.id), night: false });
+    this.trophies.noteCast({ adjectives: res.adjectives.map((a) => a.id), night: this.renderer.skyPreset === 'night' });
     this.trophies.noteWords(this.spellbook.count, this.spellbook.total);
     if (fresh.object || fresh.adjectives.length) {
       if (!this.spellbook.isOpen) this.hud.bookBtn.classList.add('has-new');
@@ -701,6 +710,56 @@ export class Game {
     else if (id === 'clear') this.clearAll();
     else if (id === 'share') void this.shareScene();
     else if (id === 'trophies') this.openTrophies();
+    else if (id === 'sky') this.cycleSky();
+    else if (id === 'weather') this.cycleWeather();
+  }
+
+  // ---- sky and weather
+  /** The automatic day and night turning of Explore: seconds into the cycle, and whether it is running. */
+  private skyClock = 0;
+  private skyAuto = false;
+
+  /** 🌤: day, sunset, night, dawn. Choosing one by hand stops the automatic cycle. */
+  cycleSky(): void {
+    const next = SKY_NAMES[(SKY_NAMES.indexOf(this.renderer.skyPreset) + 1) % SKY_NAMES.length];
+    this.skyAuto = false;
+    this.setSky(next);
+    this.trophies.noteSky(next);
+    this.hud.toasts.show(SKY_LABEL[next], { duration: 1500 });
+  }
+
+  setSky(name: SkyName, seconds = 2.5): void {
+    this.renderer.setSky(name, seconds);
+    this.tools.setBadge('sky', name === 'day' ? '' : name === 'night' ? '🌙' : name === 'sunset' ? '🌇' : '🌅');
+  }
+
+  /** 🌦: clear, rain, snow (just for looks and mood: it does not put out fires). */
+  cycleWeather(): void {
+    const next = WEATHER_NAMES[(WEATHER_NAMES.indexOf(this.renderer.weather.current) + 1) % WEATHER_NAMES.length];
+    this.setWeather(next);
+    if (next !== 'clear') this.trophies.noteWeather(next);
+    this.hud.toasts.show(WEATHER_LABEL[next], { duration: 1500 });
+  }
+
+  setWeather(w: WeatherName): void {
+    this.renderer.weather.set(w);
+    this.fx.audio.setAmbient(w === 'rain' ? 'rain' : w === 'snow' ? 'wind' : null);
+    this.tools.setBadge('weather', w === 'rain' ? '🌧' : w === 'snow' ? '❄' : '');
+  }
+
+  /** Explore: the sky turns slowly through day, sunset, night and dawn. */
+  private stepSkyCycle(dt: number): void {
+    if (!this.skyAuto || this.photo || this.titleMode || !settings.get().cycle) return;
+    const phases: [SkyName, number][] = [['day', 260], ['sunset', 50], ['night', 150], ['dawn', 50]];
+    const total = phases.reduce((n, p) => n + p[1], 0);
+    this.skyClock += dt;
+    let t = this.skyClock % total;
+    let now: SkyName = 'day';
+    for (const [name, len] of phases) {
+      if (t < len) { now = name; break; }
+      t -= len;
+    }
+    if (this.renderer.skyPreset !== now) this.setSky(now, 14);
   }
 
   /** The 🏆 panel. */
@@ -1213,6 +1272,7 @@ export class Game {
     this.stepIntro(dt);
     this.updateCarry(dt);
     this.updateGuide(dt);
+    this.stepSkyCycle(dt);
     this.tutorial.update(this, dt);
     this.reactions.update(dt, this.renderer.camera, !this.titleMode && !this.hud.overlayOpen);
     updateVoxelLOD(this.renderer.camera.position, (this.renderer.scene.fog as Fog).far);

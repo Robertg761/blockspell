@@ -310,6 +310,8 @@ export class Audio {
   private sfxBus: GainNode | null = null;
   private musicBus: GainNode | null = null;
   private volumes = { music: 1, sfx: 1 };
+  private amb: { src: AudioBufferSourceNode; gain: GainNode } | null = null;
+  private wantAmbient: 'rain' | 'wind' | null = null;
   private lastPlayed = new Map<SoundName, number>();
   /** Background music; available after `unlock()`. */
   music: Music | null = null;
@@ -347,6 +349,40 @@ export class Audio {
     this.synth = new Synth(ctx, this.sfxBus, buf);
     this.music = new Music(new Synth(ctx, this.musicBus, buf), this.musicBus);
     this.music.start();
+    this.applyAmbient();
+  }
+
+  /** A quiet looping bed of rain or wind noise under everything (null: none). Works before `unlock()` too. */
+  setAmbient(kind: 'rain' | 'wind' | null): void {
+    this.wantAmbient = kind;
+    this.applyAmbient();
+  }
+
+  private applyAmbient(): void {
+    const s = this.synth;
+    if (!s || !this.sfxBus) return;
+    const ctx = s.ctx;
+    if (this.amb) {
+      const old = this.amb;
+      old.gain.gain.setTargetAtTime(0, ctx.currentTime, 0.4);
+      setTimeout(() => { try { old.src.stop(); } catch { /* already stopped */ } old.src.disconnect(); }, 2500);
+      this.amb = null;
+    }
+    if (!this.wantAmbient) return;
+    const src = ctx.createBufferSource();
+    src.buffer = s.noiseBuf;
+    src.loop = true;
+    const f = ctx.createBiquadFilter();
+    const rain = this.wantAmbient === 'rain';
+    f.type = rain ? 'bandpass' : 'lowpass';
+    f.frequency.value = rain ? 3200 : 420;
+    f.Q.value = rain ? 0.5 : 0.8;
+    const g = ctx.createGain();
+    g.gain.value = 0.0001;
+    g.gain.setTargetAtTime(rain ? 0.2 : 0.14, ctx.currentTime, 0.6);
+    src.connect(f).connect(g).connect(this.sfxBus);
+    src.start();
+    this.amb = { src, gain: g };
   }
 
   /** Music and effects loudness, 0..1 each (the settings sliders). Works before and after `unlock()`. */

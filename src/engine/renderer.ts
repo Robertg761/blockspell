@@ -1,6 +1,6 @@
 import {
   ACESFilmicToneMapping, PMREMGenerator, Color, DirectionalLight, Fog, HemisphereLight, PCFShadowMap,
-  HalfFloatType, PerspectiveCamera, Scene, SRGBColorSpace, Vector2, Vector3, WebGLRenderer, WebGLRenderTarget,
+  HalfFloatType, PerspectiveCamera, Scene, ShaderMaterial, SRGBColorSpace, Vector2, Vector3, WebGLRenderer, WebGLRenderTarget,
 } from 'three';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
@@ -13,6 +13,8 @@ import { createBackdrop } from './backdrop';
 import { createSky } from './sky';
 import { Clouds } from './clouds';
 import { createGradePass, type ScreenFx } from './grade';
+import { cloneSky, lerpSky, SKIES, type SkyName, type SkyState } from './skies';
+import { Weather } from './weather';
 import type { CameraShake } from './shake';
 import type { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 
@@ -35,6 +37,14 @@ export class Renderer {
   readonly sun: DirectionalLight;
   readonly clouds: Clouds;
   private sky;
+  private hemi!: HemisphereLight;
+  readonly weather: Weather;
+  /** Time of day: the preset we are heading for, the look when the change began, and how far along it is. */
+  private skyName: SkyName = 'day';
+  private skyFrom: SkyState = cloneSky(SKIES.day);
+  private skyNow: SkyState = cloneSky(SKIES.day);
+  private skyT = 1;
+  private skyDur = 2.5;
   private sunDir = new Vector3(0.55, 0.85, 0.35).normalize();
   /** Null when bloom is disabled (?nobloom) or unsupported; then we render straight to screen. */
   private composer: EffectComposer | null = null;
@@ -63,7 +73,7 @@ export class Renderer {
     this.scene.add(this.sky);
     this.scene.fog = new Fog(new Color(SKY.horizon), DEFAULT_RANGE.fog[0], DEFAULT_RANGE.fog[1]);
 
-    const hemi = new HemisphereLight('#cfe8ff', '#7a6243', 1.1);
+    const hemi = (this.hemi = new HemisphereLight('#cfe8ff', '#7a6243', 1.1));
     this.scene.add(hemi);
 
     this.sun = new DirectionalLight('#fff0d8', 2.6);
@@ -79,6 +89,7 @@ export class Renderer {
 
     this.clouds = new Clouds();
     this.scene.add(this.clouds.group, createBackdrop());
+    this.weather = new Weather(this.scene);
 
     this.controls = new OrbitControls(this.camera, this.gl.domElement);
     this.controls.enableDamping = true;
@@ -113,6 +124,42 @@ export class Renderer {
       console.warn('Bloom unavailable, falling back to direct rendering', e);
       this.composer = null;
     }
+  }
+
+  get skyPreset(): SkyName {
+    return this.skyName;
+  }
+
+  /** Changes the time of day, blending from the current look over `seconds` (0: at once). */
+  setSky(name: SkyName, seconds = 2.5): void {
+    this.skyName = name;
+    this.skyFrom = cloneSky(this.skyNow);
+    this.skyT = seconds <= 0 ? 1 : 0;
+    this.skyDur = Math.max(0.01, seconds);
+    if (seconds <= 0) this.stepSky(0);
+  }
+
+  private stepSky(dt: number): void {
+    if (this.skyT >= 1 && dt > 0) return;
+    this.skyT = Math.min(1, this.skyT + dt / this.skyDur);
+    const k = this.skyT * this.skyT * (3 - 2 * this.skyT);
+    const s = lerpSky(this.skyNow, this.skyFrom, SKIES[this.skyName], k);
+    const u = (this.sky.material as ShaderMaterial).uniforms;
+    u.top.value.copy(s.top);
+    u.horizon.value.copy(s.horizon);
+    u.bottom.value.copy(s.bottom);
+    u.sunColor.value.copy(s.sunColor);
+    u.sunDir.value.copy(s.sunDir);
+    u.stars.value = s.stars;
+    (this.scene.fog as Fog).color.copy(s.horizon);
+    this.hemi.color.copy(s.hemiSky);
+    this.hemi.groundColor.copy(s.hemiGround);
+    this.hemi.intensity = s.hemiI;
+    this.sun.color.copy(s.sunColor);
+    this.sun.intensity = s.sunI;
+    this.sunDir.copy(s.sunDir);
+    this.gl.toneMappingExposure = s.exposure;
+    this.clouds.setLight(s.cloudGlow, s.cloudTint);
   }
 
   /** Fog, far plane and zoom-out limit for a level (null restores the defaults). */
@@ -215,7 +262,9 @@ export class Renderer {
       if (screen) (u.uFlash.value as Vector3).copy(screen.flashColor);
       u.uTime.value = this.clock % 10;
     }
+    this.stepSky(dt);
     this.clouds.update(dt);
+    this.weather.update(dt, this.controls.target);
     this.followSun();
     shake.apply(this.camera);
     this.sky.position.copy(this.camera.position);

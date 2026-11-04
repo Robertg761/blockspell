@@ -1,7 +1,7 @@
 import { h } from './dom';
 import './tools.css';
 
-export type ToolId = 'photo' | 'share' | 'undo' | 'clear' | 'speed' | 'trophies';
+export type ToolId = 'photo' | 'share' | 'undo' | 'clear' | 'speed' | 'sky' | 'weather' | 'trophies';
 
 interface ToolDef {
   id: ToolId;
@@ -17,10 +17,12 @@ const TOOLS: ToolDef[] = [
   { id: 'undo', icon: '↶', title: 'Undo the last spell', modes: ['free'] },
   { id: 'clear', icon: '🧹', title: 'Clear everything you cast', modes: ['free'] },
   { id: 'speed', icon: '⏱', title: 'Time: normal, slow, slower, paused', modes: ['free', 'hero', 'world'] },
+  { id: 'sky', icon: '🌤', title: 'Time of day: day, sunset, night, dawn', modes: ['free', 'hero', 'world'] },
+  { id: 'weather', icon: '🌦', title: 'Weather: clear, rain, snow', modes: ['free', 'hero', 'world'] },
   { id: 'trophies', icon: '🏆', title: 'Trophies', modes: ['free', 'hero', 'world'] },
 ];
 
-/** The vertical strip of extra buttons on the right edge: photo, share, undo, clear, time and trophies. */
+/** The vertical strip of extra buttons on the right edge: photo, share, undo, clear, time, sky, weather and trophies. */
 export class SideTools {
   readonly el = h('div.side-tools.hidden', { role: 'toolbar', 'aria-label': 'Extra tools' });
   private buttons = new Map<ToolId, HTMLButtonElement>();
