@@ -18,7 +18,7 @@ export function sampleColors(e: Entity, n = 5): string[] {
 }
 
 /** Breaks an entity apart into voxel shards and spawns its `debris` objects. */
-export function shatter(e: Entity, world: GameWorld, reason = 'broken'): void {
+export function shatter(e: Entity, world: GameWorld, reason = 'broken', loot?: string[]): void {
   if (!e.alive) return;
   const p = e.body.position;
   const colors = sampleColors(e, 6);
@@ -27,13 +27,12 @@ export function shatter(e: Entity, world: GameWorld, reason = 'broken'): void {
   world.fx.burst(p, { count: 8, color: ['#ffffff', '#fff6a8'], speed: 5, up: 1, size: 0.05, life: 0.35, glow: true });
   world.fx.sound(e.has('metal') ? 'clank' : e.has('flammable') ? 'thud' : 'shatter', { pitch: 1 / Math.sqrt(e.scale) });
   world.fx.addShake(0.15);
-  spawnDebris(e, world);
+  spawnDebris(e, world, loot);
   world.events.emit('broken', { entity: e });
   world.remove(e, reason);
 }
 
-export function spawnDebris(e: Entity, world: GameWorld): void {
-  const list = e.def.debris ?? [];
+export function spawnDebris(e: Entity, world: GameWorld, list = e.def.debris ?? []): void {
   list.forEach((id, i) => {
     const def = objects.get(id);
     if (!def) return;

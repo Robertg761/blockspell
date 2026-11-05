@@ -16,7 +16,7 @@ const solutions: LevelSolution[] = [
   { name: 'fan blows it across', steps: [{ walkTo: [1.5, 8] }, { cast: 'fan', at: [1.5, 6.5] }], timeout: 20 },
   { name: 'big bomb on the bank', steps: [{ walkTo: [1.5, 8.5] }, { cast: 'big bomb', at: [1.5, 6.4] }, { walkTo: [1.5, 9.5] }], timeout: 20 },
   { name: 'flaming tnt on the bank', steps: [{ walkTo: [1.5, 8.5] }, { cast: 'flaming tnt', at: [1.5, 6.4] }, { walkTo: [1.5, 9.5] }], timeout: 20 },
-  { name: 'boat pushes it', steps: [{ walkTo: [1.5, 8] }, { cast: 'boat', at: [1.5, 4.7] }], timeout: 20 },
+  { name: 'sail a boat into it', steps: [{ walkTo: [1.5, 7] }, { cast: 'boat', at: [1.5, 4.7] }, { wait: 1.5 }, { walkTo: [1.5, 6.2] }, { press: 'grab' }, { hold: { drive: [0, 1] }, for: 5 }], timeout: 20 },
 ];
 
 export default defineTask({

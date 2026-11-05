@@ -1,5 +1,7 @@
 import { Vector3, type Camera } from 'three';
 import type { CarryHint } from '../behaviors/lib/carry';
+import { rideKind } from '../behaviors/lib/ride';
+import { useLabel } from '../behaviors/lib/use';
 import { h } from './dom';
 import { isTouch } from './touch';
 import './prompt.css';
@@ -9,9 +11,24 @@ function lines(hint: CarryHint): [string, string][] {
   const name = hint.entity.label;
   switch (hint.verb) {
     case 'lift': return [['E', `Grab ${name}`]];
+    case 'wear': return [['E', `Put on ${name}`]];
+    case 'ride': {
+      const verb = hint.entity.def.ride?.verb ?? 'Ride';
+      return [['E', `${verb} ${name}`], ...(hint.entity.has('thrust') ? [['C', 'Light fuse'] as [string, string]] : [])];
+    }
+    case 'riding': {
+      if (!hint.fresh) return [];
+      const kind = rideKind(hint.entity);
+      const flying: [string, string][] = kind === 'plane' || kind === 'hover' ? [['Space', 'Up'], ['Shift', 'Down']] : [];
+      return [['WASD', 'Steer'], ...flying, ['E', 'Get out']];
+    }
     case 'drag': return [['E', `Drag ${name}`]];
     case 'heavy': return [['', `${name[0].toUpperCase()}${name.slice(1)} is too heavy`]];
-    case 'holding': return [['E', hint.spot ? 'Put down' : 'Drop'], ['F', 'Throw'], ['Q', 'Turn']];
+    case 'holding': {
+      const use = useLabel(hint.entity);
+      if (hint.entity.has('wearable')) return [['Space', 'Fly'], ['E', 'Take off']];
+      return [...(use ? [['C', use] as [string, string]] : []), ['E', hint.spot ? 'Put down' : 'Drop'], ['F', 'Throw'], ...(hint.entity.def.grip === undefined ? [['Q', 'Turn'] as [string, string]] : [])];
+    }
     case 'dragging': return [['E', 'Let go']];
   }
 }
@@ -29,7 +46,7 @@ export class CarryPrompt {
 
   update(hint: CarryHint | null, camera: Camera): void {
     // touch screens have buttons for all this; only say what's in reach and what's too heavy
-    const list = !hint ? [] : isTouch ? (hint.verb === 'holding' || hint.verb === 'dragging' ? [] : lines(hint).map(([, text]): [string, string] => ['', text])) : lines(hint);
+    const list = !hint ? [] : isTouch ? (hint.verb === 'holding' || hint.verb === 'dragging' || hint.verb === 'riding' ? [] : lines(hint).map(([, text]): [string, string] => ['', text])) : lines(hint);
     const key = JSON.stringify(list);
     if (key !== this.key) {
       this.key = key;

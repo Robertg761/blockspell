@@ -2,7 +2,7 @@ import type { Entity } from '../../core/entity';
 import type { GameWorld } from '../../core/world';
 import { defineBehavior } from '../types';
 
-function unlock(door: Entity, key: Entity, world: GameWorld): void {
+export function unlock(door: Entity, key: Entity, world: GameWorld): void {
   if (!door.has('locked') || !key.alive) return;
   world.removeTag(door, 'locked');
   door.state.open = true;

@@ -12,13 +12,15 @@ export interface PadState {
   grab: boolean;
   toss: boolean;
   turn: boolean;
+  run: boolean;
+  use: boolean;
   /** Buttons that went down since the last poll. */
   pressed: Set<PadButton>;
 }
 
-export type PadButton = 'a' | 'b' | 'x' | 'y' | 'start' | 'select' | 'lb' | 'rb';
+export type PadButton = 'a' | 'b' | 'x' | 'y' | 'start' | 'select' | 'lb' | 'rb' | 'lt' | 'rt' | 'ls';
 
-const BUTTON_INDEX: Record<PadButton, number> = { a: 0, b: 1, x: 2, y: 3, lb: 4, rb: 5, select: 8, start: 9 };
+const BUTTON_INDEX: Record<PadButton, number> = { a: 0, b: 1, x: 2, y: 3, lb: 4, rb: 5, lt: 6, rt: 7, select: 8, start: 9, ls: 10 };
 const DEADZONE = 0.22;
 
 const dead = (v: number): number => (Math.abs(v) < DEADZONE ? 0 : Math.sign(v) * ((Math.abs(v) - DEADZONE) / (1 - DEADZONE)));
@@ -29,7 +31,7 @@ export class GamepadInput {
   active = false;
   /** Fresh presses seen by the latest poll (empty when no pad is connected). */
   last: Set<PadButton> = new Set();
-  private idle: PadState = { move: { x: 0, y: 0 }, look: { x: 0, y: 0 }, jump: false, grab: false, toss: false, turn: false, pressed: new Set() };
+  private idle: PadState = { move: { x: 0, y: 0 }, look: { x: 0, y: 0 }, jump: false, grab: false, toss: false, turn: false, run: false, use: false, pressed: new Set() };
 
   /** The current state of the first connected pad, or null when there is none. */
   poll(): PadState | null {
@@ -62,6 +64,8 @@ export class GamepadInput {
     s.grab = now.has('x');
     s.toss = now.has('b');
     s.turn = now.has('rb') || now.has('lb');
+    s.run = now.has('lt') || now.has('ls');
+    s.use = now.has('rt');
     s.pressed = pressed;
     this.last = pressed;
     return s;

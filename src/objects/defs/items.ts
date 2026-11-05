@@ -103,7 +103,7 @@ export default [
     name: 'key',
     synonyms: ['skeleton key', 'house key', 'keys', 'door key'],
     category: 'items',
-    blurb: 'Unlocks locked things it touches.',
+    blurb: 'Unlocks locked things. Press C next to a door.',
     tags: ['key', 'metal'],
     tintKeys: ['keyGold', 'keyDark', 'keyLight'],
     burstColor: '#f2c230',
@@ -137,12 +137,13 @@ export default [
     name: 'bucket',
     synonyms: ['pail', 'water bucket', 'bucket of water'],
     category: 'items',
-    blurb: 'A bucket of water. Splashes out fires.',
+    blurb: 'A bucket of water. Press C to splash out fires.',
     tags: ['wet', 'metal'],
     tintKeys: ['bucketMetal', 'bucketDark'],
     burstColor: '#7cc8f2',
     spawnSound: 'splash',
     voxelSize: 0.04,
+    use: 'douse',
     physics: { mass: 1.5, shape: 'auto', maxBoxes: 6, friction: 0.5 },
     build(b) {
       const C = 7;
@@ -169,7 +170,7 @@ export default [
     name: 'umbrella',
     synonyms: ['parasol', 'brolly'],
     category: 'items',
-    blurb: 'Hang on and float down gently.',
+    blurb: 'Grab it, jump off something high and float down gently.',
     tags: ['glider'],
     props: { fallSpeed: 1.3 },
     tintKeys: ['umbrellaA'],
@@ -199,13 +200,14 @@ export default [
     name: 'torch',
     synonyms: ['tiki torch', 'firebrand', 'lit torch'],
     category: 'items',
-    blurb: 'Lights flammable things and glows in the dark.',
+    blurb: 'Press C to light flammable things. Glows in the dark.',
     tags: ['hot', 'glows'],
     props: { heatRadius: 0.6, glow: 4, extinguishable: 0 },
     tintKeys: ['torchWood'],
     burstColor: '#ff8a3a',
     spawnSound: 'ignite',
     voxelSize: 0.05,
+    grip: 0.55,
     physics: { mass: 0.8, shape: 'box', uprightOnly: true, friction: 0.7 },
     parts: [
       {
@@ -234,12 +236,13 @@ export default [
     name: 'book',
     synonyms: ['novel', 'textbook', 'notebook', 'tome'],
     category: 'items',
-    blurb: 'Pages burn quickly.',
+    blurb: 'Press C to read it for a hint. Pages burn quickly.',
     tags: ['flammable'],
     props: { burnTime: 4 },
     tintKeys: ['bookCover', 'bookCoverDark'],
     burstColor: '#a8362f',
     voxelSize: 0.03,
+    use: 'read',
     physics: { mass: 0.6, shape: 'box', friction: 0.6 },
     build(b) {
       // covers + spine
@@ -266,13 +269,14 @@ export default [
     name: 'mug',
     synonyms: ['cup', 'coffee cup', 'teacup', 'coffee mug'],
     category: 'items',
-    blurb: 'Fresh coffee. Smashes if dropped.',
+    blurb: 'Fresh coffee: press C for a burst of speed. Smashes if dropped.',
     tags: ['fragile'],
     props: { breakSpeed: 5 },
     tintKeys: ['mugBlue', 'mugBlueDark'],
     burstColor: '#4a86d8',
     spawnSound: 'pop',
     voxelSize: 0.03,
+    use: 'drink',
     physics: { mass: 0.4, shape: 'auto', maxBoxes: 4, friction: 0.5 },
     build(b) {
       b.cylinderY(4.5, 4.5, 0, 9, 4.6, 'mugBlue');
@@ -300,6 +304,7 @@ export default [
     burstColor: '#3f9b5a',
     spawnSound: 'pop',
     voxelSize: 0.04,
+    use: 'drink',
     physics: { mass: 0.5, shape: 'auto', maxBoxes: 4, friction: 0.4 },
     build(b) {
       const radii = [3, 4, 4, 4, 4, 4, 4, 4, 4, 4, 3.5, 3, 2.4, 1.9, 1.9, 1.9, 1.9, 2.2];
@@ -391,6 +396,7 @@ export default [
     burstColor: '#f5c542',
     spawnSound: 'chime',
     voxelSize: 0.0125,
+    use: 'flip',
     physics: { mass: 0.3, shape: 'box', friction: 0.5 },
     build(b) {
       const star: [number, number][] = [];
@@ -417,7 +423,7 @@ export default [
     name: 'gift',
     synonyms: ['present', 'gift box', 'giftbox'],
     category: 'items',
-    blurb: 'What could be inside? Pops open when it breaks.',
+    blurb: 'What could be inside? Press C to open it.',
     tags: ['fragile', 'flammable'],
     props: { breakSpeed: 4, burnTime: 4 },
     debris: ['ball', 'balloon'],
@@ -425,6 +431,7 @@ export default [
     burstColor: '#e8435a',
     spawnSound: 'magic',
     voxelSize: 0.04,
+    use: 'open',
     physics: { mass: 0.8, shape: 'box', friction: 0.6 },
     build(b) {
       b.box(0, 0, 0, 11, 9, 11, 'giftWrap');
@@ -524,12 +531,14 @@ export default [
     name: 'hammer',
     synonyms: ['mallet', 'sledgehammer', 'gavel'],
     category: 'items',
-    blurb: 'Heavy. Smashes fragile things.',
+    blurb: 'Hold C to smash stone, ice and anything fragile.',
     tags: ['heavy', 'metal'],
     tintKeys: ['hammerHandle'],
     burstColor: '#8a939e',
     spawnSound: 'clank',
     voxelSize: 0.03,
+    use: 'smash',
+    grip: 1.1,
     physics: { mass: 8, shape: 'auto', maxBoxes: 4, friction: 0.6 },
     build(b) {
       // handle
@@ -557,12 +566,14 @@ export default [
     name: 'sword',
     synonyms: ['blade', 'katana', 'sabre', 'saber', 'broadsword'],
     category: 'items',
-    blurb: 'Sharp! Pops balloons.',
+    blurb: 'Sharp! Hold C to slash bushes and boxes. Pops balloons.',
     tags: ['metal', 'sharp'],
     tintKeys: ['swordBlade', 'swordEdge'],
     burstColor: '#c3cdd8',
     spawnSound: 'clank',
     voxelSize: 0.04,
+    use: 'slash',
+    grip: 1.0,
     physics: { mass: 1.5, shape: 'auto', maxBoxes: 4, friction: 0.5 },
     build(b) {
       // blade along +Y, with a lighter sharp edge and a tip

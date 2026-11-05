@@ -32,9 +32,10 @@ export const VIGNETTES: Vignette[] = [
   {
     id: 'fireworks', name: 'Fireworks night', blurb: 'Three rockets, three colors.',
     steps: [
-      { spell: 'red rocket', at: [-2.4, 0], delay: 0 },
-      { spell: 'blue rocket', at: [0, 0.8], delay: 0.5 },
-      { spell: 'golden rocket', at: [2.4, 0], delay: 1 },
+      // rockets wait for a pilot: lit ones go by themselves
+      { spell: 'flaming red rocket', at: [-2.4, 0], delay: 0 },
+      { spell: 'flaming blue rocket', at: [0, 0.8], delay: 0.5 },
+      { spell: 'flaming golden rocket', at: [2.4, 0], delay: 1 },
     ],
   },
   {

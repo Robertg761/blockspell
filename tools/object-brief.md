@@ -84,6 +84,11 @@ Use only tags listed in `KNOWN_TAGS` (`src/core/tags.ts`). Numeric tuning goes i
 with the names given there (e.g. `{ burnTime: 6 }`, `{ lift: 1.4, ceiling: 5 }`, `{ thrust: 2.5, fuel: 4 }`).
 Don't write behavior logic yourself, just tag. `debris: ['plank']` spawns objects when this breaks.
 
+Everything should give the hero something to do. Things to drive get the `rideable` tag and a
+`ride` spec (`src/objects/types.ts`), things worn on the back get `wearable`, and tools get `use`
+and `grip`. Food, keys, explosives, hot things and animals already work with Use by their tags:
+see `src/behaviors/lib/use.ts`. Say how in the `blurb`, because it is shown when the word is first cast.
+
 ## Words
 
 - Synonyms must not collide with other objects' ids/synonyms (the planned id list is in your task),

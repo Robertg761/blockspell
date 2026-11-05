@@ -349,6 +349,7 @@ export default [
     burstColor: '#4aa3d8',
     voxelSize: 0.06,
     orient: 'away',
+    grip: 0,
     physics: { mass: 6, shape: 'auto', maxBoxes: 5, friction: 0.6 },
     props: { windForce: 16, windRange: 7 },
     parts: [

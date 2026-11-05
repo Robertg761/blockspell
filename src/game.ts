@@ -12,6 +12,7 @@ import { progress } from './levels/progress';
 import { SolutionRunner } from './levels/solve';
 import { starsFor, type LevelDef, type LevelObjective, type LevelSolution, type V3 } from './levels/types';
 import type { Entity } from './core/entity';
+import type { ObjectDef } from './objects/types';
 import { buildZone, castLimitAt, orderedTasks, zoneAt, zoneEntry, zones } from './tasks';
 import { worldSave } from './tasks/save';
 import { TaskTracker } from './tasks/tracker';
@@ -26,6 +27,8 @@ import { Hud, type DemoNews } from './ui/hud';
 import { h } from './ui/dom';
 import { isTouch } from './ui/touch';
 import { CARRY, carryHint, carryKind, handGrab, type Carry, type CarryHint } from './behaviors/lib/carry';
+import { board, canRide, leave, ridingOf, thrownOff } from './behaviors/lib/ride';
+import { isTool } from './behaviors/lib/use';
 import { waterSurfaceAt } from './behaviors/lib/water';
 import { Spellbook } from './ui/spellbook';
 import { ease } from './engine/tween';
@@ -79,6 +82,8 @@ export class Game {
   lastResult: { stars: number; words: number } | null = null;
   /** True while the title screen is up (slow camera orbit, no hero input). */
   titleMode = false;
+  /** Free Play: the player clicked a vehicle, and a hero is at the controls until they get out. */
+  private pilot = false;
   /** Open world: the zone the hero is in, or was last in while on a bridge (null in classic levels). */
   zone: ZoneDef | null = null;
   /** Open world: checks every task instead of a single level goal. */
@@ -97,6 +102,8 @@ export class Game {
   /** Free Play casts, newest last: what Undo takes back and what a shared link replays. */
   private history: { log: SceneCast; entities: Entity[]; pending: { cancelled: boolean } }[] = [];
   private keys = new Set<string>();
+  /** When the player last turned the camera themselves: the riding camera leaves them be for a moment. */
+  private orbitedAt = -Infinity;
   /** Hero action keys pressed since the last tick: a tap shorter than a frame still counts. */
   private taps = new Set<string>();
   private pad = new GamepadInput();
@@ -135,6 +142,8 @@ export class Game {
     this.waypoint = new Waypoint(this.renderer.scene);
     this.trophies = new Trophies((t) => this.onTrophy(t), (x) => this.onExperiment(x));
     this.trophies.watch(this.world.events, this.world);
+    this.world.events.on('say', ({ text }) => this.hud.toasts.show(text, { duration: 1500 }));
+    this.world.events.on('hint', () => this.hud.toasts.show(this.currentHint(), { title: '📖 The book says', kind: 'info', duration: 6000 }));
     this.world.events.on('taskComplete', ({ taskId }) => {
       const saved = worldSave.all().tasks;
       const total = orderedTasks().length;
@@ -391,10 +400,13 @@ export class Game {
     const islands = level.islands ?? (level.terrain === null ? [] : [level.terrain ?? {}]);
     const terrain = islands.map((t) => ({ ...DEFAULT_TERRAIN, ...t }));
     const key = JSON.stringify(terrain);
-    if (key !== this.terrainKey) {
+    if (key !== this.terrainKey || this.world.islandsCut) {
       this.world.setIslands(terrain);
       this.terrainKey = key;
+      this.world.islandsCut = false;
     }
+    this.world.flightLimit = level.islands ? 75 : 45;
+    this.pilot = false;
     this.renderer.setRange(level.view ?? null);
     level.setup(this.world);
     this.zone = level.zones && level.hero ? zoneAt(...level.hero, level.zones) : null;
@@ -482,6 +494,7 @@ export class Game {
   teleportHero(at: [number, number] | V3): V3 {
     const h = this.world.hero;
     if (!h?.alive) throw new Error('no hero in this level');
+    if (h.state.riding && !leave(this.world, h)) thrownOff(h);
     const [x, z] = at.length === 3 ? [at[0], at[2]] : at;
     const g = this.world.groundAt(x, z);
     const y = at.length === 3 ? at[1] : Number.isFinite(g) ? g : 0;
@@ -504,6 +517,42 @@ export class Game {
     mark(e, 'hero');
     this.world.hero = e;
     return e;
+  }
+
+  /** Keys drive a hero: always in hero levels, and in Free Play while someone's at the controls. */
+  private get steering(): boolean {
+    return !!this.level.hero || this.pilot;
+  }
+
+  /** Free Play: puts a hero at the controls of what the player clicked. Returns false if it's not to be driven. */
+  pilotClick(v: Entity): boolean {
+    if (!this.isFreePlay || this.pilot || this.titleMode || !canRide(v)) return false;
+    const h = this.spawnHero([v.x, v.y, v.z]);
+    if (!h) return false;
+    h.state.pilot = true;
+    this.pilot = true;
+    this.hud.autoFocus = false;
+    this.hud.input.blur();
+    this.tutorial.touch.setHero(true);
+    board(this.world, h, v);
+    return true;
+  }
+
+  /** Free Play: the pilot is out, or lost their vehicle. They vanish, and the pointer is the hand again. */
+  private endControls(): void {
+    const h = this.world.hero;
+    this.pilot = false;
+    this.keys.clear();
+    this.hud.autoFocus = true;
+    this.tutorial.touch.setHero(false);
+    if (h?.alive) {
+      if (h.state.riding) thrownOff(h);
+      this.fx.poof(h.body.position, ['#fff6a8', '#ffffff'], 0.7);
+      this.world.remove(h, 'respawn');
+      // out over the void there's nothing left to look at
+      if (!Number.isFinite(this.world.groundAt(h.x, h.z)) && this.level.camera) this.renderer.setView(this.level.camera.position, this.level.camera.target);
+    }
+    this.world.hero = null;
   }
 
   /**
@@ -530,6 +579,7 @@ export class Game {
    * they are fished out and put back at the zone entry.
    */
   private swimming(hero: Entity, dt: number): boolean {
+    if (hero.state.riding) return false;
     const feet = hero.y - hero.size.y / 2;
     const surface = waterSurfaceAt(this.world, hero.x, feet + 0.05, hero.z, (w) => !!w.def.levelOnly);
     const t = surface !== null && surface - feet > 0.5 ? ((hero.state.swimT as number) ?? 0) + dt : 0;
@@ -564,7 +614,7 @@ export class Game {
   cast(text: string): boolean {
     this.fx.audio.unlock();
     const res = parseSpell(text);
-    if (this.level.hero) this.hud.input.blur();
+    if (this.steering) this.hud.input.blur();
     if (!res.ok) {
       if (res.reason === 'empty') return false;
       this.fizzle();
@@ -652,8 +702,8 @@ export class Game {
     if (res.correctedFrom) this.hud.toasts.show(`Guessing you meant “${res.def.name}”.`, { title: `✦ ${name}`, kind: 'success' });
     else if (this.heldNews) { /* the finish panel lists new words */ }
     else if (fresh.object && res.def.blurb)
-      this.hud.toasts.show(res.def.blurb, { title: `✦ New word: ${name}  (${this.spellbook.count}/${this.spellbook.total})`, kind: 'success' });
-    else if (!this.seen.has(res.def.id) && res.def.blurb) this.hud.toasts.show(res.def.blurb, { title: `✦ ${name}`, kind: 'success' });
+      this.hud.toasts.show(this.blurbOf(res.def), { title: `✦ New word: ${name}  (${this.spellbook.count}/${this.spellbook.total})`, kind: 'success' });
+    else if (!this.seen.has(res.def.id) && res.def.blurb) this.hud.toasts.show(this.blurbOf(res.def), { title: `✦ ${name}`, kind: 'success' });
     this.seen.add(res.def.id);
     if (res.unknownAdjectives.length) {
       const bad = res.unknownAdjectives;
@@ -664,6 +714,15 @@ export class Game {
       );
     }
     return true;
+  }
+
+  /** What to say about a new word. Blurbs talk to a hero, and Free Play's player is a pointer. */
+  private blurbOf(def: ObjectDef): string {
+    if (!this.isFreePlay) return def.blurb ?? '';
+    if (def.ride) return 'Click it to climb in. W and S are throttle and brake, A and D steer, E gets out.';
+    if (isTool(def)) return 'Drag it onto a tree, a rock or anything else, and hold it there to break it.';
+    const heroOnly = def.use || def.grip !== undefined || def.tags.includes('wearable');
+    return heroOnly ? `It takes a hero to use a ${def.name}: try it in Explore or a level.` : (def.blurb ?? '');
   }
 
   /** Failed-spell feedback: a small grey puff at the cast point, the error buzz and a shake. */
@@ -1068,7 +1127,7 @@ export class Game {
     canvas.addEventListener('pointerdown', (e) => {
       this.fx.audio.unlock();
       down = { x: e.clientX, y: e.clientY };
-      if (this.level.hero) this.hud.input.blur();
+      if (this.steering) this.hud.input.blur();
       else if (!this.titleMode && !this.photo && e.button === 0 && !this.hand) {
         const ent = this.entityAt(e.clientX, e.clientY);
         if (ent && carryKind(ent)) {
@@ -1079,6 +1138,7 @@ export class Game {
       }
     }, { capture: true });
     canvas.addEventListener('pointermove', (e) => {
+      if (down) this.orbitedAt = performance.now();
       const hand = this.hand;
       if (!hand || e.pointerId !== hand.pointer || !down) return;
       if (!hand.e.alive) this.hand = null;
@@ -1133,7 +1193,7 @@ export class Game {
       const typing = document.activeElement === input;
       // 1-9 cast pinned spells (Alt+1-9 where plain digits belong to the spell bar)
       const digit = /^Digit([1-9])$/.exec(e.code);
-      if (digit && !this.titleMode && !this.hud.overlayOpen && !e.metaKey && !e.ctrlKey && !e.repeat && (e.altKey || (this.level.hero && !typing))) {
+      if (digit && !this.titleMode && !this.hud.overlayOpen && !e.metaKey && !e.ctrlKey && !e.repeat && (e.altKey || (this.steering && !typing))) {
         if (this.hud.hotbar.cast(Number(digit[1]) - 1)) {
           e.preventDefault();
           return;
@@ -1147,7 +1207,7 @@ export class Game {
         }
       }
       if (typing || e.metaKey || e.ctrlKey || e.altKey || this.hud.overlayOpen) return;
-      if (this.level.hero) {
+      if (this.steering) {
         // hero levels: keys move the hero; Enter (or T or /) opens the spell bar
         if (HERO_KEYS.has(e.code)) {
           this.keys.add(e.code);
@@ -1158,7 +1218,9 @@ export class Game {
           e.preventDefault();
           this.keys.clear();
           input.focus();
-        } else if (e.code === 'KeyR' && !e.repeat) this.restart();
+        } else if (e.code === 'KeyR' && !e.repeat) {
+          if (this.level.hero) this.restart(); // a Free Play scene has no reset key, pilot or not
+        }
         else if (e.code === 'KeyP' && !e.repeat) this.setPhoto(true);
         return;
       }
@@ -1200,6 +1262,10 @@ export class Game {
     inp.grab = tapped('KeyE') || !!pad?.grab;
     inp.toss = tapped('KeyF') || !!pad?.toss;
     inp.turn = tapped('KeyQ') || !!pad?.turn;
+    inp.use = tapped('KeyC') || !!pad?.use;
+    inp.run = on('ShiftLeft', 'ShiftRight') || !!pad?.run;
+    inp.drive.x = ms;
+    inp.drive.y = mf;
     // right stick orbits the camera around what it looks at
     if (pad && (pad.look.x || pad.look.y)) this.orbitBy(pad.look.x, pad.look.y, this.frameDt);
     this.taps.clear();
@@ -1221,6 +1287,7 @@ export class Game {
   private orbitBy(x: number, y: number, dt: number): void {
     const cam = this.renderer.camera, ctl = this.renderer.controls;
     const t = ctl.target;
+    this.orbitedAt = performance.now();
     const k = 2.7 * dt * settings.get().orbit; // 0.045 per frame at 60 fps
     const ox = cam.position.x - t.x, oz = cam.position.z - t.z;
     const a = -x * k * 2.4;
@@ -1273,7 +1340,8 @@ export class Game {
         this.setAim(hitEntity.point);
         return;
       }
-      if (ent && ent !== this.world.hero) {
+      if (ent && this.pilotClick(ent)) return;
+      if (ent && ent !== this.world.hero && !ent.has('ridden')) {
         this.poke(ent);
         this.fx.sparkle(hitEntity.point, undefined, 10);
       }
@@ -1310,6 +1378,7 @@ export class Game {
     this.marker.update(dt);
 
     const hero = this.world.hero;
+    if (this.pilot && (!hero?.alive || !hero.state.riding || hero.y < (this.level.killY ?? -6))) this.endControls();
     if (this.level.zones && hero?.alive) this.trackZone(hero);
     if (this.level.hero && (!hero?.alive || hero.y < (this.level.killY ?? -6))) this.respawnHero();
     else if (hero?.alive && this.level.hero && this.swimming(hero, dt)) this.respawnHero(true);
@@ -1333,6 +1402,16 @@ export class Game {
         this.hud.toasts.show('Press R (or ↺) to try again.', { kind: 'error', title: msg, duration: 8000, actions: [{ label: '↺ Retry', onClick: () => this.loadLevel(this.level.id) }] });
       }
     }
+  }
+
+  /** What a book tells the hero: the hint for the task they're nearest, or for this level. */
+  private currentHint(): string {
+    const saved = worldSave.all().tasks;
+    const open = (this.level.tasks ?? []).filter((t) => !saved[t.id] && !this.tracker.isDone(t.id));
+    const h = this.world.hero;
+    const near = (t: { start: V3 }) => (h ? Math.hypot(t.start[0] - h.x, t.start[2] - h.z) : 0);
+    const task = open.sort((a, b) => near(a) - near(b))[0];
+    return task?.hint ?? this.level.hint ?? 'Anything you can write, you can make.';
   }
 
   /**
@@ -1471,11 +1550,26 @@ export class Game {
     controls.autoRotateSpeed = 0.6;
     const h = this.world.hero;
     if (!h?.alive || this.titleMode || this.stepOverview()) return;
-    const k = 1 - Math.exp(-dt * 3.5);
+    const riding = ridingOf(h);
+    const k = 1 - Math.exp(-dt * (riding ? 7 : 3.5));
     const ty = Math.max(h.y + 0.4, (this.level.killY ?? -6) + 3);
     const d = new Vector3((h.x - controls.target.x) * k, (ty - controls.target.y) * k, (h.z - controls.target.z) * k);
     controls.target.add(d);
     this.renderer.camera.position.add(d);
+    if (riding && performance.now() - this.orbitedAt > 1800 && riding.body.velocity.length() > 1) this.swingBehind(h.state.yaw as number, dt);
+  }
+
+  /** Eases the camera round behind a heading: on board, W is always away from the screen. */
+  private swingBehind(yaw: number, dt: number): void {
+    const cam = this.renderer.camera.position, t = this.renderer.controls.target;
+    const ox = cam.x - t.x, oz = cam.z - t.z;
+    const now = Math.atan2(ox, oz);
+    let d = yaw + Math.PI - now;
+    while (d > Math.PI) d -= Math.PI * 2;
+    while (d < -Math.PI) d += Math.PI * 2;
+    const a = now + d * (1 - Math.exp(-dt * 1.5)), r = Math.hypot(ox, oz);
+    cam.x = t.x + Math.sin(a) * r;
+    cam.z = t.z + Math.cos(a) * r;
   }
 
   private stepIntro(dt: number): void {
@@ -1499,7 +1593,7 @@ export class Game {
     const e = inHand ?? hint?.entity;
     const hover = inHand && (inHand.state.carry as Carry).at!;
     const at = hover ? { ...hover, y: hover.y - CARRY.hover } : hint?.verb === 'holding' ? hint.spot : e && { x: e.x, y: e.y, z: e.z };
-    ring.group.visible = !!at && !!e && hint?.verb !== 'heavy' && hint?.verb !== 'dragging';
+    ring.group.visible = !!at && !!e && hint?.verb !== 'heavy' && hint?.verb !== 'dragging' && hint?.verb !== 'riding';
     if (at && e) {
       const half = e.size.y / 2 + (hint?.verb === 'holding' ? 0.04 : 0);
       ring.follow(at.x, at.y - half, at.z, Math.max(0.6, Math.hypot(e.size.x, e.size.z) * 1.25));
@@ -1577,4 +1671,4 @@ function firstWay(t: { solutions: LevelSolution[] }): string[] {
   return (t.solutions[0]?.steps ?? []).flatMap((st) => ('cast' in st ? [st.cast] : []));
 }
 
-const HERO_KEYS = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space', 'KeyE', 'KeyF', 'KeyQ']);
+const HERO_KEYS = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space', 'KeyE', 'KeyF', 'KeyQ', 'KeyC', 'ShiftLeft', 'ShiftRight']);

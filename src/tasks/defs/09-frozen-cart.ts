@@ -34,6 +34,7 @@ export default defineTask({
       // just frozen: no melting into a puddle once thawed, and it stays parked
       world.removeTag(cart, 'cold');
       world.removeTag(cart, 'vehicle');
+      world.removeTag(cart, 'rideable');
     }
   },
   check: latch('tagRemoved', ({ entity, tag }) => tag === 'frozen' && entity.state.role === 'cart'),
