@@ -5,6 +5,7 @@ import { isTouch } from './touch';
 import { Hotbar } from './hotbar';
 import { h } from './dom';
 import { pwa, type PwaState } from '../pwa';
+import { detectPlatform } from '../platform';
 import { Toasts } from './toast';
 
 export interface HudCallbacks {
@@ -580,7 +581,7 @@ export class Hud {
   }
 
   /** Title screen. `logo` is an optional animated element shown above the name. */
-  showTitle(opts: { onDemo: () => void; onExplore: () => void; onFreePlay: () => void; onSurprise: () => void; onSettings: () => void; extra?: HTMLElement[]; exploreLabel: string; logo?: HTMLElement }): void {
+  showTitle(opts: { onDemo: () => void; onExplore: () => void; onFreePlay: () => void; onSurprise: () => void; onSettings: () => void; onGetApp: () => void; extra?: HTMLElement[]; exploreLabel: string; logo?: HTMLElement }): void {
     const go = (fn: () => void) => () => {
       this.cb.onStart();
       this.hideOverlay();
@@ -602,6 +603,8 @@ export class Hud {
           h('button.link-btn.surprise-link', { type: 'button', text: '🎲 Surprise me', onClick: go(opts.onSurprise) }),
           ...(opts.extra ?? []),
           h('button.link-btn.settings-link', { type: 'button', text: '⚙ Settings', onClick: opts.onSettings }),
+          // already an app (desktop, Android, installed PWA)? Then there is nothing left to download
+          ...(detectPlatform().native || detectPlatform().standalone ? [] : [h('button.link-btn.get-app-link', { type: 'button', text: '⬇ Get the app', onClick: opts.onGetApp })]),
         ]),
         h('p.small', { text: 'Runs entirely offline. No network, no tracking.' }),
         this.pwaLine,

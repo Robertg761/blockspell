@@ -48,6 +48,7 @@ import { trophiesPanel } from './ui/trophies-panel';
 import { shopPanel } from './ui/shop-panel';
 import { SHOP, wallet } from './wallet';
 import { settingsPanel } from './ui/settings-panel';
+import { getAppPanel } from './ui/get-app-panel';
 import { GamepadInput } from './ui/gamepad';
 import { cssFilter, filterById } from './photo-filters';
 
@@ -222,6 +223,7 @@ export class Game {
       onFreePlay: () => this.freePlay(),
       onSurprise: () => this.freePlay(true),
       onSettings: () => this.openSettings(),
+      onGetApp: () => this.openGetApp(),
       extra: [h('button.link-btn.trophy-link', { type: 'button', text: `🏆 Trophies ${this.trophies.unlockedCount}/${TROPHY_TOTAL}`, onClick: () => this.openTrophies() })],
     });
   }
@@ -240,6 +242,12 @@ export class Game {
     // turning the day and night cycle back on restarts it, even after a manual sky choice or a load with it off
     if (s.cycle && !this.cycleWasOn && this.level?.tasks) this.skyAuto = true;
     this.cycleWasOn = s.cycle;
+  }
+
+  /** The ⬇ panel with every way to install or download the game. */
+  openGetApp(): void {
+    this.keys.clear();
+    this.hud.showPanel(getAppPanel(() => (this.titleMode ? this.showTitle() : this.hud.hideOverlay())));
   }
 
   /** The ⚙ panel. Back returns to the title screen if that's where it was opened from. */

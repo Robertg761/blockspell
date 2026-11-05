@@ -1,0 +1,85 @@
+{
+  "name": "blockspell-desktop",
+  "productName": "Blockspell",
+  "version": "0.1.0",
+  "description": "Blockspell: write a word, make it real. The offline desktop app.",
+  "private": true,
+  "license": "MIT",
+  "author": "Robert Gordon <robertgordon761@gmail.com>",
+  "homepage": "https://github.com/Robertg761/blockspell",
+  "main": "main.cjs",
+  "scripts": {
+    "prepare-app": "node prepare.mjs",
+    "start": "npm run prepare-app && electron .",
+    "dist": "npm run prepare-app && electron-builder --publish never",
+    "smoke": "node smoke.mjs"
+  },
+  "devDependencies": {
+    "electron": "^38.0.0",
+    "electron-builder": "^26.0.0"
+  },
+  "build": {
+    "appId": "io.github.robertg761.blockspell",
+    "productName": "Blockspell",
+    "copyright": "MIT License",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "main.cjs",
+      "app/**/*",
+      "!**/*.map"
+    ],
+    "icon": "build/icon.png",
+    "artifactName": "Blockspell-${os}-${arch}.${ext}",
+    "mac": {
+      "category": "public.app-category.games",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        }
+      ],
+      "identity": null
+    },
+    "dmg": {
+      "title": "Blockspell"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "deleteAppDataOnUninstall": false
+    },
+    "linux": {
+      "category": "Game",
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "maintainer": "Robert Gordon <robertgordon761@gmail.com>",
+      "syncDesktopName": true
+    }
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Robertg761/blockspell.git"
+  },
+  "desktopName": "blockspell.desktop"
+}
