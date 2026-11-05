@@ -8,6 +8,9 @@ import './tutorial.css';
 const STORE = 'blockspell.tutorial.v1';
 const MOVE_KEYS = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']);
 
+/** A guided level's job card already teaches these to keyboard players. */
+const CARD_TEACHES = new Set(['walk', 'jump', 'cast', 'aim']);
+
 type Anchor = 'hero' | 'spell' | 'screen';
 
 interface Ctx {
@@ -122,7 +125,7 @@ export class Tutorial {
     this.touch.update(game);
     const level = this.level;
     if (!this.enabled || !level) return;
-    if (game.hud.overlayOpen || game.titleMode || game.runner) {
+    if (game.hud.overlayOpen || game.titleMode || game.runner || (level.objectives && game.won)) {
       if (this.current) this.hide(false);
       return;
     }
@@ -161,7 +164,13 @@ export class Tutorial {
     if (this.current) this.place(game);
   }
 
+  /** In a guided level the scene is the puzzle, so tips wait by the spell bar. Climbing is the exception: it helps most at the ladder. */
+  private clearOfScene(tip: Tip): boolean {
+    return !!this.level?.objectives && tip.anchor !== 'spell' && tip.id !== 'climb';
+  }
+
   private eligible(tip: Tip, c: Ctx): boolean {
+    if (c.level.objectives && !isTouch && CARD_TEACHES.has(tip.id)) return false;
     return !this.learned[tip.id] && !this.snoozed.has(tip.id) && tip.when(c);
   }
 
@@ -192,7 +201,8 @@ export class Tutorial {
       {
         id: 'run', anchor: 'hero',
         text: touch ? 'Push the pad all the way to run' : 'Hold [Shift] to run',
-        when: (c) => hero(c) && c.since('jump') > 4,
+        // since() is Infinity for a tip never learned, and the demo's card stands in for the jump tip
+        when: (c) => hero(c) && c.acts.moved && c.since('jump') > 4,
         done: (c) => c.acts.ran,
       },
       {
@@ -259,7 +269,7 @@ export class Tutorial {
     this.textEl.innerHTML = key(text);
     this.el.style.display = '';
     this.el.classList.remove('out', 'show');
-    this.el.classList.toggle('no-arrow', tip.anchor === 'screen');
+    this.el.classList.toggle('no-arrow', tip.anchor === 'screen' || this.clearOfScene(tip));
     void this.el.offsetWidth;
     this.el.classList.add('show');
   }
@@ -294,7 +304,7 @@ export class Tutorial {
     const rect = this.root.getBoundingClientRect();
     const w = this.el.offsetWidth, hh = this.el.offsetHeight;
     let x = rect.width / 2, y = rect.height * 0.32;
-    const a = this.current.tip.anchor;
+    const a = this.clearOfScene(this.current.tip) ? 'spell' : this.current.tip.anchor;
     if (a === 'spell') {
       const bar = this.root.querySelector('.hud-bottom')?.getBoundingClientRect();
       if (bar) { x = bar.left - rect.left + bar.width / 2; y = bar.top - rect.top - 12; }
