@@ -3,10 +3,15 @@ import type { Entity } from '../../core/entity';
 import { GROUP } from '../../core/groups';
 import type { HeroInput } from '../../core/world';
 import { CARRY, carryOf, carryTarget, grab, heldBy, letGo, putDown, toss } from '../lib/carry';
+import { leave, ridingOf, thrownOff } from '../lib/ride';
+import { tickHandTool, tickUse } from '../lib/use';
 import { defineBehavior } from '../types';
 
 const UP = new Vec3(0, 1, 0);
-const want = new Quaternion(), err = new Quaternion();
+const RIGHT = new Vec3(1, 0, 0);
+const want = new Quaternion(), err = new Quaternion(), tilt = new Quaternion();
+/** Axes, hammers and swords are modeled with their edge along +X: this turns it to lead the swing. */
+const EDGE_FIRST = new Quaternion().setFromAxisAngle(UP, -Math.PI / 2);
 
 /** Pull toward a point: the speed that closes `d` meters, on top of `base`, within `max`. */
 function chase(e: Entity, base: { x: number; y: number; z: number }, dx: number, dy: number, dz: number, pull: number, max: number): void {
@@ -34,13 +39,34 @@ function overlapping(a: Entity, b: Entity): boolean {
 }
 
 /** True on the tick a hero input goes down. */
-function pressed(e: Entity, inp: HeroInput, key: 'grab' | 'toss' | 'turn'): boolean {
+function pressed(e: Entity, inp: HeroInput, key: 'grab' | 'toss' | 'turn' | 'use'): boolean {
   const was = e.state[`${key}Held`];
   e.state[`${key}Held`] = inp[key];
   return inp[key] && !was;
 }
 
-/** Grabbing, setting down, throwing and turning. See lib/carry.ts for what each of them does. */
+/** Held like a tool or worn on the back: stuck to the hero, not hovering. It goes where they go, walls or no walls. */
+function strapOn(e: Entity, hero: Entity): void {
+  const b = e.body, yaw = hero.state.yaw as number;
+  const fx = Math.sin(yaw), fz = Math.cos(yaw);
+  const side = e.def.grip === undefined ? 0 : 0.2; // the right hand: right of forward is (-fz, fx)
+  const out = e.def.grip === undefined ? -0.26 : 0.32 + Math.max(e.size.z, e.size.y) * 0.3;
+  const swing = (hero.state.swing as number | undefined) ?? 0;
+  b.collisionFilterMask = 0;
+  b.force.set(0, 9.82 * b.mass, 0);
+  b.torque.set(0, 0, 0);
+  b.position.set(hero.x + fx * out - fz * side, hero.y + (e.def.grip === undefined ? 0.12 : 0.08), hero.z + fz * out + fx * side);
+  b.velocity.copy(hero.body.velocity);
+  b.angularVelocity.set(0, 0, 0);
+  want.setFromAxisAngle(UP, yaw);
+  // tools with a head come down in a swing; a saw just shakes
+  const grip = e.def.grip ?? 0;
+  tilt.setFromAxisAngle(RIGHT, grip > 0 ? grip + (swing - 0.5) * swing * 2.2 : swing * 0.06 * Math.sin(e.age * 90));
+  want.mult(tilt, b.quaternion);
+  if (grip > 0) b.quaternion.mult(EDGE_FIRST, b.quaternion);
+}
+
+/** Grabbing, setting down, throwing, turning, using and getting in. See lib/carry.ts for what each of them does. */
 export default [
   defineBehavior({
     id: 'hero-hands',
@@ -51,10 +77,15 @@ export default [
       e.body.collisionFilterMask &= ~GROUP.HELD;
     },
     // per tick, not per substep: a tick can pass without a substep, and a quick tap only lasts one tick
-    update(e, world) {
+    update(e, world, dt) {
       const inp = world.input;
-      const wantsGrab = pressed(e, inp, 'grab'), wantsToss = pressed(e, inp, 'toss'), wantsTurn = pressed(e, inp, 'turn');
+      const wantsGrab = pressed(e, inp, 'grab'), wantsToss = pressed(e, inp, 'toss'), wantsTurn = pressed(e, inp, 'turn'), wantsUse = pressed(e, inp, 'use');
       if (e.has('frozen')) return;
+      if (e.state.riding) {
+        if (!ridingOf(e)) thrownOff(e); // burned, popped or reset out from under them
+        else if (wantsGrab) leave(world, e);
+        return;
+      }
       const held = heldBy(e);
       if (!held) e.state.held = null; // eaten, burned up or reset out of the hero's hands
       const lifted = !!held && carryOf(held)?.mode === 'lift';
@@ -66,6 +97,15 @@ export default [
         }
       } else if (wantsToss && lifted) toss(world, e, held);
       else if (wantsTurn && lifted) carryOf(held)!.yaw += CARRY.turn;
+      else if (wantsUse && !held) {
+        // a rocket on the ground can be sent off with nobody aboard
+        const target = carryTarget(world, e);
+        if (target?.has('thrust') && target.has('rideable') && !target.state.lit) {
+          target.state.lit = true;
+          world.fx.sound('ignite');
+        }
+      }
+      tickUse(world, e, heldBy(e), wantsUse, inp.use, dt);
     },
   }),
   defineBehavior({
@@ -75,6 +115,9 @@ export default [
     order: 100,
     attach(e) {
       e.body.collisionFilterGroup = GROUP.HELD;
+    },
+    update(e, world) {
+      if (carryOf(e)?.mode === 'hand') tickHandTool(world, e);
     },
     detach(e) {
       e.body.collisionFilterGroup = GROUP.ENTITY;
@@ -126,6 +169,11 @@ export default [
         // falling behind on the level means it's caught on a step: a heave gets it over
         b.velocity.y = Math.abs(c.dist - d) > 0.2 && Math.abs(vy) < 0.5 ? 2 : vy;
         b.angularVelocity.set(0, b.angularVelocity.y * 0.8, 0);
+        return;
+      }
+
+      if (c.mode === 'lift' && (e.def.grip !== undefined || e.has('wearable'))) {
+        strapOn(e, hero);
         return;
       }
 

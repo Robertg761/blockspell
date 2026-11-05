@@ -53,9 +53,28 @@ export const DEFAULT_TERRAIN: TerrainOptions = {
   cz: 0,
 };
 
+/** A tree baked into the scenery. Tools can cut it down (see behaviors/lib/use.ts). */
+export interface SceneryTree {
+  /** The foot of the trunk, in world space. */
+  x: number;
+  y: number;
+  z: number;
+  /** Height to the top of the crown (m). */
+  height: number;
+  /** Trunk collider, if it has one. */
+  body: Body | null;
+  /** How far through it the tools are, in seconds of chainsaw. */
+  damage: number;
+  gone: boolean;
+  /** Takes its voxels out of the baked mesh. */
+  erase(): void;
+}
+
 export interface Terrain {
   group: Group;
   bodies: Body[];
+  /** The trees on the hills, in world space. */
+  trees: SceneryTree[];
   /** The meshes the player can aim at. Ground cover is left out. */
   pickables: Mesh[];
   /** Top surface height at a world position (−Infinity over the void). */
@@ -179,6 +198,8 @@ export function buildTerrain(opts: Partial<TerrainOptions>, physMat: PhysMateria
     body.position.set(o.cx + (x + m.min[0] + m.sx / 2) * DECOR_VOXEL, (y + m.min[1] + m.sy / 2) * DECOR_VOXEL, o.cz + (z + m.min[2] + m.sz / 2) * DECOR_VOXEL);
     bodies.push(body);
   };
+  const trees: SceneryTree[] = [];
+  let rebake = () => {};
   const placeRing = (minFrac: number, random: Rng = rng) => {
     for (let tries = 0; tries < 50; tries++) {
       const a = random() * Math.PI * 2;
@@ -199,12 +220,20 @@ export function buildTerrain(opts: Partial<TerrainOptions>, physMat: PhysMateria
     const species = looks();
     const height = trunkH * SUB + Math.round(lr);
     const tree = species < 0.5 ? buildOak(looks, height) : species < 0.8 ? buildPine(looks, height) : buildBirch(looks, height);
-    decor.merge(tree, (cx + 1) * SUB, Math.round(p.h / DECOR_VOXEL), (cz + 1) * SUB);
+    const ox = (cx + 1) * SUB, oy = Math.round(p.h / DECOR_VOXEL), oz = (cz + 1) * SUB;
+    decor.merge(tree, ox, oy, oz);
     const tb = new Body({ mass: 0, material: physMat, type: Body.STATIC });
     const solidHeight = (species < 0.5 ? height : species < 0.8 ? Math.round(height * 1.9) + 8 : Math.round(height * 1.3)) * DECOR_VOXEL;
     tb.addShape(new Box(new Vec3(DV, solidHeight / 2, DV)));
     tb.position.set(o.cx + (cx + 1) * DV, p.h + solidHeight / 2, o.cz + (cz + 1) * DV);
     bodies.push(tb);
+    trees.push({
+      x: tb.position.x, y: p.h, z: tb.position.z, height: solidHeight, body: tb, damage: 0, gone: false,
+      erase() {
+        tree.paint((x, y, z) => void decor.clear(x + ox, y + oy, z + oz));
+        rebake();
+      },
+    });
   }
   for (let r = 0; r < o.rocks; r++) {
     const p = placeRing(0.95);
@@ -227,12 +256,19 @@ export function buildTerrain(opts: Partial<TerrainOptions>, physMat: PhysMateria
   }
   hangCreepers(decor, surface, T / FINE / DECOR_VOXEL);
   const pickables = [terrainMesh];
+  const decorSpec = () => ({ model: decor.build(), voxelSize: DECOR_VOXEL, origin: 'model', style: 'decor', ao: 0.55, lod: true, label: 'terrain-decor' }) as const;
   if (decor.size > 0) {
-    const dm = bindVoxelMesh(new Mesh(undefined, mat), { model: decor.build(), voxelSize: DECOR_VOXEL, origin: 'model', style: 'decor', ao: 0.55, lod: true, label: 'terrain-decor' });
+    const dm = bindVoxelMesh(new Mesh(undefined, mat), decorSpec());
     dm.name = 'terrain-decor';
     dm.receiveShadow = true;
     group.add(dm);
     pickables.push(dm);
+    rebake = () => {
+      bindVoxelMesh(dm, decorSpec());
+      const old = shadows[1].geometry;
+      shadows[1].geometry = coarseDecor();
+      old.dispose();
+    };
   }
 
   // Shadows don't need the detail: the ground casts from its collision boxes,
@@ -247,14 +283,15 @@ export function buildTerrain(opts: Partial<TerrainOptions>, physMat: PhysMateria
   const ground = mergeGeometries(shadowBoxes);
   for (const g of shadowBoxes) g.dispose();
   const shadows = [shadowOf(ground)];
-  if (decor.size > 0) {
+  const coarseDecor = () => {
     const coarse = new VoxelBuilder();
     decor.paint((x, y, z) => {
       coarse.set(x >> 1, y >> 1, z >> 1, '#000000');
       return undefined;
     });
-    shadows.push(shadowOf(meshVoxels(coarse.build(), { voxelSize: DECOR_VOXEL * 2, origin: 'model', ao: 0, jitter: 0 }).geometry));
-  }
+    return meshVoxels(coarse.build(), { voxelSize: DECOR_VOXEL * 2, origin: 'model', ao: 0, jitter: 0 }).geometry;
+  };
+  if (decor.size > 0) shadows.push(shadowOf(coarseDecor()));
 
   const cover = new GroundCover(scatterCover(makeRng(o.seed + 9103), o, surface, fbm));
   group.add(cover.group);
@@ -263,6 +300,7 @@ export function buildTerrain(opts: Partial<TerrainOptions>, physMat: PhysMateria
   return {
     group,
     bodies,
+    trees,
     pickables,
     heightAt: (x, z) => localHeight(x - o.cx, z - o.cz),
     clearCover: (x0, z0, x1, z1) => cover.clearRect(x0 - o.cx, z0 - o.cz, x1 - o.cx, z1 - o.cz),

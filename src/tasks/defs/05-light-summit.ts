@@ -14,7 +14,7 @@ const H = 3.5;
 
 const solutions: LevelSolution[] = [
   { name: 'a star floats up', steps: [{ cast: 'star', at: [2.3, 0] }], timeout: 12 },
-  { name: 'a ufo hovers over it', steps: [{ cast: 'ufo', at: [2.4, 0] }], timeout: 12 },
+  { name: 'fly a ufo up beside it', steps: [{ cast: 'ufo', at: [2.4, 2] }, { wait: 1 }, { walkTo: [2.4, 3.4] }, { press: 'grab' }, { hold: { jump: true }, for: 2.5 }], timeout: 12 },
   { name: 'the sun rises over it', steps: [{ cast: 'sun', at: [-2.4, 0] }], timeout: 12 },
   {
     name: 'giant stairs up, then a torch',

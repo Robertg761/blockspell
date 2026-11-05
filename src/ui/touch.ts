@@ -1,13 +1,15 @@
 import type { Game } from '../game';
 import type { CarryHint } from '../behaviors/lib/carry';
+import { rideKind } from '../behaviors/lib/ride';
+import { useLabel } from '../behaviors/lib/use';
 import { h } from './dom';
 
 /** True on touch-first devices, or when forced with `?touch` (for testing). */
 export const isTouch: boolean =
   (typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches) || /[?&]touch\b/.test(location.search);
 
-type Code = 'KeyW' | 'KeyA' | 'KeyS' | 'KeyD' | 'Space' | 'KeyE' | 'KeyF' | 'KeyQ';
-const KEY: Record<Code, string> = { KeyW: 'w', KeyA: 'a', KeyS: 's', KeyD: 'd', Space: ' ', KeyE: 'e', KeyF: 'f', KeyQ: 'q' };
+type Code = 'KeyW' | 'KeyA' | 'KeyS' | 'KeyD' | 'Space' | 'KeyE' | 'KeyF' | 'KeyQ' | 'KeyC' | 'ShiftLeft';
+const KEY: Record<Code, string> = { KeyW: 'w', KeyA: 'a', KeyS: 's', KeyD: 'd', Space: ' ', KeyE: 'e', KeyF: 'f', KeyQ: 'q', KeyC: 'c', ShiftLeft: 'Shift' };
 
 /**
  * On-screen controls for hero levels (joystick, Jump, Climb, and Grab, Throw and Turn when
@@ -24,6 +26,12 @@ export class TouchControls {
   private grabBtn: HTMLElement;
   private tossBtn: HTMLElement;
   private turnBtn: HTMLElement;
+  private useBtn: HTMLElement;
+  private downBtn: HTMLElement;
+  private climbBtn: HTMLElement;
+  private jumpBtn: HTMLElement;
+  /** On board, a full stick is only steering: running means nothing there, and Shift would mean descend. */
+  private riding = false;
 
   constructor(root: HTMLElement) {
     const knob = h('div.joy-knob');
@@ -39,7 +47,13 @@ export class TouchControls {
     this.bindHold(this.grabBtn, 'grab', ['KeyE']);
     this.bindHold(this.tossBtn, 'toss', ['KeyF']);
     this.bindHold(this.turnBtn, 'turn', ['KeyQ']);
-    this.el = h('div.touch-controls.hidden', {}, [joy, h('div.touch-actions', {}, [this.turnBtn, this.tossBtn, this.grabBtn, climb, jump])]);
+    this.useBtn = h('button.touch-btn.carry.off', { type: 'button', text: 'Use', 'aria-label': 'Use what you hold' });
+    this.downBtn = h('button.touch-btn.carry.off', { type: 'button', text: 'Down ▼', 'aria-label': 'Fly down' });
+    this.bindHold(this.useBtn, 'use', ['KeyC']);
+    this.bindHold(this.downBtn, 'down', ['ShiftLeft']);
+    this.climbBtn = climb;
+    this.jumpBtn = jump;
+    this.el = h('div.touch-controls.hidden', {}, [joy, h('div.touch-actions', {}, [this.turnBtn, this.tossBtn, this.useBtn, this.grabBtn, this.downBtn, climb, jump])]);
     root.append(this.el);
     if (isTouch) document.body.classList.add('touch');
 
@@ -70,11 +84,21 @@ export class TouchControls {
   private syncCarry(hint: CarryHint | null): void {
     const verb = hint?.verb;
     const holding = verb === 'holding';
-    const label = holding || verb === 'dragging' ? 'Drop' : verb === 'drag' ? 'Drag' : 'Grab';
+    const riding = verb === 'riding';
+    this.riding = riding;
+    const flying = riding && (rideKind(hint!.entity) === 'plane' || rideKind(hint!.entity) === 'hover');
+    const label = riding ? 'Get out' : holding || verb === 'dragging' ? 'Drop' : verb === 'drag' ? 'Drag' : verb === 'ride' ? (hint!.entity.def.ride?.verb ?? 'Ride') : verb === 'wear' ? 'Put on' : 'Grab';
     if (this.grabBtn.textContent !== label) this.grabBtn.textContent = label;
+    const jumpLabel = flying ? 'Up ▲' : 'Jump';
+    if (this.jumpBtn.textContent !== jumpLabel) this.jumpBtn.textContent = jumpLabel;
+    const use = holding ? useLabel(hint!.entity) : null;
+    if (use && this.useBtn.textContent !== use) this.useBtn.textContent = use;
+    this.climbBtn.classList.toggle('off', riding);
     this.setShown(this.grabBtn, 'grab', !!verb && verb !== 'heavy');
     this.setShown(this.tossBtn, 'toss', holding);
-    this.setShown(this.turnBtn, 'turn', holding);
+    this.setShown(this.turnBtn, 'turn', holding && hint!.entity.def.grip === undefined);
+    this.setShown(this.useBtn, 'use', !!use);
+    this.setShown(this.downBtn, 'down', flying);
   }
 
   private setShown(btn: HTMLElement, src: string, on: boolean): void {
@@ -141,6 +165,7 @@ export class TouchControls {
       if (len > 0.28) {
         if (dx > 0.38) codes.push('KeyD'); else if (dx < -0.38) codes.push('KeyA');
         if (dy < -0.38) codes.push('KeyW'); else if (dy > 0.38) codes.push('KeyS');
+        if (len > 0.92 && !this.riding) codes.push('ShiftLeft'); // pushed all the way: run
       }
       this.setSource('joy', codes);
     };

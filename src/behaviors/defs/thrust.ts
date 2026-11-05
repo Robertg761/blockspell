@@ -1,5 +1,8 @@
 import { Vec3 } from 'cannon-es';
+import type { Entity } from '../../core/entity';
+import type { GameWorld } from '../../core/world';
 import { ignite } from '../lib/fire';
+import { parked } from '../lib/ride';
 import { defineBehavior } from '../types';
 
 const UP = new Vec3(0, 1, 0);
@@ -7,17 +10,26 @@ const dir = new Vec3();
 const force = new Vec3();
 const EXHAUST = ['#fff4b8', '#ffd84a', '#ffb43c', '#ff6c1e'];
 
+/** A parked engine waits for a pilot or a lit fuse. Ridden, it only burns while Space is down. */
+const idle = (e: Entity, world: GameWorld) => parked(e, world) || (e.has('ridden') && !world.input.jump);
+
 /** Rocket engine: pushes along the body's local +Y while fuel lasts, with flame, smoke and rumble. */
 export default defineBehavior({
   id: 'thrust',
   tags: ['thrust'],
+  // before `flammable` looks at it: metal doesn't burn, but a flaming rocket has been lit
+  order: -1,
   attach(e) {
+    if (e.state.burning) e.state.lit = true;
     e.state.fuel = e.prop('fuel', 4) * Math.sqrt(e.scale);
     e.state.ignitionDelay = 0.6;
     e.body.allowSleep = false;
     e.body.angularDamping = Math.max(e.body.angularDamping, 0.6);
   },
   update(e, world, dt) {
+    // anything hot lights a waiting rocket: the way to send one off with nobody aboard in Free Play
+    if (e.has('rideable') && parked(e, world) && (e.state.burning || world.nearby(e.body.position, 1.3, (o) => o.has('hot') || !!o.state.burning).length)) e.state.lit = true;
+    if (idle(e, world)) return;
     const delay = (e.state.ignitionDelay as number) - dt;
     e.state.ignitionDelay = delay;
     if (delay > 0 || (e.state.fuel as number) <= 0 || e.has('frozen')) return;
@@ -41,6 +53,7 @@ export default defineBehavior({
       for (const o of world.nearby(nozzle, 0.8 * s)) if (o !== e && o.has('flammable')) ignite(o, world);
   },
   fixedUpdate(e, world) {
+    if (idle(e, world) || e.has('ridden')) return;
     if ((e.state.ignitionDelay as number) > 0 || (e.state.fuel as number) <= 0 || e.has('frozen')) return;
     e.body.quaternion.vmult(UP, dir);
     let payload = 0;

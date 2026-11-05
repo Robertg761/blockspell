@@ -142,7 +142,7 @@ export default [
     name: 'tree',
     synonyms: ['oak', 'pine', 'trees', 'sapling'],
     category: 'nature',
-    blurb: 'Climb it! Burns nicely.',
+    blurb: 'Climb it, burn it, or chop it down for logs.',
     tags: ['flammable', 'climbable'],
     tintKeys: ['leaf', 'leafDark', 'treeLeafLight'],
     burstColor: '#4fa341',

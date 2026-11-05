@@ -9,7 +9,7 @@ const f = new Frame(offset(windmill.center, [1.5, 0, 6.5]));
 const BELL_Y = 3.45;
 
 const solutions: LevelSolution[] = [
-  { name: 'rocket flies up into it', steps: [{ cast: 'rocket', at: [0, 0.3] }], timeout: 12 },
+  { name: 'rocket flies up into it', steps: [{ hold: { dir: [0, -1], jump: true }, for: 0.4 }, { wait: 0.9 }, { walkTo: [0, 1.7], timeout: 4 }, { wait: 0.3 }, { cast: 'rocket', at: [0, 0.3] }, { wait: 0.8 }, { press: 'use' }], timeout: 12 },
   { name: 'balloon floats up to it', steps: [{ cast: 'balloon', at: [0, 0.3] }], timeout: 14 },
   { name: 'bomb rattles it', steps: [{ cast: 'bomb', at: [1.8, 0.8] }], timeout: 14 },
   { name: 'flaming tnt rattles it', steps: [{ cast: 'flaming tnt', at: [-1.8, 0.8] }], timeout: 14 },

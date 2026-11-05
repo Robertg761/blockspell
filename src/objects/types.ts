@@ -28,6 +28,27 @@ export interface ObjectPhysics {
   anchored?: boolean;
 }
 
+/** How the hero rides a thing. Needs the `rideable` tag. */
+export interface RideDef {
+  /** ground rolls or walks, water sails, plane needs speed to fly, hover flies straight up and down. */
+  kind: 'ground' | 'water' | 'plane' | 'hover';
+  /** Top speed (m/s). */
+  speed: number;
+  /** Turn rate at full lock (radians per second). Default 1.6. */
+  turn?: number;
+  /** Climb and descent speed of a hover (m/s). Default 4. */
+  climb?: number;
+  /** The hero's center relative to the body's, at scale 1 (m, +Z forward). */
+  seat: [number, number, number];
+  /** The word the prompt uses. Default 'Ride'. */
+  verb?: string;
+  /** Rides standing up (a skateboard, a balloon's basket). */
+  stand?: boolean;
+}
+
+/** What Use (C) does with something in the hero's hands. See behaviors/lib/use.ts. */
+export type UseKind = 'saw' | 'chop' | 'mine' | 'smash' | 'slash' | 'douse' | 'drink' | 'open' | 'read' | 'flip';
+
 /** Spellbook sections. */
 export type ObjectCategory = 'animals' | 'vehicles' | 'structures' | 'nature' | 'food' | 'items';
 
@@ -75,6 +96,15 @@ export interface ObjectDef {
   tintKeys?: string[];
   /** Free-form numeric tuning used by behaviors (e.g. burnTime, lift, speed). A spawn may override them (SpawnOptions.props). */
   props?: Record<string, number>;
+  /** How the hero drives it (needs the `rideable` tag). */
+  ride?: RideDef;
+  /** What Use does while it's held, for things no tag covers (food eats and hot things light on their own). */
+  use?: UseKind;
+  /**
+   * Held out in front like a tool instead of overhead. The tilt forward from upright, radians:
+   * about 1 for things built along +Y (a sword), 0 for things built pointing along +Z (a chainsaw).
+   */
+  grip?: number;
   /** Only placed by levels: no spell word summons it and it stays out of the spellbook (the lake's pool). */
   levelOnly?: boolean;
   /** Sound played on spawn (default 'pop'). */

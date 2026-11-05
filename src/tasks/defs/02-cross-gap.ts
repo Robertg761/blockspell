@@ -36,5 +36,6 @@ export default defineTask({
     { name: 'giant plank', steps: [{ cast: 'giant plank', at: [-1, 0, 0] }, { wait: 1.5 }, { walkTo: [3, 0], timeout: 8 }] },
     { name: 'trampoline', steps: [{ cast: 'trampoline', at: [-3.9, 0] }, { wait: 1.5 }, { hold: { dir: [1, 0], jump: true }, for: 4 }] },
     { name: 'spring', steps: [{ cast: 'spring', at: [-3.9, 0] }, { wait: 1.5 }, { hold: { dir: [1, 0], jump: true }, for: 4 }] },
+    { name: 'fly a helicopter over', steps: [{ cast: 'helicopter', at: [-4, 0] }, { wait: 1 }, { walkTo: [-5.6, 0] }, { press: 'grab' }, { hold: { drive: [0, 1] }, for: 1.6 }, { wait: 0.6 }, { press: 'grab' }] },
   ] as LevelSolution[]).map((s) => f.solution(s)),
 });

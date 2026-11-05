@@ -10,7 +10,7 @@ const f = new Frame(offset(windmill.center, [-5, 0, -2]));
 const solutions: LevelSolution[] = [
   // the hero stands 6.5 m south; a fan cast between aims away from them, at the sails
   { name: 'fan blows on the sails', steps: [{ cast: 'fan', at: [0, 3.3] }], timeout: 12 },
-  { name: 'rocket whooshes past', steps: [{ cast: 'rocket', at: [1.3, 1.4] }], timeout: 12 },
+  { name: 'rocket whooshes past', steps: [{ cast: 'rocket', at: [1.3, 1.4] }, { wait: 0.8 }, { walkTo: [1.3, 2.7] }, { press: 'use' }, { walkTo: [1.3, 5] }], timeout: 12 },
   { name: 'bomb shakes it', steps: [{ cast: 'bomb', at: [1.6, 2.2] }], timeout: 14 },
   { name: 'flaming tnt blast', steps: [{ cast: 'flaming tnt', at: [-1.6, 2.2] }], timeout: 14 },
 ];

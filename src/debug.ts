@@ -1,3 +1,5 @@
+import { handGrab, type Carry } from './behaviors/lib/carry';
+import { objects } from './objects';
 import type { Game } from './game';
 import { orderedLevels } from './levels';
 import { SolutionRunner } from './levels/solve';
@@ -38,6 +40,7 @@ import { clearHDSetting, geometryBytes, hdPending, hdStats, hdTop, setHDEnabled 
  *   __blockspell.resetZone()                  reset the hero's zone (like pressing R in the world)
  *   __blockspell.leakCheck()                  cast things and reset each zone a few times; counts must match
  *   __blockspell.fragileCheck()               a cast mug lands, is carried and put down whole, then breaks when thrown
+ *   __blockspell.actionChecks()               the hero runs, rides everything rideable and fells trees with a chainsaw
  *   __blockspell.solveAll()                   every level solution, every task solution, a "3 distinct
  *                                             ways" check and a "solves again after a zone reset" check per
  *                                             task, an idle check per zone, the leak check and a fragile thing
@@ -343,6 +346,123 @@ export function installDebug(game: Game) {
     return check('fragile', name, !mug.alive, 'it survived being thrown');
   }
 
+  /**
+   * What the hero can do with things: runs, gets in everything rideable, drives it somewhere and gets out,
+   * and fells a cast tree and a tree from the scenery with a chainsaw.
+   */
+  function actionChecks(): SolveResult[] {
+    const worldLevel = orderedLevels().find((l) => l.tasks);
+    if (!worldLevel) return [];
+    const w = game.world;
+    const fresh = () => {
+      game.loadLevel(worldLevel.id);
+      game.teleportHero([0, 9]);
+      game.step(0.3);
+      return w.hero!;
+    };
+    const press = (key: 'grab' | 'use') => api.run([{ press: key }, { wait: 0.1 }], 3);
+    const out: SolveResult[] = [];
+
+    let hero = fresh();
+    const z0 = hero.z;
+    api.run([{ hold: { dir: [0, -1], run: true }, for: 1.5 }], 3);
+    out.push(check('actions', 'the hero runs', z0 - hero.z > 6, `ran ${(z0 - hero.z).toFixed(1)} m in 1.5 s`));
+
+    for (const def of objects.all().filter((d) => d.tags.includes('rideable') && d.ride?.kind !== 'water')) {
+      hero = fresh();
+      game.castAt(def.id, [hero.x + 2.5, 0, hero.z]);
+      game.step(1.2);
+      const v = w.living((e) => e.def === def).pop();
+      if (!v) {
+        out.push(check('actions', `ride a ${def.id}`, false, 'it did not appear'));
+        continue;
+      }
+      const rest = { x: v.x, z: v.z };
+      if (!v.has('animal')) {
+        game.step(2);
+        if (Math.hypot(v.x - rest.x, v.z - rest.z) > 0.5) {
+          out.push(check('actions', `ride a ${def.id}`, false, 'it went off without a driver'));
+          continue;
+        }
+      }
+      // walk up to it the way a player would, and animals wander off: go after them a few times
+      for (let i = 0; i < 10 && hero.state.riding !== v; i++) {
+        api.run([{ walkTo: [Math.min(v.size.x, v.size.z) / 2 + 0.4, 0], of: def.id, timeout: 1.5 }], 2);
+        press('grab');
+      }
+      if (hero.state.riding !== v) {
+        out.push(check('actions', `ride a ${def.id}`, false, 'could not get in'));
+        continue;
+      }
+      const from = { x: v.x, y: v.y, z: v.z };
+      api.run([{ hold: { drive: [0, 1], jump: true }, for: 2.5 }], 4);
+      const moved = Math.hypot(v.x - from.x, v.y - from.y, v.z - from.z);
+      api.run([{ hold: { drive: [0, -1] }, for: 1.5 }], 3);
+      press('grab');
+      // a respawn (it drove off the edge) is a fresh hero on their feet
+      const aboard = w.hero === hero && !!hero.state.riding;
+      out.push(check('actions', `ride a ${def.id}`, moved > 1 && !aboard, `moved ${moved.toFixed(1)} m, ${aboard ? 'still aboard' : 'got out'}`));
+    }
+
+    hero = fresh();
+    game.castAt('chainsaw', [hero.x + 2.2, 0, hero.z]);
+    game.step(1.2);
+    api.run([{ walkTo: [-0.9, 0], of: 'chainsaw', timeout: 2 }], 3);
+    press('grab');
+    const holding = hero.state.held;
+    game.castAt('tree', [hero.x, 0, hero.z - 4]);
+    game.step(1);
+    const tree = w.living((e) => e.def.id === 'tree').pop();
+    api.run([{ hold: { dir: [0, -1] }, for: 1.5 }, { hold: { use: true }, for: 3 }, { wait: 1.5 }], 8);
+    out.push(check('actions', 'a chainsaw fells a tree', !!holding && !tree?.alive && w.living((e) => e.def.id === 'log').length === 2, 'the tree still stands'));
+
+    const stand = w.sceneryTreeNear(-3, 10, 30);
+    if (stand) {
+      const statics = w.counts().statics;
+      game.teleportHero([stand.x + 1, stand.z]);
+      hero.state.yaw = -Math.PI / 2;
+      api.run([{ hold: { use: true }, for: 3 }, { wait: 1.5 }], 8);
+      out.push(check('actions', 'a chainsaw fells a scenery tree', stand.gone && w.counts().statics === statics - 1, 'the scenery tree still stands'));
+    }
+
+    // Free Play: nobody's there, so the plane has to wait to be clicked
+    const free = orderedLevels().find((l) => !l.hero && !l.goal && !l.tasks);
+    if (free) {
+      game.loadLevel(free.id);
+      game.castAt('airplane', [0, 0, 0]);
+      game.step(3);
+      const plane = w.living((e) => e.def.id === 'airplane').pop();
+      const waited = !!plane && Math.hypot(plane.x, plane.z) < 0.5;
+      const took = !!plane && game.pilotClick(plane);
+      const pilot = w.hero;
+      api.run([{ hold: { drive: [0, 1] }, for: 2 }], 3);
+      const flew = !!plane && Math.hypot(plane.x, plane.z) > 3;
+      api.run([{ hold: { drive: [0, -1] }, for: 1.5 }], 3);
+      press('grab');
+      game.step(0.2);
+      out.push(check('actions', 'Free Play: click a plane and drive it', waited && took && flew && !w.hero && !pilot?.alive, `waited ${waited}, took ${took}, flew ${flew}, pilot gone ${!pilot?.alive}`));
+
+      // the pointer holds a chainsaw against a tree, and only that tree
+      game.loadLevel(free.id);
+      game.castAt('tree', [0, 0, 0]);
+      game.castAt('tree', [6, 0, 0]);
+      game.castAt('chainsaw', [3, 0, 3]);
+      game.step(1.2);
+      const [near, far] = w.living((e) => e.def.id === 'tree');
+      const saw = w.living((e) => e.def.id === 'chainsaw').pop();
+      if (saw && near && far) {
+        handGrab(w, saw);
+        const at = (saw.state.carry as Carry).at!;
+        game.step(1);
+        const idle = !near.state.worked && !far.state.worked;
+        Object.assign(at, { x: near.x + 0.3, y: 1.4, z: near.z });
+        game.step(4.5);
+        out.push(check('actions', 'Free Play: drag a chainsaw onto a tree', idle && !near.alive && far.alive && w.living((e) => e.def.id === 'log').length === 2, `idle ${idle}, near fell ${!near.alive}, far stands ${far.alive}`));
+      } else out.push(check('actions', 'Free Play: drag a chainsaw onto a tree', false, 'the things did not appear'));
+    }
+    return out;
+  }
+
   const api = {
     game,
     get world() {
@@ -360,6 +480,7 @@ export function installDebug(game: Game) {
     resetZone: () => game.resetZone(),
     leakCheck: (rounds = 4) => keepingSave(() => leakCheck(rounds)),
     fragileCheck: () => keepingSave(() => fragileCheck()),
+    actionChecks: () => keepingSave(() => actionChecks()),
     cast(text: string, at?: [number, number] | V3) {
       if (!at) return game.cast(text);
       const g = game.world.groundAt(at[0], at[1]);
@@ -490,7 +611,7 @@ export function installDebug(game: Game) {
           });
           out.push(solveAfterReset(task.id));
         }
-        out.push(...idleChecks(), ...leakCheck(), fragileCheck());
+        out.push(...idleChecks(), ...leakCheck(), fragileCheck(), ...actionChecks());
         return out;
       });
     },

@@ -22,7 +22,7 @@ interface Ctx {
   acts: Acts;
 }
 
-interface Acts { moved: boolean; jumped: boolean; typed: boolean; orbited: boolean; restarted: boolean; climbed: number }
+interface Acts { moved: boolean; jumped: boolean; ran: boolean; typed: boolean; orbited: boolean; restarted: boolean; climbed: number }
 
 interface Tip {
   id: string;
@@ -85,6 +85,7 @@ export class Tutorial {
       if (typing) return;
       if (MOVE_KEYS.has(e.code)) this.acts.moved = true;
       if (e.code === 'Space') this.acts.jumped = true;
+      if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') this.acts.ran = true;
       if (e.code === 'KeyR') this.acts.restarted = true;
     });
     root.addEventListener('focusin', (e) => {
@@ -187,6 +188,12 @@ export class Tutorial {
         text: touch ? 'Tap <b>Jump</b> to hop up' : 'Press [Space] to jump',
         when: (c) => hero(c) && c.since('walk') > 4,
         done: (c) => c.acts.jumped,
+      },
+      {
+        id: 'run', anchor: 'hero',
+        text: touch ? 'Push the pad all the way to run' : 'Hold [Shift] to run',
+        when: (c) => hero(c) && c.since('jump') > 4,
+        done: (c) => c.acts.ran,
       },
       {
         id: 'cast', anchor: 'spell',
@@ -331,5 +338,5 @@ export class Tutorial {
 }
 
 function fresh(): Acts {
-  return { moved: false, jumped: false, typed: false, orbited: false, restarted: false, climbed: 0 };
+  return { moved: false, jumped: false, ran: false, typed: false, orbited: false, restarted: false, climbed: 0 };
 }

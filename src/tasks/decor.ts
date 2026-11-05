@@ -18,6 +18,10 @@ export class Decor {
   private b = new VoxelBuilder();
   private solids: { position: V3; size: V3 }[] = [];
   private any = false;
+  /** Trees, kept apart so a tool can take one back out of the baked mesh. */
+  private trees: { x: number; z: number; height: number; boxes: number[][]; solid: number }[] = [];
+  /** While set, `box` also notes the voxel bounds it fills. */
+  private noting: number[][] | null = null;
 
   constructor(private readonly origin: V3) {}
 
@@ -26,6 +30,7 @@ export class Decor {
     const nx = Math.max(1, Math.round(sx / V)), ny = Math.max(1, Math.round(sy / V)), nz = Math.max(1, Math.round(sz / V));
     const x0 = Math.round((x - sx / 2) / V), y0 = Math.round((y - sy / 2) / V), z0 = Math.round((z - sz / 2) / V);
     this.b.box(x0, y0, z0, x0 + nx - 1, y0 + ny - 1, z0 + nz - 1, color);
+    this.noting?.push([x0, y0, z0, x0 + nx - 1, y0 + ny - 1, z0 + nz - 1]);
     if (top) this.b.box(x0, y0 + ny - 1, z0, x0 + nx - 1, y0 + ny - 1, z0 + nz - 1, top);
     this.any = true;
     if (solid) {
@@ -45,8 +50,28 @@ export class Decor {
   /** Adds the baked mesh and the colliders to the world (skipped on a zone reset, like other statics). */
   build(world: GameWorld): void {
     if (!this.any || world.skipStatics) return;
-    world.addDecorMesh(this.b.build(), this.origin);
-    for (const s of this.solids) world.addStaticCollider(s.position, s.size);
+    const mesh = world.addDecorMesh(this.b.build(), this.origin);
+    const bodies = this.solids.map((s) => world.addStaticCollider(s.position, s.size));
+    const [ox, oy, oz] = this.origin;
+    for (const t of this.trees)
+      world.addSceneryTree({
+        x: ox + t.x, y: oy, z: oz + t.z, height: t.height, body: bodies[t.solid], damage: 0, gone: false,
+        erase: () => {
+          for (const [x0, y0, z0, x1, y1, z1] of t.boxes) this.b.box(x0, y0, z0, x1, y1, z1, null);
+          if (mesh) world.rebakeDecor(mesh, this.b.build());
+        },
+      });
+  }
+
+  /** Notes what `draw` builds as one tree, standing at (x, z) and `height` m tall. */
+  private plant(x: number, z: number, height: number, draw: () => void): this {
+    const boxes: number[][] = [];
+    const solid = this.solids.length;
+    this.noting = boxes;
+    draw();
+    this.noting = null;
+    this.trees.push({ x, z, height, boxes, solid });
+    return this;
   }
 
   // ------------------------------------------------------------ pieces
@@ -60,27 +85,30 @@ export class Decor {
 
   /** A round leafy tree, `h` m to the top of the trunk. Only the trunk is solid. */
   tree(x: number, z: number, h = 2.5, leaf = 'leaf'): this {
-    this.box(x, h / 2, z, 0.5, h, 0.5, 'bark', true);
-    this.box(x, h + 0.5, z, 2.25, 1.25, 2.25, leaf);
-    this.box(x, h + 1.4, z, 1.5, 0.75, 1.5, leaf === 'leaf' ? 'leafDark' : leaf);
-    return this;
+    return this.plant(x, z, h + 1.75, () => {
+      this.box(x, h / 2, z, 0.5, h, 0.5, 'bark', true);
+      this.box(x, h + 0.5, z, 2.25, 1.25, 2.25, leaf);
+      this.box(x, h + 1.4, z, 1.5, 0.75, 1.5, leaf === 'leaf' ? 'leafDark' : leaf);
+    });
   }
 
   /** A pointy pine tree. */
   pine(x: number, z: number, h = 3): this {
-    this.box(x, 0.5, z, 0.5, 1, 0.5, 'bark', true);
-    this.box(x, h * 0.45, z, 2, h * 0.3, 2, 'leafDark');
-    this.box(x, h * 0.72, z, 1.5, h * 0.3, 1.5, 'leafDark');
-    this.box(x, h * 0.95, z, 0.75, h * 0.25, 0.75, 'leaf');
-    return this;
+    return this.plant(x, z, h * 1.05, () => {
+      this.box(x, 0.5, z, 0.5, 1, 0.5, 'bark', true);
+      this.box(x, h * 0.45, z, 2, h * 0.3, 2, 'leafDark');
+      this.box(x, h * 0.72, z, 1.5, h * 0.3, 1.5, 'leafDark');
+      this.box(x, h * 0.95, z, 0.75, h * 0.25, 0.75, 'leaf');
+    });
   }
 
   /** A dead, leafless tree (ember country). */
   deadTree(x: number, z: number, h = 2.5): this {
-    this.box(x, h / 2, z, 0.5, h, 0.5, 'charcoal', true);
-    this.box(x + 0.5, h * 0.7, z, 0.75, 0.25, 0.25, 'charcoal');
-    this.box(x - 0.4, h * 0.85, z + 0.25, 0.25, 0.25, 0.75, 'charcoal');
-    return this;
+    return this.plant(x, z, h, () => {
+      this.box(x, h / 2, z, 0.5, h, 0.5, 'charcoal', true);
+      this.box(x + 0.5, h * 0.7, z, 0.75, 0.25, 0.25, 'charcoal');
+      this.box(x - 0.4, h * 0.85, z + 0.25, 0.25, 0.25, 0.75, 'charcoal');
+    });
   }
 
   /** A low shrub (not solid). */
