@@ -201,7 +201,8 @@ export class Tutorial {
       {
         id: 'run', anchor: 'hero',
         text: touch ? 'Push the pad all the way to run' : 'Hold [Shift] to run',
-        when: (c) => hero(c) && c.since('jump') > 4,
+        // since() is Infinity for a tip never learned, and the demo's card stands in for the jump tip
+        when: (c) => hero(c) && c.acts.moved && c.since('jump') > 4,
         done: (c) => c.acts.ran,
       },
       {
