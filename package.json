@@ -14,6 +14,9 @@
     "check-tasks": "node scripts/check-tasks.mjs"
   },
   "dependencies": {
+    "@capacitor/core": "^8.6.0",
+    "@capacitor/filesystem": "^8.1.5",
+    "@capacitor/share": "^8.0.3",
     "cannon-es": "^0.20.0",
     "three": "^0.187.0"
   },

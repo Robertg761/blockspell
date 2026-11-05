@@ -1,5 +1,6 @@
 import { PHOTO_FILTERS } from '../photo-filters';
 import { h } from './dom';
+import { isAndroidApp, saveBlob } from '../save-file';
 import './tools.css';
 
 /** The photo mode controls: a bar (Snap, Freeze, Done), the shutter flash and the little photo that slides in. */
@@ -70,10 +71,12 @@ export class PhotoUI {
   }
 
   /** Slides the photo in at the corner; clicking it saves it again. */
-  thumb(url: string, filename: string): void {
+  thumb(url: string, filename: string, blob?: Blob): void {
     this.clearThumb();
     this.lastUrl = url;
-    const a = h('a.photo-thumb', { href: url, download: filename, title: 'Save this photo again' }, [h('img', { src: url, alt: 'Your photo' }), h('span', { text: 'Saved ✓ click to save again' })]);
+    const a = h('a.photo-thumb', { href: url, download: filename, title: 'Save this photo again' }, [h('img', { src: url, alt: 'Your photo' }), h('span', { text: blob && isAndroidApp() ? 'Tap to save or share' : 'Saved ✓ click to save again' })]);
+    // the Android app can't follow <a download>, so saving again goes through the share sheet there
+    if (blob && isAndroidApp()) a.addEventListener('click', (e) => { e.preventDefault(); void saveBlob(blob, filename); });
     this.root.append(a);
     this.thumbTimer = window.setTimeout(() => {
       a.classList.add('out');
