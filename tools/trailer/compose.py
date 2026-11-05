@@ -1,0 +1,189 @@
+#!/usr/bin/env python3
+"""Cuts the rendered shots together, adds titles/logo/flashes/fades, grades, and muxes the score.
+   python3 tools/trailer/compose.py FRAMES_DIR LOGO_DIR AUDIO.wav OUT.mp4 [--seconds N] [--scale 1]
+"""
+import math, os, subprocess, sys
+import numpy as np
+from PIL import Image, ImageDraw, ImageFilter, ImageFont
+sys.path.insert(0, os.path.dirname(__file__))
+from edit import CLIPS, BLACK, ENDBG, FPS
+
+args = [a for a in sys.argv[1:] if not a.startswith('--')]
+FRAMES, LOGO, AUDIO, OUT = args[:4]
+opts = dict(zip([a for a in sys.argv[1:] if a.startswith('--')], [None] * 9))
+def opt(name, default):
+    if name in sys.argv: return type(default)(sys.argv[sys.argv.index(name) + 1])
+    return default
+LIMIT = opt('--seconds', 0.0); SCALE = opt('--scale', 1.0)
+W, H = int(1920 * SCALE), int(1080 * SCALE)
+
+FD = '/usr/share/fonts/opentype/inter/'
+def font(name, size): return ImageFont.truetype(FD + name, int(size * SCALE))
+MONO = '/usr/share/fonts/truetype/dejavu/DejaVuSansMono-Bold.ttf'
+
+# ---- timeline -------------------------------------------------------------------------------
+timeline = []  # (start, dur, shot, offset)
+t = 0.0
+for shot, off, dur in CLIPS:
+    timeline.append((t, dur, shot, off)); t += dur
+CLIMAX_END = t
+END_START = t + BLACK
+timeline.append((END_START, ENDBG[2], ENDBG[0], ENDBG[1]))
+TOTAL = END_START + ENDBG[2]
+
+def source_frame(f):
+    ts = f / FPS
+    for start, dur, shot, off in reversed(timeline):
+        if ts >= start:
+            idx = int(round((ts - start + off) * FPS))
+            d = os.path.join(FRAMES, shot)
+            n = len([x for x in os.listdir(d) if x.endswith('.jpg')])
+            idx = min(idx, n - 1)
+            return os.path.join(d, f'{idx:05d}.jpg') if ts < start + dur + 1e-6 else None
+    return None
+_counts = {}
+
+# ---- text helpers ------------------------------------------------------------------------------
+def tracked(draw, xy, text, fnt, fill, tracking=0, anchor_center=True, shadow=True):
+    widths = [draw.textlength(c, font=fnt) for c in text]
+    total = sum(widths) + tracking * SCALE * (len(text) - 1)
+    x, y = xy
+    if anchor_center: x -= total / 2
+    if shadow:
+        for dx, dy, a in ((0, 4, 120), (0, 8, 70)):
+            cx = x
+            for c, w in zip(text, widths):
+                draw.text((cx + dx * SCALE, y + dy * SCALE), c, font=fnt, fill=(0, 0, 0, a)); cx += w + tracking * SCALE
+    for c, w in zip(text, widths):
+        draw.text((x, y), c, font=fnt, fill=fill); x += w + tracking * SCALE
+    return total
+
+def ease_out(u): return 1 - (1 - min(1, max(0, u))) ** 3
+def win(t, a, b, fin=0.25, fout=0.3):  # 0..1 visibility
+    if t < a or t > b: return 0.0
+    return min(1.0, (t - a) / fin, (b - t) / fout)
+
+CAPTIONS = [  # (text, a, b, style)
+    ('WRITE A WORD.', 0.7, 3.3, 'big-top'),
+    ('MAKE IT REAL.', 4.25, 6.0, 'big-top-slam'),
+    ('3 rainbow balloons', 6.0, 7.0, 'chip'), ('flaming red rocket', 7.0, 8.0, 'chip'), ('giant ufo', 8.0, 9.0, 'chip'),
+    ('big dog', 9.0, 10.0, 'chip'), ('giant hotairballoon', 10.0, 11.0, 'chip'), ('giant snowman', 11.0, 12.0, 'chip'),
+    ('flaming giant tnt', 12.0, 14.0, 'chip'),
+    ('A WORLD OF FLOATING ISLANDS', 18.25, 21.75, 'mid'),
+    ('MANY WAYS TO SOLVE EVERY PUZZLE', 22.25, 28.2, 'mid'),
+    ('big bridge', 22.7, 26.0, 'chip'), ('cloud', 26.3, 29.0, 'chip'), ('big ladder', 29.3, 32.0, 'chip'),
+    ('EVERYTHING REACTS.', 32.3, 35.7, 'mid'),
+    ('SO WHAT WILL YOU WRITE?', 36.2, 37.9, 'mid'),
+]
+FLASHES = [(3.5, 0.35, 0.25), (12.25, 0.5, 0.3), (14.0, 0.8, 0.45), (32.7, 0.45, 0.3), (38.65, 0.95, 0.6), (40.4, 0.4, 0.3)]
+SHAKES = [(3.5, 14), (14.0, 22), (38.65, 28), (12.25, 8), (32.7, 10), (40.4, 14)]
+
+def logo_frame(k):
+    k = max(0, min(k, len([x for x in os.listdir(LOGO) if x.endswith('.png')]) - 1))
+    return Image.open(os.path.join(LOGO, f'{k:05d}.png')).convert('RGBA')
+
+def draw_logo(img, k, cx, cy, width, alpha=1.0):
+    lg = logo_frame(k).crop((340, 280, 1580, 800))  # tight box around the letters
+    s = width / lg.width
+    lg = lg.resize((int(lg.width * s), int(lg.height * s)), Image.LANCZOS)
+    a = lg.getchannel('A')
+    glow = Image.new('RGBA', lg.size, (0, 0, 0, 0)); glow.putalpha(a.point(lambda v: int(v * 0.55 * alpha)))
+    pad = int(60 * SCALE)
+    big = Image.new('RGBA', (lg.width + 2 * pad, lg.height + 2 * pad), (0, 0, 0, 0)); big.paste(glow, (pad, pad))
+    big = big.filter(ImageFilter.GaussianBlur(24 * SCALE))
+    x, y = int(cx - big.width / 2), int(cy - big.height / 2)
+    img.alpha_composite(big, (x, y))
+    if alpha < 1: lg.putalpha(a.point(lambda v: int(v * alpha)))
+    img.alpha_composite(lg, (int(cx - lg.width / 2), int(cy - lg.height / 2)))
+
+def vignette_mask():
+    yy, xx = np.mgrid[0:H, 0:W]; d = np.sqrt(((xx - W / 2) / (W / 2)) ** 2 + ((yy - H / 2) / (H / 2)) ** 2)
+    return np.clip(1 - 0.22 * d ** 2, 0.5, 1).astype(np.float32)[..., None]
+VIG = vignette_mask()
+
+def render(f):
+    ts = f / FPS
+    path = source_frame(f)
+    if path is None: base = Image.new('RGB', (W, H), (0, 0, 0))
+    else:
+        base = Image.open(path).convert('RGB')
+        if base.size != (W, H): base = base.resize((W, H), Image.LANCZOS)
+    # impact shake: zoom a touch and wobble
+    amp = sum(a * math.exp(-(ts - h) / 0.22) for h, a in SHAKES if ts >= h) * SCALE
+    if amp > 0.5:
+        ox, oy = amp * math.sin(ts * 83), amp * math.cos(ts * 97)
+        z = 1 + amp / 900
+        base = base.transform((W, H), Image.AFFINE, (1 / z, 0, W / 2 * (1 - 1 / z) - ox, 0, 1 / z, H / 2 * (1 - 1 / z) - oy), Image.BICUBIC)
+    arr = np.asarray(base, dtype=np.float32) / 255.0
+    # darken under the title / end card so text and logo read
+    dim = 0.0
+    if 14.0 <= ts < 18.0: dim = 0.38 * min(1, (ts - 14.0) / 0.4) * min(1, (18.0 - ts) / 0.5)
+    if ts >= END_START: dim = 0.55 * min(1, (ts - END_START) / 1.2)
+    if dim: arr = arr * (1 - dim)
+    for h, strength, dec in FLASHES:
+        if ts >= h: arr = arr + (1 - arr) * strength * math.exp(-(ts - h) / dec)
+    # fades to / from black
+    k = 1.0
+    if ts < 0.8: k = min(k, ts / 0.8)
+    if CLIMAX_END - 0.7 <= ts < CLIMAX_END: k = min(k, (CLIMAX_END - ts) / 0.7)
+    if CLIMAX_END <= ts < END_START: k = 0.0
+    if ts >= END_START: k = min(k, (ts - END_START) / 1.0)
+    if ts > TOTAL - 1.8: k = min(k, (TOTAL - ts) / 1.8)
+    arr = np.clip(arr, 0, 1) * k
+    img = Image.fromarray((arr * 255).astype(np.uint8)).convert('RGBA')
+    ov = Image.new('RGBA', (W, H), (0, 0, 0, 0))
+    d = ImageDraw.Draw(ov)
+    for text, a, b, style in CAPTIONS:
+        v = win(ts, a, b)
+        if v <= 0: continue
+        if style.startswith('big'):
+            fnt = font('Inter-ExtraBold.otf', 104)
+            scale = 1.0 + (0.18 * (1 - ease_out((ts - a) / 0.18)) if 'slam' in style else 0)
+            if scale != 1.0: fnt = font('Inter-ExtraBold.otf', 104 * scale)
+            tracked(d, (W / 2, H * 0.14), text, fnt, (255, 255, 255, int(255 * v)), 14)
+        elif style == 'mid':
+            fnt = font('Inter-ExtraBold.otf', 58)
+            w = tracked(d, (W / 2, H * 0.115), text, fnt, (255, 255, 255, int(255 * v)), 9)
+            d.rectangle((W / 2 - 60 * SCALE, H * 0.115 + 82 * SCALE, W / 2 + 60 * SCALE, H * 0.115 + 88 * SCALE), fill=(255, 176, 46, int(255 * v)))
+        elif style == 'chip':
+            fnt = ImageFont.truetype(MONO, int(44 * SCALE))
+            label = '✦ ' + text
+            tw = d.textlength(label, font=fnt); px, py = 34 * SCALE, 22 * SCALE
+            x0, y0 = 90 * SCALE, H - 190 * SCALE
+            slide = (1 - ease_out((ts - a) / 0.2)) * 30 * SCALE
+            d.rounded_rectangle((x0 - slide, y0, x0 + tw + 2 * px - slide, y0 + 44 * SCALE + 2 * py + 8 * SCALE), 18 * SCALE, fill=(14, 18, 34, int(200 * v)), outline=(255, 176, 46, int(255 * v)), width=int(3 * SCALE))
+            d.text((x0 + px - slide, y0 + py), label, font=fnt, fill=(255, 244, 214, int(255 * v)))
+    # title card: logo + tagline
+    if 14.0 <= ts < 18.0:
+        v = min(1, (18.0 - ts) / 0.4)
+        draw_logo(ov, int((ts - 14.0) * FPS), W / 2, H * 0.43, 1180 * SCALE, v)
+        tv = win(ts, 15.7, 18.0, 0.4, 0.4)
+        if tv > 0: tracked(d, (W / 2, H * 0.67), 'WRITE A WORD. MAKE IT REAL.', font('Inter-ExtraBold.otf', 52), (255, 214, 120, int(255 * tv)), 10)
+    # end card
+    if ts >= END_START + 0.4:
+        u = ts - END_START
+        lv = min(1, (u - 0.4) / 0.6)
+        draw_logo(ov, int((u - 0.4) * FPS), W / 2, H * 0.34, 980 * SCALE, lv)
+        for text, a, fnt, y, col, tr in [
+            ('WRITE A WORD. MAKE IT REAL.', 1.8, font('Inter-ExtraBold.otf', 56), 0.56, (255, 255, 255), 10),
+            ('BUILT FOR HACKYARD #6  ·  OFFLINE', 2.8, font('Inter-Bold.otf', 38), 0.66, (255, 176, 46), 8),
+            ('Plays entirely offline in your browser. No install. No tracking.', 3.8, font('Inter-Medium.otf', 34), 0.74, (225, 230, 245), 1),
+            ('github.com/Robertg761/blockspell', 4.6, ImageFont.truetype(MONO, int(32 * SCALE)), 0.82, (160, 190, 255), 1),
+        ]:
+            v = min(1, max(0, (u - a) / 0.6)) * min(1, (TOTAL - ts) / 1.5)
+            if v > 0: tracked(d, (W / 2, H * y + (1 - v) * 14 * SCALE), text, fnt, col + (int(255 * v),), tr)
+    img.alpha_composite(ov)
+    out = np.asarray(img.convert('RGB'), dtype=np.float32) * VIG
+    return np.clip(out, 0, 255).astype(np.uint8)
+
+nframes = int((LIMIT or TOTAL) * FPS)
+vf = 'eq=contrast=1.07:saturation=1.15:gamma=0.97,noise=alls=5:allf=t,unsharp=5:5:0.5'
+cmd = ['ffmpeg', '-y', '-loglevel', 'error', '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-s', f'{W}x{H}', '-r', str(FPS), '-i', '-',
+       '-i', AUDIO, '-vf', vf, '-c:v', 'libx264', '-preset', 'slow', '-crf', '16', '-pix_fmt', 'yuv420p', '-movflags', '+faststart',
+       '-c:a', 'aac', '-b:a', '256k', '-frames:v', str(nframes), '-shortest', OUT]
+p = subprocess.Popen(cmd, stdin=subprocess.PIPE)
+for f in range(nframes):
+    p.stdin.write(render(f).tobytes())
+    if f % 48 == 0: print(f, '/', nframes, flush=True)
+p.stdin.close(); p.wait()
+print('wrote', OUT)
