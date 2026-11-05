@@ -1,7 +1,7 @@
 import type { Game } from '../game';
 import type { CarryHint } from '../behaviors/lib/carry';
 import { rideKind } from '../behaviors/lib/ride';
-import { useLabel } from '../behaviors/lib/use';
+import { nearbyLabel, useLabel } from '../behaviors/lib/use';
 import { h } from './dom';
 
 /** True on touch-first devices, or when forced with `?touch` (for testing). */
@@ -91,7 +91,7 @@ export class TouchControls {
     if (this.grabBtn.textContent !== label) this.grabBtn.textContent = label;
     const jumpLabel = flying ? 'Up ▲' : 'Jump';
     if (this.jumpBtn.textContent !== jumpLabel) this.jumpBtn.textContent = jumpLabel;
-    const use = holding ? useLabel(hint!.entity) : null;
+    const use = !hint || riding ? null : holding ? useLabel(hint.entity) : nearbyLabel(hint.entity);
     if (use && this.useBtn.textContent !== use) this.useBtn.textContent = use;
     this.climbBtn.classList.toggle('off', riding);
     this.setShown(this.grabBtn, 'grab', !!verb && verb !== 'heavy');

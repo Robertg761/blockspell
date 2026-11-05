@@ -1,6 +1,8 @@
 import { Quaternion, Vec3 } from 'cannon-es';
 import type { Entity } from '../../core/entity';
 import type { GameWorld } from '../../core/world';
+import { carryOf } from './carry';
+import { shatter } from './debris';
 import { blocked, HERO } from './hero';
 import { inWater, waterSurfaceAt } from './water';
 
@@ -20,6 +22,11 @@ export const RIDE = {
   bank: 0.65,
   /** How fast a rocket with no fuel left comes down (m/s). */
   sink: 3,
+  /** A knock harder than this hurts (m/s), and this much per m/s beyond it, out of 100. */
+  crashSpeed: 6,
+  crashHurt: 9,
+  /** Below this much health it trails smoke. */
+  smokeAt: 55,
 };
 
 /** A ridden thing's state.ride. */
@@ -43,13 +50,10 @@ const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v
 const approach = (v: number, to: number, step: number) => (v < to ? Math.min(to, v + step) : Math.max(to, v - step));
 const yawOf = (q: Quaternion) => Math.atan2(2 * (q.x * q.z + q.w * q.y), 1 - 2 * (q.x * q.x + q.y * q.y));
 
-/**
- * True while this waits for a driver instead of going off by itself. Free Play has nobody to wear
- * a jetpack, so those only wait where there's a hero on foot; vehicles can always be clicked and flown.
- */
-export function parked(e: Entity, world: GameWorld): boolean {
+/** True while this waits for a driver or a wearer instead of going off by itself. */
+export function parked(e: Entity): boolean {
   if (e.state.lit || e.has('ridden') || e.has('animal')) return false;
-  return e.has('rideable') || (e.has('wearable') && !!world.hero && !world.hero.state.pilot);
+  return e.has('rideable') || e.has('wearable');
 }
 
 /** True if the hero could get on this right now. */
@@ -83,8 +87,42 @@ export function board(world: GameWorld, hero: Entity, v: Entity): void {
   world.fx.sparkle(hero.body.position, undefined, 8);
 }
 
+/** Puts the pet in the hero's arms in the passenger seat. */
+export function seatPet(v: Entity, pet: Entity, hero: Entity): void {
+  const c = carryOf(pet);
+  if (!c) return;
+  c.mode = 'aboard';
+  hero.state.held = null;
+  v.state.passenger = pet;
+  pet.body.collisionFilterMask = 0;
+}
+
+/** Lets what's in the passenger seat fall straight down: a delivery from the air. */
+export function dropCargo(v: Entity, world: GameWorld): void {
+  const pet = v.state.passenger as Entity | null | undefined;
+  if (!pet?.alive) return;
+  dropPet(v);
+  pet.body.position.set(v.x, v.y - v.size.y / 2 - pet.size.y / 2 - 0.1, v.z);
+  pet.body.velocity.set(v.body.velocity.x, Math.min(0, v.body.velocity.y), v.body.velocity.z);
+  world.fx.sound('whoosh', { pitch: 0.8 });
+}
+
+/** The pet hops off, wherever the vehicle is. */
+function dropPet(v: Entity): void {
+  const pet = v.state.passenger as Entity | null | undefined;
+  v.state.passenger = null;
+  const c = pet?.alive ? carryOf(pet) : null;
+  if (!c) return;
+  c.mode = 'loose';
+  c.t = 0;
+  pet!.body.collisionFilterMask = -1;
+  pet!.body.velocity.set(v.body.velocity.x * 0.5, 2, v.body.velocity.z * 0.5);
+}
+
 /** Takes the hero off wherever they are, as when the vehicle burns or pops from under them. */
 export function thrownOff(hero: Entity): void {
+  const v = hero.state.riding as Entity | null | undefined;
+  if (v) dropPet(v);
   hero.state.riding = null;
   hero.state.airTime = 1;
   hero.body.collisionFilterMask = -1;
@@ -126,8 +164,14 @@ export function leave(world: GameWorld, hero: Entity): boolean {
     world.events.emit('say', { text: 'Too deep to hop out here. Get closer to the shore!' });
     return false;
   }
+  const pet = v.state.passenger as Entity | null | undefined;
   thrownOff(hero);
   hero.body.position.set(spot.x, spot.y, spot.z);
+  if (pet?.alive) {
+    // it comes along: down beside the hero, not left in the middle of the lake
+    pet.body.position.set(spot.x, spot.y + 0.6, spot.z);
+    pet.body.velocity.set(0, 0, 0);
+  }
   hero.body.velocity.set(v.body.velocity.x * 0.5, Math.max(0, v.body.velocity.y) * 0.5, v.body.velocity.z * 0.5);
   world.removeTag(v, 'ridden');
   world.fx.sound('step', { pitch: 0.8 });
@@ -145,6 +189,43 @@ function seat(v: Entity, hero: Entity): void {
   p.angularVelocity.set(0, 0, 0);
   p.force.set(0, 9.82 * p.mass, 0);
   hero.state.yaw = (v.state.ride as RideState | undefined)?.yaw ?? hero.state.yaw;
+  const pet = v.state.passenger as Entity | null | undefined;
+  if (pet?.alive) {
+    // on the hero's shoulder
+    seatAt.set(s[0] * v.scale + 0.3, s[1] * v.scale + hero.size.y * 0.25 + pet.size.y / 2, s[2] * v.scale);
+    b.quaternion.vmult(seatAt, seatAt);
+    pet.body.position.set(b.position.x + seatAt.x, b.position.y + seatAt.y, b.position.z + seatAt.z);
+    pet.body.velocity.copy(b.velocity);
+    pet.body.quaternion.copy(b.quaternion);
+    pet.body.angularVelocity.set(0, 0, 0);
+    pet.body.force.set(0, 9.82 * pet.body.mass, 0);
+  }
+}
+
+/** A hard knock. Enough of them and it falls apart, throwing the hero clear. Animals just shrug it off. */
+export function crash(v: Entity, world: GameWorld, speed: number): void {
+  if (v.has('animal') || speed < RIDE.crashSpeed || world.time - ((v.state.crashAt as number | undefined) ?? -Infinity) < 0.5) return;
+  v.state.crashAt = world.time; // a wall and the throttle both report one crash
+  const left = ((v.state.health as number | undefined) ?? 100) - (speed - RIDE.crashSpeed) * RIDE.crashHurt;
+  v.state.health = left;
+  world.fx.addShake(Math.min(0.5, speed * 0.03));
+  world.fx.burst(v.body.position, { count: 14, color: ['#ffd84a', '#ffffff', '#8a929c'], speed: 4, up: 2, gravity: 9, size: 0.07, life: 0.5, glow: true, spread: v.radius * 0.4 });
+  if (left > 0) return;
+  const hero = v.state.rider as Entity | undefined;
+  if (hero?.alive && hero.state.riding === v) {
+    thrownOff(hero);
+    hero.body.velocity.set(v.body.velocity.x * 0.3, 5, v.body.velocity.z * 0.3);
+  }
+  world.fx.poof(v.body.position, ['#555', '#777', '#999'], Math.max(0.8, v.radius));
+  shatter(v, world, 'wrecked');
+}
+
+/** Smoke from anything that's taken a beating. */
+export function smoke(v: Entity, world: GameWorld, dt: number): void {
+  const health = (v.state.health as number | undefined) ?? 100;
+  if (health >= RIDE.smokeAt || Math.random() > dt * (8 - health / 10)) return;
+  const p = v.body.position;
+  world.fx.burst({ x: p.x, y: p.y + v.size.y * 0.3, z: p.z }, { count: 1, color: ['#4a4a4a', '#6f6f6f', '#333333'], speed: 0.4, up: 1.2, gravity: -0.8, drag: 1.2, size: 0.18, life: 1.2, grow: true });
 }
 
 /** Turns the body to the ride's heading, pitch and roll. */
@@ -167,7 +248,7 @@ function bumped(v: Entity, world: GameWorld, r: RideState, fx: number, fz: numbe
   if (world.time - r.bumpAt < 0.4) return;
   r.bumpAt = world.time;
   world.fx.sound(v.has('metal') ? 'clank' : 'thud', { volume: Math.min(1, 0.3 + hit * 0.08) });
-  world.fx.addShake(Math.min(0.35, hit * 0.03));
+  crash(v, world, hit);
 }
 
 /** Past the edge of the world it turns itself around. Returns true while it does. */
@@ -293,6 +374,15 @@ export function steer(v: Entity, world: GameWorld, h: number): void {
   seat(v, hero);
 }
 
+/** How hard it's working, 0..1, and what kind of motor it has: for the engine sound. Null for animals. */
+export function engineNote(v: Entity): { throttle: number; pitch: number } | null {
+  if (v.has('animal') || !v.def.ride) return null;
+  const r = v.state.ride as RideState | undefined;
+  const top = v.def.ride.speed * Math.sqrt(v.scale) * ((v.state.speedMul as number) ?? 1);
+  const kind = rideKind(v);
+  return { throttle: Math.min(1, Math.abs(r?.speed ?? 0) / top), pitch: kind === 'plane' ? 1.5 : kind === 'hover' ? 1.9 : kind === 'water' ? 0.8 : 1 };
+}
+
 /** Sets a thing up for riding, level and facing the way it faced. */
 export function startRide(v: Entity): void {
   const b = v.body;
@@ -311,5 +401,6 @@ export function endRide(v: Entity): void {
     if (v.body.material) v.body.material.friction = r.grip;
     v.body.linearDamping = r.damping;
   }
+  dropPet(v);
   v.state.rider = undefined;
 }

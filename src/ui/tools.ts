@@ -1,7 +1,7 @@
 import { h } from './dom';
 import './tools.css';
 
-export type ToolId = 'photo' | 'share' | 'undo' | 'clear' | 'speed' | 'sky' | 'weather' | 'trophies';
+export type ToolId = 'photo' | 'share' | 'undo' | 'clear' | 'speed' | 'sky' | 'weather' | 'trophies' | 'shop';
 
 interface ToolDef {
   id: ToolId;
@@ -20,6 +20,7 @@ const TOOLS: ToolDef[] = [
   { id: 'sky', icon: '🌤', title: 'Time of day: day, sunset, night, dawn', modes: ['free', 'hero', 'world'] },
   { id: 'weather', icon: '🌦', title: 'Weather: clear, rain, snow', modes: ['free', 'hero', 'world'] },
   { id: 'trophies', icon: '🏆', title: 'Trophies', modes: ['free', 'hero', 'world'] },
+  { id: 'shop', icon: '🪙', title: 'Shop: spend your coins', modes: ['hero', 'world'] },
 ];
 
 /** The vertical strip of extra buttons on the right edge: photo, share, undo, clear, time, sky, weather and trophies. */

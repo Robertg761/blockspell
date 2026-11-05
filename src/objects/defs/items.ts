@@ -359,13 +359,14 @@ export default [
     name: 'pillow',
     synonyms: ['cushion', 'pillows'],
     category: 'items',
-    blurb: 'Soft and bouncy. Burns easily.',
+    blurb: 'Press C for a nap. Soft and bouncy, and burns easily.',
     tags: ['flammable', 'floats'],
     props: { burnTime: 4 },
     tintKeys: ['pillowWhite', 'pillowShade'],
     burstColor: '#f4f1f0',
     spawnSound: 'poof',
     voxelSize: 0.035,
+    use: 'nap',
     physics: { mass: 0.5, shape: 'box', restitution: 0.5, friction: 0.8 },
     build(b) {
       for (let x = 0; x < 20; x++)

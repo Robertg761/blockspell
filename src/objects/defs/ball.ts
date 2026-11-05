@@ -5,12 +5,13 @@ export default defineObject({
   name: 'ball',
   synonyms: ['beach ball', 'bouncy ball', 'sphere', 'orb', 'rubber ball'],
   category: 'items',
-  blurb: 'Boing! It bounces.',
+  blurb: 'Boing! Press C next to it to kick it.',
   tags: ['bouncy'],
   tintKeys: ['red', 'redDark'],
   burstColor: '#e04848',
   spawnSound: 'boing',
   voxelSize: 0.09,
+  use: 'kick',
   physics: { mass: 0.5, shape: 'sphere', restitution: 0.82, friction: 0.4, angularDamping: 0.2, linearDamping: 0.02 },
   build(b) {
     b.sphere(4.5, 4.5, 4.5, 4.6, 'red');

@@ -311,6 +311,7 @@ export class Audio {
   private musicBus: GainNode | null = null;
   private volumes = { music: 1, sfx: 1 };
   private amb: { src: AudioBufferSourceNode; gain: GainNode } | null = null;
+  private motor: { low: OscillatorNode; high: OscillatorNode; gain: GainNode } | null = null;
   private wantAmbient: 'rain' | 'wind' | null = null;
   private lastPlayed = new Map<SoundName, number>();
   /** Background music; available after `unlock()`. */
@@ -391,6 +392,37 @@ export class Audio {
     src.connect(f).connect(g).connect(this.sfxBus);
     src.start();
     this.amb = { src, gain: g };
+  }
+
+  /**
+   * The hum of whatever the hero is driving. `throttle` runs 0 (idling) to 1 (flat out) and rises in
+   * pitch with it; `pitch` sets what kind of motor it is; null shuts it off. Call it every frame.
+   */
+  engine(throttle: number | null, pitch = 1): void {
+    const ctx = this.sfxBus?.context;
+    if (!ctx || !this.sfxBus) return;
+    if (!this.motor) {
+      if (throttle === null) return;
+      const gain = ctx.createGain();
+      gain.gain.value = 0;
+      const filter = ctx.createBiquadFilter();
+      filter.type = 'lowpass';
+      filter.frequency.value = 500;
+      const low = ctx.createOscillator(), high = ctx.createOscillator();
+      low.type = 'sawtooth';
+      high.type = 'square';
+      low.connect(filter);
+      high.connect(filter);
+      filter.connect(gain).connect(this.sfxBus);
+      low.start();
+      high.start();
+      this.motor = { low, high, gain };
+    }
+    const t = ctx.currentTime, m = this.motor;
+    const hz = 48 * pitch * (1 + (throttle ?? 0) * 1.7);
+    m.low.frequency.setTargetAtTime(hz, t, 0.09);
+    m.high.frequency.setTargetAtTime(hz * 1.51, t, 0.09);
+    m.gain.gain.setTargetAtTime(throttle === null ? 0 : 0.05 + throttle * 0.07, t, 0.12);
   }
 
   /** Music and effects loudness, 0..1 each (the settings sliders). Works before and after `unlock()`. */

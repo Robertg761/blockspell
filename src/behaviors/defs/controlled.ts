@@ -4,6 +4,7 @@ import { GROUP } from '../../core/groups';
 import type { GameWorld } from '../../core/world';
 import { carryLoad, heldBy } from '../lib/carry';
 import { blocked, HERO } from '../lib/hero';
+import { sit } from '../lib/use';
 import { defineBehavior } from '../types';
 
 const UP = new Vec3(0, 1, 0);
@@ -117,6 +118,7 @@ export default defineBehavior({
   fixedUpdate(e, world, h) {
     const b = e.body;
     if (e.has('frozen') || e.state.riding) return; // in the seat, the vehicle moves them
+    if (sit(world, e)) return;
     const inp = world.input;
     const grounded = onGround(e, world, h);
     const wasAir = e.state.airTime as number;
@@ -177,7 +179,8 @@ export default defineBehavior({
     const load = carryLoad(e);
     const fed = ((e.state.fedUntil as number | undefined) ?? 0) > world.time;
     const running = inp.run && load.jump > 0;
-    const speed = (grounded ? (running ? HERO.run : HERO.speed) : HERO.airSpeed) * load.speed * (fed ? HERO.fedSpeed : 1);
+    const runSpeed = HERO.run * (e.state.boots ? HERO.bootSpeed : 1);
+    const speed = (grounded ? (running ? runSpeed : HERO.speed) : HERO.airSpeed) * load.speed * (fed ? HERO.fedSpeed : 1);
     if (grounded || ml > 0.05) {
       b.velocity.x += (mx * speed - b.velocity.x) * k;
       b.velocity.z += (mz * speed - b.velocity.z) * k;

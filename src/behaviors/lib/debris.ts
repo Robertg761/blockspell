@@ -41,5 +41,6 @@ export function spawnDebris(e: Entity, world: GameWorld, list = e.def.debris ?? 
     const a = (i / Math.max(1, list.length)) * Math.PI * 2;
     const d = world.spawn(def, { position: { x: e.x + Math.cos(a) * 0.3, y: e.y + 0.2 + i * 0.15, z: e.z + Math.sin(a) * 0.3 }, mods, silent: true, yaw: a });
     d.body.velocity.set(Math.cos(a) * 2, 3, Math.sin(a) * 2);
+    d.state.loot = true; // earned, unlike a coin that was just cast
   });
 }

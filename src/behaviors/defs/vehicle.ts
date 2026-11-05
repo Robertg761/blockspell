@@ -17,7 +17,7 @@ export default defineBehavior({
     e.body.allowSleep = false;
   },
   update(e, world, dt) {
-    if (Math.random() < dt * 0.4 && !e.has('frozen') && !parked(e, world)) world.fx.sound(e.has('flies') ? 'buzz' : 'engine', { pitch: 1 / Math.sqrt(e.scale), volume: 0.35 });
+    if (Math.random() < dt * 0.4 && !e.has('frozen') && !parked(e)) world.fx.sound(e.has('flies') ? 'buzz' : 'engine', { pitch: 1 / Math.sqrt(e.scale), volume: 0.35 });
   },
   fixedUpdate(e, world, h) {
     if (e.has('frozen')) return;
@@ -30,7 +30,7 @@ export default defineBehavior({
       b.angularVelocity.x += (-up.z * 5 - b.angularVelocity.x) * k;
       b.angularVelocity.z += (up.x * 5 - b.angularVelocity.z) * k;
     }
-    if (up.y < 0.6 || parked(e, world) || e.has('ridden')) return; // flipped over, or waiting for a driver
+    if (up.y < 0.6 || parked(e) || e.has('ridden')) return; // flipped over, or waiting for a driver
     const ground = world.groundAt(b.position.x, b.position.z);
     const onGround = Number.isFinite(ground) && b.position.y - e.size.y / 2 - ground < 0.25 && Math.abs(b.velocity.y) < 1.5;
     if (!onGround && !swimming && !e.has('flies')) return;

@@ -26,9 +26,9 @@ import { CarryPrompt } from './ui/prompt';
 import { Hud } from './ui/hud';
 import { h } from './ui/dom';
 import { isTouch } from './ui/touch';
-import { CARRY, carryHint, carryKind, handGrab, type Carry, type CarryHint } from './behaviors/lib/carry';
-import { board, canRide, leave, ridingOf, thrownOff } from './behaviors/lib/ride';
-import { isTool } from './behaviors/lib/use';
+import { CARRY, carryHint, carryKind, grab, handGrab, heldBy, letGo, type Carry, type CarryHint } from './behaviors/lib/carry';
+import { board, canRide, engineNote, leave, ridingOf, thrownOff } from './behaviors/lib/ride';
+import { clickUse, isTool } from './behaviors/lib/use';
 import { waterSurfaceAt } from './behaviors/lib/water';
 import { Spellbook } from './ui/spellbook';
 import { ease } from './engine/tween';
@@ -45,6 +45,8 @@ import { SKY_LABEL, SKY_NAMES, type SkyName } from './engine/skies';
 import { WEATHER_LABEL, WEATHER_NAMES, type WeatherName } from './engine/weather';
 import { finalePanel } from './ui/finale-panel';
 import { trophiesPanel } from './ui/trophies-panel';
+import { shopPanel } from './ui/shop-panel';
+import { SHOP, wallet } from './wallet';
 import { settingsPanel } from './ui/settings-panel';
 import { GamepadInput } from './ui/gamepad';
 import { cssFilter, filterById } from './photo-filters';
@@ -137,9 +139,14 @@ export class Game {
     this.waypoint = new Waypoint(this.renderer.scene);
     this.trophies = new Trophies((t) => this.onTrophy(t), (x) => this.onExperiment(x));
     this.trophies.watch(this.world.events, this.world);
+    this.world.events.on('coin', () => wallet.add(1));
     this.world.events.on('say', ({ text }) => this.hud.toasts.show(text, { duration: 1500 }));
     this.world.events.on('hint', () => this.hud.toasts.show(this.currentHint(), { title: '📖 The book says', kind: 'info', duration: 6000 }));
-    this.world.events.on('taskComplete', ({ taskId }) => {
+    this.world.events.on('taskComplete', ({ taskId, first }) => {
+      if (first && !this.runner) {
+        wallet.add(TASK_REWARD);
+        this.hud.toasts.show(`+${TASK_REWARD} coins. Spend them in the 🪙 shop.`, { duration: 2200 });
+      }
       const saved = worldSave.all().tasks;
       const total = orderedTasks().length;
       this.trophies.noteTasks(Object.keys(saved).length, saved[taskId]?.ways.length ?? 0, total);
@@ -498,8 +505,12 @@ export class Game {
 
   /** Spawns the keyboard-controlled hero at its feet position. */
   private spawnHero(at: V3): Entity | null {
-    const e = this.world.spawnById('hero', { position: { x: at[0], y: at[1], z: at[2] }, grounded: true, silent: true, label: 'you' });
+    // Free Play's pilot is nobody in particular: what the shop sells is for the hero of the islands
+    const shirt = this.level.hero ? SHOP.find((i) => i.id === wallet.shirt)?.color : undefined;
+    const color = shirt ? adjectives.get(shirt) : undefined;
+    const e = this.world.spawnById('hero', { position: { x: at[0], y: at[1], z: at[2] }, grounded: true, silent: true, label: 'you', adjectives: color ? [color] : undefined });
     if (!e) return null;
+    e.state.boots = wallet.owns('boots');
     this.world.removeTag(e, 'player');
     this.world.removeTag(e, 'animal');
     this.world.addTag(e, 'controlled');
@@ -515,15 +526,17 @@ export class Game {
 
   /** Free Play: puts a hero at the controls of what the player clicked. Returns false if it's not to be driven. */
   pilotClick(v: Entity): boolean {
-    if (!this.isFreePlay || this.pilot || this.titleMode || !canRide(v)) return false;
-    const h = this.spawnHero([v.x, v.y, v.z]);
+    const wear = v.has('wearable') && !v.has('held') && !v.has('ghost');
+    if (!this.isFreePlay || this.pilot || this.titleMode || !(canRide(v) || wear)) return false;
+    const h = this.spawnHero([v.x, v.y - v.size.y / 2, v.z]);
     if (!h) return false;
     h.state.pilot = true;
     this.pilot = true;
     this.hud.autoFocus = false;
     this.hud.input.blur();
     this.tutorial.touch.setHero(true);
-    board(this.world, h, v);
+    if (wear) grab(this.world, h, v);
+    else board(this.world, h, v);
     return true;
   }
 
@@ -707,9 +720,13 @@ export class Game {
   private blurbOf(def: ObjectDef): string {
     if (!this.isFreePlay) return def.blurb ?? '';
     if (def.ride) return 'Click it to climb in. W and S are throttle and brake, A and D steer, E gets out.';
+    if (def.tags.includes('wearable')) return 'Click it to put it on. Space flies, WASD moves, and E takes it off.';
     if (isTool(def)) return 'Drag it onto a tree, a rock or anything else, and hold it there to break it.';
-    const heroOnly = def.use || def.grip !== undefined || def.tags.includes('wearable');
-    return heroOnly ? `It takes a hero to use a ${def.name}: try it in Explore or a level.` : (def.blurb ?? '');
+    if (def.use === 'douse') return 'Drag it over a fire to put it out.';
+    if (def.use === 'play') return 'Click it to play a note. It rings when things land on it too.';
+    if (def.use === 'open' || def.use === 'read' || def.use === 'flip') return 'Click it and see what happens.';
+    if (def.tags.includes('edible')) return `${def.blurb ?? ''} Drag it to a hungry animal to feed it.`.trim();
+    return def.use && def.use !== 'kick' ? `It takes a hero to use a ${def.name}: try it in Explore or a level.` : (def.blurb ?? '');
   }
 
   /** Failed-spell feedback: a small grey puff at the cast point, the error buzz and a shake. */
@@ -811,6 +828,7 @@ export class Game {
     else if (id === 'clear') this.clearAll();
     else if (id === 'share') void this.shareScene();
     else if (id === 'trophies') this.openTrophies();
+    else if (id === 'shop') this.openShop();
     else if (id === 'sky') this.cycleSky();
     else if (id === 'weather') this.cycleWeather();
   }
@@ -878,6 +896,31 @@ export class Game {
     this.hud.showPanel(trophiesPanel(this.trophies, back));
   }
 
+  /** The 🪙 panel. A new shirt shows as soon as the panel closes. */
+  openShop(): void {
+    this.keys.clear();
+    let changed = false;
+    this.hud.showPanel(shopPanel(() => (changed = true), () => {
+      this.hud.hideOverlay();
+      const h = this.world.hero;
+      if (changed && h?.alive && !h.state.riding) this.dressHero(h);
+    }));
+  }
+
+  /** Swaps the hero for one in what's bought, on the same spot. */
+  private dressHero(old: Entity): void {
+    const at: V3 = [old.x, old.y - old.size.y / 2, old.z];
+    const yaw = old.state.yaw;
+    const held = old.state.held as Entity | null | undefined;
+    if (held?.alive) letGo(old, held);
+    this.world.remove(old, 'respawn');
+    const e = this.spawnHero(at);
+    if (e) {
+      e.state.yaw = yaw;
+      this.fx.sparkle(e.body.position, undefined, 14);
+    }
+  }
+
   /** A trophy was just earned: toast, chime and sparkles. */
   private onExperiment(x: Experiment): void {
     this.hud.toasts.show(`${x.name}. Ticked in the lab notebook (🏆 panel).`, { title: `${x.icon} Experiment done`, kind: 'success', duration: 4200 });
@@ -907,6 +950,7 @@ export class Game {
 
   setTimeScale(k: number): void {
     this.timeScale = k;
+    this.tools.setBadge('shop', wallet.coins ? String(wallet.coins) : '');
     this.tools.setBadge('speed', k === 1 ? '' : k === 0 ? '⏸' : k === 0.5 ? '½×' : '¼×');
     this.tools.setActive('speed', k !== 1);
     this.photoUI.setFrozen(k === 0);
@@ -1324,6 +1368,7 @@ export class Game {
         return;
       }
       if (ent && this.pilotClick(ent)) return;
+      if (ent && this.isFreePlay && !this.pilot && clickUse(this.world, ent)) return;
       if (ent && ent !== this.world.hero && !ent.has('ridden')) {
         this.poke(ent);
         this.fx.sparkle(hitEntity.point, undefined, 10);
@@ -1361,7 +1406,10 @@ export class Game {
     this.marker.update(dt);
 
     const hero = this.world.hero;
-    if (this.pilot && (!hero?.alive || !hero.state.riding || hero.y < (this.level.killY ?? -6))) this.endControls();
+    const rode = hero?.alive ? ridingOf(hero) : null;
+    const note = rode && !this.titleMode ? engineNote(rode) : null;
+    this.fx.audio.engine(note?.throttle ?? null, note?.pitch);
+    if (this.pilot && (!hero?.alive || !(hero.state.riding || heldBy(hero)) || hero.y < (this.level.killY ?? -6))) this.endControls();
     if (this.level.zones && hero?.alive) this.trackZone(hero);
     if (this.level.hero && (!hero?.alive || hero.y < (this.level.killY ?? -6))) this.respawnHero();
     else if (hero?.alive && this.level.hero && this.swimming(hero, dt)) this.respawnHero(true);
@@ -1572,6 +1620,8 @@ export class Game {
 }
 
 const SURPRISED = 'blockspell.surprised.v1';
+/** Coins for finishing a task for the first time. */
+const TASK_REWARD = 3;
 const FINALE = 'blockspell.finale.v1';
 const TROPHY_TOTAL = TROPHIES.length;
 /** The spells of a task's first scripted solution: the Journal's second hint. */

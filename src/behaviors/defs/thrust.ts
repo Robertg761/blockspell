@@ -11,7 +11,7 @@ const force = new Vec3();
 const EXHAUST = ['#fff4b8', '#ffd84a', '#ffb43c', '#ff6c1e'];
 
 /** A parked engine waits for a pilot or a lit fuse. Ridden, it only burns while Space is down. */
-const idle = (e: Entity, world: GameWorld) => parked(e, world) || (e.has('ridden') && !world.input.jump);
+const idle = (e: Entity, world: GameWorld) => parked(e) || (e.has('ridden') && !world.input.jump);
 
 /** Rocket engine: pushes along the body's local +Y while fuel lasts, with flame, smoke and rumble. */
 export default defineBehavior({
@@ -28,7 +28,7 @@ export default defineBehavior({
   },
   update(e, world, dt) {
     // anything hot lights a waiting rocket: the way to send one off with nobody aboard in Free Play
-    if (e.has('rideable') && parked(e, world) && (e.state.burning || world.nearby(e.body.position, 1.3, (o) => o.has('hot') || !!o.state.burning).length)) e.state.lit = true;
+    if (e.has('rideable') && parked(e) && (e.state.burning || world.nearby(e.body.position, 1.3, (o) => o.has('hot') || !!o.state.burning).length)) e.state.lit = true;
     if (idle(e, world)) return;
     const delay = (e.state.ignitionDelay as number) - dt;
     e.state.ignitionDelay = delay;
