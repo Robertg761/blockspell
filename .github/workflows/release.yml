@@ -1,0 +1,156 @@
+name: Build downloads
+
+# Builds the installable apps: Windows (.exe), macOS (.dmg, Apple silicon and Intel), Linux (.AppImage) and an
+# Android .apk. Every build is also uploaded as a workflow artifact.
+#   - Pull requests that touch the app packaging only build (nothing is published).
+#   - Pushing a tag like v0.1.0 builds and publishes a GitHub Release with the files.
+#   - "Run workflow" (workflow_dispatch) with a tag name does the same from the branch you pick.
+# The in-game "Get the app" panel links to .../releases/latest/download/<file>, so the file names below must not change.
+on:
+  push:
+    tags: ['v*']
+  pull_request:
+    paths:
+      - 'desktop/**'
+      - 'mobile/**'
+      - '.github/workflows/release.yml'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to create or update (for example v0.1.0). Leave empty to only build.'
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  web:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npm run check-offline
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist
+          if-no-files-found: error
+
+  desktop:
+    needs: web
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            flag: --win
+            files: 'desktop/release/Blockspell-win-x64.exe'
+          - os: macos-latest
+            flag: --mac
+            files: |
+              desktop/release/Blockspell-mac-arm64.dmg
+              desktop/release/Blockspell-mac-x64.dmg
+          - os: ubuntu-latest
+            flag: --linux
+            files: 'desktop/release/Blockspell-linux-x86_64.AppImage'
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+      - run: npm ci
+        working-directory: desktop
+      - run: npm run prepare-app
+        working-directory: desktop
+      - run: npx electron-builder ${{ matrix.flag }} --publish never
+        working-directory: desktop
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      - name: Check the expected files exist
+        shell: bash
+        run: |
+          ls -la desktop/release
+          while read -r f; do [ -z "$f" ] || [ -f "$f" ] || { echo "missing $f"; exit 1; }; done <<'LIST'
+          ${{ matrix.files }}
+          LIST
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-${{ matrix.os }}
+          path: ${{ matrix.files }}
+          if-no-files-found: error
+
+  android:
+    needs: web
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platforms;android-36 build-tools;36.0.0'
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+      - run: npm ci
+        working-directory: mobile
+      - run: node build-apk.mjs
+        working-directory: mobile
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android
+          path: mobile/Blockspell-android.apk
+          if-no-files-found: error
+
+  publish:
+    needs: [desktop, android]
+    if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.tag != '')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: out
+          merge-multiple: true
+      - name: Create or update the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          rm -rf out/dist
+          ls -la out
+          for f in Blockspell-win-x64.exe Blockspell-mac-arm64.dmg Blockspell-mac-x64.dmg Blockspell-linux-x86_64.AppImage Blockspell-android.apk; do
+            [ -f "out/$f" ] || { echo "missing $f"; exit 1; }
+          done
+          NOTES=$'Download the file for your device, or open the game in a browser and use "Get the app".\n\n- **Windows**: Blockspell-win-x64.exe\n- **macOS**: Blockspell-mac-arm64.dmg (Apple silicon) or Blockspell-mac-x64.dmg (Intel)\n- **Linux**: Blockspell-linux-x86_64.AppImage (chmod +x, then run)\n- **Android**: Blockspell-android.apk\n\nThe apps are not code-signed: Windows shows "More info, Run anyway", macOS needs right-click, Open, and Android asks to allow installs from your browser. Everything runs offline.'
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" out/Blockspell-* --clobber
+          else
+            gh release create "$TAG" out/Blockspell-* --target "$GITHUB_SHA" --title "Blockspell $TAG" --notes "$NOTES"
+          fi

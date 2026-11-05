@@ -48,6 +48,8 @@ import { trophiesPanel } from './ui/trophies-panel';
 import { shopPanel } from './ui/shop-panel';
 import { SHOP, wallet } from './wallet';
 import { settingsPanel } from './ui/settings-panel';
+import { getAppPanel } from './ui/get-app-panel';
+import { isAndroidApp, saveBlob } from './save-file';
 import { GamepadInput } from './ui/gamepad';
 import { cssFilter, filterById } from './photo-filters';
 
@@ -222,6 +224,7 @@ export class Game {
       onFreePlay: () => this.freePlay(),
       onSurprise: () => this.freePlay(true),
       onSettings: () => this.openSettings(),
+      onGetApp: () => this.openGetApp(),
       extra: [h('button.link-btn.trophy-link', { type: 'button', text: `🏆 Trophies ${this.trophies.unlockedCount}/${TROPHY_TOTAL}`, onClick: () => this.openTrophies() })],
     });
   }
@@ -240,6 +243,12 @@ export class Game {
     // turning the day and night cycle back on restarts it, even after a manual sky choice or a load with it off
     if (s.cycle && !this.cycleWasOn && this.level?.tasks) this.skyAuto = true;
     this.cycleWasOn = s.cycle;
+  }
+
+  /** The ⬇ panel with every way to install or download the game. */
+  openGetApp(): void {
+    this.keys.clear();
+    this.hud.showPanel(getAppPanel(() => (this.titleMode ? this.showTitle() : this.hud.hideOverlay())));
   }
 
   /** The ⚙ panel. Back returns to the title screen if that's where it was opened from. */
@@ -1099,12 +1108,7 @@ export class Game {
       const blob = new Blob(chunks, { type: mime.split(';')[0] });
       const stamp = new Date().toISOString().replace(/[:T]/g, '-').slice(0, 19);
       const name = `blockspell-clip-${stamp}.${mime.startsWith('video/mp4') ? 'mp4' : 'webm'}`;
-      const url = URL.createObjectURL(blob);
-      const a = h('a', { href: url, download: name });
-      document.body.append(a);
-      a.click();
-      a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 15000);
+      void saveBlob(blob, name);
       this.hud.toasts.show(`Saved ${name}`, { title: '🎞 Clip saved', kind: 'success', duration: 4000 });
       this.trophies.bump('clips');
     };
@@ -1154,11 +1158,9 @@ export class Game {
     canvas.toBlob((blob) => {
       if (!blob) return;
       const url = URL.createObjectURL(blob);
-      const a = h('a', { href: url, download: name });
-      document.body.append(a);
-      a.click();
-      a.remove();
-      this.photoUI.thumb(url, name);
+      // on Android saving opens the share sheet, so wait for a tap on the thumbnail instead of opening it every shot
+      if (!isAndroidApp()) void saveBlob(blob, name);
+      this.photoUI.thumb(url, name, blob);
       this.world.events.emit('photo', { name });
     }, 'image/png');
   }

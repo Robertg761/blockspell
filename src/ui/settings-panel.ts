@@ -1,4 +1,5 @@
 import { exportSave, importSave, saveFileName } from '../save-data';
+import { saveBlob } from '../save-file';
 import { settings, type Settings } from '../settings';
 import { h } from './dom';
 import './panels.css';
@@ -68,13 +69,7 @@ export function settingsPanel(ops: SettingsPanelOps): HTMLElement {
   const status = h('p.small.save-status', { 'aria-live': 'polite' });
   const exportBtn = h('button.btn.secondary', { type: 'button', text: '⬇ Save a backup', title: 'Download your progress as a file' });
   exportBtn.addEventListener('click', () => {
-    const blob = new Blob([exportSave()], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = h('a', { href: url, download: saveFileName() });
-    document.body.append(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 10000);
+    void saveBlob(new Blob([exportSave()], { type: 'application/json' }), saveFileName());
     status.textContent = 'Backup saved. Keep the file somewhere safe.';
   });
   const fileInput = h('input', { type: 'file', accept: 'application/json,.json', class: 'hidden-file', 'aria-label': 'Choose a backup file' });
