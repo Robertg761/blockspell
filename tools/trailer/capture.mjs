@@ -2,7 +2,7 @@
 // Renders trailer shots to JPEG frames, one deterministic frame at a time.
 //   node tools/trailer/capture.mjs [--scale 1] [--out DIR] [--step N] [--fps 24] shotId [shotId ...]
 // Needs the dev server (npx vite --port 5199 --strictPort). --scale 0.25 --step 12 makes quick previews.
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync, readdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { openGame } from './lib.mjs';
 import { SHOTS } from './shots.mjs';
@@ -58,6 +58,7 @@ for (const id of only) {
 
   const dir = join(out, id);
   mkdirSync(dir, { recursive: true });
+  for (const f of readdirSync(dir)) if (f.endsWith('.jpg')) rmSync(join(dir, f));  // drop frames from an earlier capture of this shot (other step or length)
   const n = Math.round(shot.seconds * FPS);
   const events = [...(shot.events ?? [])].sort((a, b) => a.t - b.t);
   let ev = 0;
