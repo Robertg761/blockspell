@@ -11,6 +11,8 @@ away and pop near flames. Solve each level by summoning the right things.
 
 Built for **Hackyard Yard #6: "Offline"**.
 
+**[▶ Play it in your browser](https://robertg761.github.io/blockspell/)** · **[⬇ Download for Windows, macOS, Linux and Android](https://github.com/Robertg761/blockspell/releases/latest)** · [How the offline part works](#get-it-on-a-computer-or-phone)
+
 ## How to play
 
 Pick a level from the title screen (**▶ Play** continues where you left off, **☰ Levels**
