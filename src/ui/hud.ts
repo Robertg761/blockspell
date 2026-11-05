@@ -1,9 +1,11 @@
-import { spellsText, starsForPar, type LevelDef } from '../levels/types';
+import { spellsText, starsForPar, type LevelDef, type LevelObjective } from '../levels/types';
 import { Audio, loadMuted } from '../engine/audio';
 import { Autocomplete } from './autocomplete';
+import { isTouch } from './touch';
 import { Hotbar } from './hotbar';
 import { h } from './dom';
 import { pwa, type PwaState } from '../pwa';
+import { detectPlatform } from '../platform';
 import { Toasts } from './toast';
 
 export interface HudCallbacks {
@@ -70,6 +72,9 @@ function saveHistory(list: string[]): void {
 const OFFLINE_TOLD = 'blockspell.offlineTold.v1';
 const starText = (n: number, of = 3) => '★'.repeat(n) + '☆'.repeat(Math.max(0, of - n));
 
+/** What a guided level held back from toasts, for its finish panel. */
+export interface DemoNews { words: string[]; trophies: string[]; experiments: number }
+
 /** All DOM UI: spell input, level card, toasts, overlays. */
 export class Hud {
   readonly toasts = new Toasts();
@@ -80,6 +85,8 @@ export class Hud {
   private goal = h('div.goal');
   private hintBtn: HTMLButtonElement;
   private wordsLine = h('div.words-line');
+  private objectives = h('div.objectives.hidden');
+  private objectivesKey = '';
   private chips = h('div.word-chips');
   private help = h('div.help');
   private overlay = h('div.overlay.hidden');
@@ -153,7 +160,7 @@ export class Hud {
     root.append(
       h('div.hud-top-left', {}, [
         h('div.brand', {}, [h('span.brand-mark', { text: '▣' }), ' Blockspell']),
-        h('div.level-card', {}, [this.levelName, this.levelDesc, this.goal, this.wordsLine, this.hintBtn]),
+        h('div.level-card', {}, [this.levelName, this.levelDesc, this.goal, this.objectives, this.wordsLine, this.hintBtn]),
       ]),
       h('div.hud-top-right', {}, [
         this.menuBtn,
@@ -290,6 +297,7 @@ export class Hud {
   }
 
   setWordChips(words: string[]): void {
+    if (!words.length) { this.chips.replaceChildren(); return; }
     this.chips.replaceChildren(
       h('span.chips-label', { text: 'Try:' }),
       ...words.map((w) => h('button.chip', { type: 'button', text: w, onClick: () => this.cb.onCast(w) })),
@@ -298,6 +306,11 @@ export class Hud {
 
   setLevel(level: LevelDef): void {
     const world = !!level.tasks;
+    this.objectivesKey = '';
+    this.objectives.replaceChildren();
+    this.objectives.classList.toggle('hidden', !level.objectives);
+    this.objectives.parentElement?.classList.toggle('has-objectives', !!level.objectives);
+    delete this.goal.dataset.key;
     this.levelName.textContent = level.order > 0 && !level.hidden ? `${level.order}. ${level.name}` : level.name;
     this.levelDesc.textContent = level.description;
     this.hint = level.hint ?? '';
@@ -316,7 +329,52 @@ export class Hud {
     this.menuBtn.title = world ? 'Journal (J)' : 'Menu';
     this.menuBtn.dataset.icon = world ? '📓' : '☰';
     this.banner.classList.remove('show');
-    this.setWords(0, level.goal ? (level.par ?? 2) : null);
+    this.setWords(0, level.goal && !level.objectives ? (level.par ?? 2) : null);
+  }
+
+  setObjectives(list: LevelObjective[], done: string[], active: LevelObjective | undefined, onTrack: (id: string) => void, onAim: () => void): void {
+    const key = `${done.join(',')}|${active?.id ?? ''}`;
+    if (key === this.objectivesKey) return;
+    this.objectivesKey = key;
+    this.setTracker(active ? { title: active.title, zone: null } : null, 'All four jobs done!');
+    this.objectives.replaceChildren(h('div.objective-body', {}, [
+      h('div.objective-progress', { role: 'status', text: `${done.length} / ${list.length} jobs done` }),
+      h('div.objective-list', { 'aria-label': 'Island jobs' }, list.map((o, i) => h('button.objective-row', {
+        type: 'button', 'aria-pressed': String(active?.id === o.id), disabled: done.includes(o.id),
+        'data-done': String(done.includes(o.id)),
+        onClick: () => onTrack(o.id),
+      }, [h('span.objective-number', { text: done.includes(o.id) ? '✓' : String(i + 1) }), o.title]))),
+      active ? h('p.objective-instruction', { text: active.instruction }) : null,
+      active ? h('div.objective-actions', {}, [
+        h('button.chip.objective-aim', { type: 'button', text: 'Aim at this job', onClick: onAim }),
+        h('button.chip', { type: 'button', text: 'Hint', onClick: () => this.toasts.show(active.hint, { title: active.title, duration: 10000 }) }),
+      ]) : null,
+      active ? h('div.objective-spells', {}, [h('span', { text: 'Try a word:' }), ...active.spells.map((spell) =>
+        h('button.chip', { type: 'button', text: spell, title: `Write ${spell} in the spell bar`, onClick: () => this.prefill(spell) }))]) : null,
+      active ? h('p.objective-controls', { text: isTouch ? 'Tap the ground to aim. Type a word below, then Cast. Use the pad to walk.' : 'Click the ground to aim. Type a word below, then Cast. WASD to walk, Space to jump.' }) : null,
+    ]));
+  }
+
+  showDemoWin(words: number, news: DemoNews, ops: { onExplore: () => void; onRetry: () => void; onKeep: () => void; onFreePlay: () => void }): void {
+    const go = (fn: () => void) => () => { this.hideOverlay(); fn(); };
+    const earned = [
+      news.words.length ? `New words: ${news.words.join(', ')}.` : '',
+      news.trophies.length ? `Trophies: ${news.trophies.join(', ')}.` : '',
+      news.experiments ? `Lab notebook: ${news.experiments} ticked.` : '',
+    ].filter(Boolean).join(' ');
+    this.showPanel(h('div.panel.win.demo-win', {}, [
+      h('div.win-stars', { text: '✦' }),
+      h('h2', { text: 'The island is ready!' }),
+      h('p', { text: 'A happy pup, a new tree, a view from the lookout, and a glowing beacon. You made it happen with words.' }),
+      h('p', { text: `4 jobs finished with ${spellsText(words)}. Try a different solution on your next visit.` }),
+      earned ? h('p.small', { text: earned }) : null,
+      h('div.panel-actions', {}, [
+        h('button.btn', { type: 'button', text: 'Explore the full world', onClick: go(ops.onExplore) }),
+        h('button.btn.secondary', { type: 'button', text: 'Replay demo', onClick: go(ops.onRetry) }),
+        h('button.btn.secondary', { type: 'button', text: 'Free Play', onClick: go(ops.onFreePlay) }),
+        h('button.link-btn', { type: 'button', text: 'Stay on this island', onClick: ops.onKeep }),
+      ]),
+    ]));
   }
 
   /** Open world: the level card names the hero's zone. */
@@ -523,7 +581,7 @@ export class Hud {
   }
 
   /** Title screen. `logo` is an optional animated element shown above the name. */
-  showTitle(opts: { onExplore: () => void; onFreePlay: () => void; onSurprise: () => void; onSettings: () => void; extra?: HTMLElement[]; exploreLabel: string; logo?: HTMLElement }): void {
+  showTitle(opts: { onDemo: () => void; onExplore: () => void; onFreePlay: () => void; onSurprise: () => void; onSettings: () => void; onGetApp: () => void; extra?: HTMLElement[]; exploreLabel: string; logo?: HTMLElement }): void {
     const go = (fn: () => void) => () => {
       this.cb.onStart();
       this.hideOverlay();
@@ -534,15 +592,19 @@ export class Hud {
         opts.logo ?? h('div.intro-logo', { text: '▣' }),
         h('h1', { text: 'Blockspell' }),
         h('p.tagline', { text: 'Write a word. Make it real.' }),
-        h('p', { text: 'Type the name of a thing (add adjectives like “big”, “blue” or “flaming”) and watch it appear. Explore the islands and help out with what you summon, or play with every word in Free Play.' }),
+        h('p', { text: 'A hungry pup. An empty garden. A lookout you cannot reach. Type what you need and make this little island ready for visitors.' }),
+        h('button.btn.big.demo-btn', { type: 'button', text: '▶ Play demo', onClick: go(opts.onDemo) }),
+        h('p.small', { text: 'Four jobs on one island. Follow the guide or find your own way.' }),
         h('div.panel-actions', {}, [
-          h('button.btn.big.explore-btn', { text: opts.exploreLabel, onClick: go(opts.onExplore) }),
-          h('button.btn.big.secondary.freeplay-btn', { text: '✦ Free Play', onClick: go(opts.onFreePlay) }),
+          h('button.btn.secondary.explore-btn', { text: opts.exploreLabel, onClick: go(opts.onExplore) }),
+          h('button.btn.secondary.freeplay-btn', { text: '✦ Free Play', onClick: go(opts.onFreePlay) }),
         ]),
         h('div.title-links', {}, [
           h('button.link-btn.surprise-link', { type: 'button', text: '🎲 Surprise me', onClick: go(opts.onSurprise) }),
           ...(opts.extra ?? []),
           h('button.link-btn.settings-link', { type: 'button', text: '⚙ Settings', onClick: opts.onSettings }),
+          // already an app (desktop, Android, installed PWA)? Then there is nothing left to download
+          ...(detectPlatform().native || detectPlatform().standalone ? [] : [h('button.link-btn.get-app-link', { type: 'button', text: '⬇ Get the app', onClick: opts.onGetApp })]),
         ]),
         h('p.small', { text: 'Runs entirely offline. No network, no tracking.' }),
         this.pwaLine,

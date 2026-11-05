@@ -1,0 +1,16 @@
+{
+  "name": "blockspell-android",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Capacitor wrapper that packs the built game into an Android APK. See README.md.",
+  "scripts": {
+    "build-apk": "node build-apk.mjs"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.0.0",
+    "@capacitor/cli": "^8.0.0",
+    "@capacitor/core": "^8.0.0",
+    "@capacitor/filesystem": "^8.1.5",
+    "@capacitor/share": "^8.0.3"
+  }
+}

@@ -11,6 +11,8 @@ away and pop near flames. Solve each level by summoning the right things.
 
 Built for **Hackyard Yard #6: "Offline"**.
 
+**[▶ Play it in your browser](https://robertg761.github.io/blockspell/)** · **[⬇ Download for Windows, macOS, Linux and Android](https://github.com/Robertg761/blockspell/releases/latest)** · [How the offline part works](#get-it-on-a-computer-or-phone)
+
 ## How to play
 
 Pick a level from the title screen (**▶ Play** continues where you left off, **☰ Levels**
@@ -175,13 +177,38 @@ counts the ways you've found.
   *Restore a backup* loads it back (handy for moving to another device, or after clearing site data).
   *Your journey* shows spells cast, words found, tasks, trophies, experiments and time played.
 
-## Install it
+## Get it on a computer or phone
 
-Blockspell is a PWA. Open it once online and it saves itself: after that it loads with the network
-off, and you can install it from the title screen ("Install as an app") or your browser menu. When a new
-version is ready a toast offers "Reload now". The service worker (`scripts/sw-template.js`, built
-by `scripts/pwa-plugin.mjs`) precaches every file in `dist/` and only runs in production builds.
-Add `?nosw` to the URL to skip it.
+The title screen has a **⬇ Get the app** link that opens a panel with the right option for the device you
+are on. The options:
+
+| Where | How | Needs |
+| --- | --- | --- |
+| Any phone, tablet or computer | Install the web app: Chrome and Edge show an install button, Safari uses *Share → Add to Home Screen* (iOS) or *File → Add to Dock* (macOS). | Open the game once online |
+| Windows, macOS, Linux | Download the desktop app (`Blockspell-win-x64.exe`, `Blockspell-mac-arm64.dmg`, `Blockspell-mac-x64.dmg`, `Blockspell-linux-x86_64.AppImage`) from the [latest release](https://github.com/Robertg761/blockspell/releases/latest). | Nothing, ever |
+| Android | Download `Blockspell-android.apk` from the same page and open it. | Allow installs from your browser once |
+
+**How can a browser game work offline?** Blockspell makes no network requests at all: models, textures
+and sound are generated in code. So "the game" is only a couple of MB of files. The first time you open it, a *service
+worker* (`scripts/sw-template.js`, written into `dist/sw.js` by `scripts/pwa-plugin.mjs`) saves every one of
+those files in the browser's cache. After that the page starts from the cache, with the Wi-Fi off. When a new
+version is ready a toast offers "Reload now". The service worker only runs in production builds; add `?nosw` to
+the URL to skip it. The desktop and Android apps just carry the same files inside the app instead of a cache.
+
+The apps are built by `.github/workflows/release.yml`: **desktop/** is an Electron shell that serves the
+built game from a private `app://` address, and **mobile/** wraps it in a Capacitor Android project and signs
+the APK with a fixed, public sideload key (`mobile/blockspell-sideload.keystore`) so new APKs install over old
+ones. They are not code-signed or notarised, so Windows says "More info → Run anyway" and macOS needs
+right-click → Open. To publish a release, push a tag (`git tag v0.1.0 && git push origin v0.1.0`) or run the
+workflow by hand with a tag name; the download links in the game point at `releases/latest/download/…`.
+
+Build them yourself (after `npm run build`):
+
+```bash
+cd desktop && npm install && npm start        # run the desktop app
+cd desktop && npm run dist                    # installer for the OS you are on, into desktop/release/
+cd mobile && npm install && npm run build-apk # needs JDK 21 and the Android SDK (ANDROID_HOME)
+```
 
 ## Levels (and some ways to solve them)
 
@@ -215,7 +242,7 @@ analytics, and no audio, texture or model files to fetch:
   bundled from npm at build time.
 
 Once you've installed dependencies, it plays fine in airplane mode, and once it has been opened
-online it is installable and loads offline (see *Install it*). To check a build:
+online it is installable and loads offline (see *Get it on a computer or phone*). To check a build:
 
 ```bash
 npm run build
@@ -378,6 +405,8 @@ src/
   save-data.ts photo-filters.ts             backup files and photo looks
   tasks/             open-world zones, tasks, predicates and their scripted solutions
 scripts/             vite precache plugin, service worker template and the check-* scripts
+desktop/             Electron shell for the Windows, macOS and Linux apps
+mobile/              Capacitor project that builds the Android APK
 ```
 
 Objects, adjectives, behaviors and levels are discovered automatically: drop a file

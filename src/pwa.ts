@@ -4,6 +4,8 @@
  * browser's "install app" prompt and "a new version is ready" updates. Everything here is optional: with no
  * service worker support (or in the dev server) the game just runs as a normal web page.
  */
+import { detectPlatform } from './platform';
+
 export interface PwaState {
   /** Every file is cached: the game now starts and plays with no network. */
   offlineReady: boolean;
@@ -77,6 +79,8 @@ export function registerPwa(): void {
     set({ canInstall: true });
   });
   window.addEventListener('appinstalled', () => set({ installed: true, canInstall: false }));
+  // the desktop and Android apps already carry every file; a service worker there would only risk stale copies
+  if (detectPlatform().native) return;
   if (!('serviceWorker' in navigator) || !import.meta.env.PROD) return;
   // ?nosw keeps the service worker out of automation runs (it would also hide requests from the checks)
   if (new URLSearchParams(location.search).has('nosw')) return;
