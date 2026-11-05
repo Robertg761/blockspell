@@ -8,7 +8,6 @@
 // installs over an older one instead of failing with a signature mismatch.
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -31,10 +30,28 @@ fs.rmSync(path.join(res, 'drawable-v24', 'ic_launcher_foreground.xml'), { force:
 
 run('npx', ['cap', 'sync', 'android']);
 
-// the fixed sideload key doubles as the debug key, so assembleDebug signs with it
-const androidDir = path.join(os.homedir(), '.android');
-fs.mkdirSync(androidDir, { recursive: true });
-fs.copyFileSync(path.join(here, 'blockspell-sideload.keystore'), path.join(androidDir, 'debug.keystore'));
+// sign with the repo's sideload key through this generated project's own gradle config (never touches ~/.android)
+const keystore = path.join(here, 'blockspell-sideload.keystore').split(path.sep).join('/');
+fs.appendFileSync(
+  path.join(here, 'android', 'app', 'build.gradle'),
+  `
+android {
+    signingConfigs {
+        sideload {
+            storeFile file('${keystore}')
+            storePassword 'android'
+            keyAlias 'androiddebugkey'
+            keyPassword 'android'
+        }
+    }
+    buildTypes {
+        debug {
+            signingConfig signingConfigs.sideload
+        }
+    }
+}
+`,
+);
 
 const gradlew = path.join(here, 'android', process.platform === 'win32' ? 'gradlew.bat' : 'gradlew');
 if (process.platform !== 'win32') fs.chmodSync(gradlew, 0o755);
