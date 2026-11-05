@@ -4,6 +4,8 @@
  * (built by .github/workflows/release.yml with fixed file names, so these URLs never change).
  */
 export const REPO_URL = 'https://github.com/Robertg761/blockspell';
+/** Where the web version lives (GitHub Pages), for links that must open outside the native apps. */
+export const PUBLIC_URL = 'https://robertg761.github.io/blockspell/';
 export const RELEASES_URL = `${REPO_URL}/releases/latest`;
 const dl = (file: string) => `${REPO_URL}/releases/latest/download/${file}`;
 

@@ -4,6 +4,8 @@
  * Opening the link replays the casts one after another, so a friend sees the same scene build itself.
  * Everything is in the link: there is no server, so sharing works with no network (and in an installed app).
  */
+import { PUBLIC_URL, detectPlatform } from './platform';
+
 export interface SceneCast {
   spell: string;
   x: number;
@@ -38,5 +40,7 @@ export function decodeScene(hash: string): SceneCast[] | null {
 
 /** The full link for a scene, based on the page the game is served from. */
 export function sceneUrl(casts: readonly SceneCast[]): string {
-  return location.href.split('#')[0].split('?')[0] + encodeScene(casts);
+  // inside the desktop or Android app the address is private (app://, https://localhost): link to the public web game instead
+  const base = detectPlatform().native ? PUBLIC_URL : location.href.split('#')[0].split('?')[0];
+  return base + encodeScene(casts);
 }
