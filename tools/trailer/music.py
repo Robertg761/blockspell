@@ -7,7 +7,7 @@ import numpy as np
 from scipy import signal
 
 SR = 44100
-TOTAL = 53.0
+from edit import TOTAL
 BEAT = 0.5
 rng = np.random.default_rng(7)
 N = int(TOTAL * SR)
@@ -93,120 +93,111 @@ def brass(f, d, vol=1.0):
     return lp(x, 2200 * 0.4 + 2500 * np.minimum(1, t[0] + 1)) * e * vol if False else lp(x, 2400) * e * vol
 
 # ---------- arrangement ----------
+# Section marks come from edit.py so the score always follows the cut.
+from edit import MARK, TOTAL as EDIT_TOTAL
+O = MARK['enter']; M0 = MARK['montage']; TNT = MARK['n-tnt']; TI = MARK['title']; G0 = MARK['world']
+CH = MARK['c-demo']; K = MARK['climax']; E = MARK['end']; PZ = MARK['p-bridge']
+
 CHORDS = {  # name: (root midi bass, triad midi)
     'Am': (33, [57, 60, 64]), 'F': (29, [53, 57, 60]), 'C': (36, [60, 64, 67]), 'G': (31, [55, 59, 62]),
 }
 def chord_at(t):
-    if t < 14: return 'Am'
-    if t < 45: return ['Am', 'F', 'C', 'G'][int((t - 14) // 4) % 4]
-    return ['F', 'C', 'G', 'Am'][min(3, int((t - 45) // 2))]
+    if t < TI: return 'Am'
+    if t < E: return ['Am', 'F', 'C', 'G'][int((t - TI) // 4) % 4]
+    return ['F', 'C', 'G', 'Am'][min(3, int((t - E) // 2))]
 
 HITS = []  # impact times, for ducking the pad and the sub
 def impact(t, p=1.0):
     HITS.append(t); put(boom(3.2, p), t, 1.0, 0, 0.35); put(kick(1.2), t, 0.9)
     put(hp(noise(1.6), 2500) * env_ad(1.6, 0.002, 0.5) * 0.35, t, 1.0, 0, 0.5)
 
-# -- 0..6: cold open: a drone, a heartbeat, typing, the cast
-put(pad(hz(33), 13.5, 500, 1.2), 0, 0.5, 0, 0.5)
-put(pad(hz(45), 12, 700, 0.8), 0, 0.35, 0.2, 0.6)
+# -- cold open: a drone, a heartbeat, typing, the cast
+put(pad(hz(33), TI - 0.5, 500, 1.2), 0, 0.5, 0, 0.5)
+put(pad(hz(45), TI - 2, 700, 0.8), 0, 0.35, 0.2, 0.6)
 for k in range(8):
     t0 = 0.5 + k * 1.0
-    if t0 < 3.4: put(kick(0.7), t0, 0.55); put(kick(0.5), t0 + 0.28, 0.35)
-type_times = np.linspace(0.9, 2.9, 19)
-for t0 in type_times: put(click(), t0, 0.8, rng.uniform(-0.2, 0.2))
-put(click(), 3.5, 1.0); put(reverse_cymbal(1.4), 2.1, 0.6, 0, 0.3); put(riser(1.7), 1.8, 0.7, 0, 0.3)
-impact(3.5, 1.0)
-for k, n in enumerate([81, 84, 88, 93, 96]): put(bell(hz(n), 2.0), 3.55 + k * 0.1, 0.45, (k - 2) * 0.3, 0.6)
-put(pad(hz(57), 5, 900, 1.0), 3.5, 0.45, 0, 0.5)
-put(whoosh(0.9), 4.0, 0.7)   # dragon takes off
-put(brass(hz(45), 1.9), 4.1, 0.0)
+    if t0 < O - 0.1: put(kick(0.7), t0, 0.55); put(kick(0.5), t0 + 0.28, 0.35)
+for t0 in np.linspace(0.45, 2.25, 19): put(click(), t0, 0.8, rng.uniform(-0.2, 0.2))
+put(click(), O, 1.0); put(reverse_cymbal(1.4), O - 1.4, 0.6, 0, 0.3); put(riser(1.7), O - 1.7, 0.7, 0, 0.3)
+impact(O, 1.0)
+for k, n in enumerate([81, 84, 88, 93, 96]): put(bell(hz(n), 2.0), O + 0.05 + k * 0.1, 0.45, (k - 2) * 0.3, 0.6)
+put(pad(hz(57), 5, 900, 1.0), O, 0.45, 0, 0.5)
+put(whoosh(0.9), O + 0.5, 0.7)   # dragon takes off
 
-# -- 6..14: montage: 8 cuts, drums enter on 6
-for k in range(16):
-    t0 = 6 + k * 0.5
+# -- montage: drums enter on the first cut, one chime per cut
+for k in range(int((TI - M0) / BEAT)):
+    t0 = M0 + k * BEAT
     put(kick(1.0), t0, 0.85)
     if k % 2 == 1: put(clap(1.0), t0, 0.55, 0, 0.15); put(snare(0.8), t0, 0.35)
     put(hat(False, 0.8), t0 + 0.25, 0.6, 0.3)
     if k % 2 == 0: put(hat(True, 0.7), t0 + 0.25, 0.3, -0.3)
-cuts = [6, 7, 8, 9, 10, 11, 12]
+    put(lp(saw(hz(33), 0.45) * np.minimum(1, (0.45 - tt(0.45)) / 0.05), 220) * 0.7, t0 + 0.25, 0.5)
+cuts = [M0 + 1.5 * i for i in range(4)] + [TNT]
 for i, t0 in enumerate(cuts):
     put(whoosh(0.35), t0 - 0.33, 0.8)
-    put(bell(hz([76, 79, 83, 79, 84, 88, 91][i]), 0.9), t0 + 0.02, 0.4, (i % 3 - 1) * 0.4, 0.5)
-put(riser(2.4), 9.8, 0.7, 0, 0.3)
-impact(12.25, 1.1)
-put(lp(noise(1.5), 600) * env_ad(1.5, 0.3, 0.6), 12.2, 0.0)
-# sub + pad for the montage
-for k in range(16):
-    t0 = 6 + k * 0.5; note = 33
-    put(lp(saw(hz(note), 0.45) * np.minimum(1, (0.45 - tt(0.45)) / 0.05), 220) * 0.7, t0 + 0.25, 0.5)
-put(pad(hz(57), 8, 1500, 1.0), 6, 0.3, 0, 0.4)
+    put(bell(hz([76, 79, 83, 88, 91][i]), 0.9), t0 + 0.02, 0.4, (i % 3 - 1) * 0.4, 0.5)
+put(riser(2.0), TNT - 0.5, 0.7, 0, 0.3)
+impact(TNT + 0.25, 1.1)
+put(pad(hz(57), TI - M0, 1500, 1.0), M0, 0.3, 0, 0.4)
 
-# -- 14..18: title slam: brass chord, crash, logo pops
-put(reverse_cymbal(1.5), 12.5, 0.0)
-impact(14.0, 1.2)
-put(hp(noise(4), 4500) * env_ad(4, 0.005, 1.2) * 0.4, 14.0, 0.6, 0, 0.5)
+# -- title slam: brass chord, crash, logo pops
+impact(TI, 1.2)
+put(hp(noise(4), 4500) * env_ad(4, 0.005, 1.2) * 0.4, TI, 0.6, 0, 0.5)
 for n, p in [(45, -0.3), (57, 0.0), (60, 0.2), (64, 0.3)]:
-    put(brass(hz(n), 3.8), 14.0, 0.28, p, 0.5)
-for k, t0 in enumerate(np.arange(14.25, 16.0, 0.25)):   # letters popping in: sparkling arp
+    put(brass(hz(n), 3.8), TI, 0.28, p, 0.5)
+for k, t0 in enumerate(np.arange(TI + 0.25, TI + 2.0, 0.25)):   # letters popping in: sparkling arp
     put(bell(hz([81, 84, 88, 91, 93, 96, 100][k % 7]), 0.8), t0, 0.35, (k % 2 - 0.5), 0.6)
-for k in range(4): put(kick(1.0), 14 + k * 1.0 + (0 if k else 0.0), 0.8 if k else 0.0); 
-for k in range(2): put(clap(1.0), 15 + k * 2, 0.5, 0, 0.3)
-put(riser(1.9), 16.0, 0.0)
+for k in range(1, 4): put(kick(1.0), TI + k * 1.0, 0.8)
+for k in range(2): put(clap(1.0), TI + 1 + k * 2, 0.5, 0, 0.3)
 
-# -- 18..32: gameplay: full groove, arps, chord pads
-for k in range(int((32 - 18) / BEAT)):
-    t0 = 18 + k * BEAT
+# -- open world and the puzzle: full groove, arps, chord pads
+for k in range(int((CH - G0) / BEAT)):
+    t0 = G0 + k * BEAT
     put(kick(0.95), t0, 0.8)
     if k % 2 == 1: put(clap(0.9), t0, 0.45, 0, 0.2)
     put(hat(False, 0.7), t0 + 0.25, 0.5, 0.3)
     if k % 4 == 3: put(hat(True, 0.6), t0 + 0.25, 0.35, -0.3)
-for ch_t in np.arange(14, 45, 4):
+for ch_t in np.arange(TI, K + 5, 4):
     name = chord_at(ch_t + 0.01); root, tri = CHORDS[name]
-    for n in tri: put(pad(hz(n), 4.4, 1400 if ch_t < 32 else 2200, 1.0), ch_t, 0.18, rng.uniform(-0.4, 0.4), 0.5)
+    for n in tri: put(pad(hz(n), 4.4, 1400 if ch_t < CH else 2200, 1.0), ch_t, 0.18, rng.uniform(-0.4, 0.4), 0.5)
     put(pad(hz(root + 12), 4.4, 400, 1.2), ch_t, 0.45, 0, 0.3)
-for k in range(int((44 - 14) / (BEAT / 2))):             # 16th-note bass / arp pattern
-    t0 = 14 + k * BEAT / 2
-    if t0 < 18: continue
+for k in range(int((K + 5 - TI) / (BEAT / 2))):             # 16th-note bass / arp pattern
+    t0 = TI + k * BEAT / 2
+    if t0 < G0: continue
     name = chord_at(t0); root, tri = CHORDS[name]
     if k % 2 == 0: put(lp(saw(hz(root), 0.22) * env_ad(0.22, 0.003, 0.2), 260) * 0.8, t0, 0.55)
-    pat = [0, 2, 1, 2, 0, 2, 1, 2][(k // 1) % 8]
-    put(pluck(hz(tri[pat % 3] + 12 * (1 if t0 < 32 else 2)), 0.3, 3200), t0, 0.22, np.sin(k) * 0.5, 0.5)
-for t0 in (22, 26, 29, 18): put(whoosh(0.5), t0 - 0.45, 0.6)
+    pat = [0, 2, 1, 2, 0, 2, 1, 2][k % 8]
+    put(pluck(hz(tri[pat % 3] + 12 * (1 if t0 < CH else 2)), 0.3, 3200), t0, 0.22, np.sin(k) * 0.5, 0.5)
+for t0 in (G0, PZ, MARK['p-tramp'], MARK['p-plank']): put(whoosh(0.5), t0 - 0.45, 0.6)
 
-# -- 32..44: chaos: snare roll, double-time hats, boom after boom
-put(riser(3.5), 28.5, 0.7, 0, 0.3); put(reverse_cymbal(2.0), 30.0, 0.5)
-for k in range(8): put(snare(0.8 + k * 0.05), 30.0 + k * 0.25, 0.3 + 0.04 * k)
-for k in range(16): put(snare(1.0), 30.0 + 2.0 + k * 0.0, 0.0)
-for k in range(int((38 - 32) / (BEAT / 2))):
-    t0 = 32 + k * BEAT / 2
-    put(hat(False, 0.8), t0, 0.45, 0.3 if k % 2 else -0.3)
-for k in range(int((38 - 32) / BEAT)):
-    put(kick(1.1), 32 + k * BEAT, 0.9)
-    if k % 2: put(snare(1.0), 32 + k * BEAT, 0.6); put(clap(1.0), 32 + k * BEAT, 0.4)
-impact(32.7, 0.9)
-put(riser(2.9), 35.4, 0.8, 0, 0.3)
-for k in range(10): put(snare(1.0 + k * 0.03), 36.4 + k * 0.1 * (1 - k * 0.04), 0.35 + 0.05 * k)
-impact(38.65, 1.3)
-put(hp(noise(5), 3500) * env_ad(5, 0.005, 1.6) * 0.45, 38.65, 0.6, 0, 0.5)
-impact(40.4, 1.0)
-impact(41.6, 0.8)
+# -- chaos: snare roll, double-time hats, boom after boom
+put(riser(3.5), CH - 3.5, 0.7, 0, 0.3); put(reverse_cymbal(2.0), CH - 2.0, 0.5)
+for k in range(8): put(snare(0.8 + k * 0.05), CH - 2.0 + k * 0.25, 0.3 + 0.04 * k)
+for k in range(int((K - CH) / (BEAT / 2))):
+    put(hat(False, 0.8), CH + k * BEAT / 2, 0.45, 0.3 if k % 2 else -0.3)
+for k in range(int((K - CH) / BEAT)):
+    put(kick(1.1), CH + k * BEAT, 0.9)
+    if k % 2: put(snare(1.0), CH + k * BEAT, 0.6); put(clap(1.0), CH + k * BEAT, 0.4)
+impact(CH + 0.6, 0.9)
+put(riser(2.9), K - 2.9, 0.8, 0, 0.3)
+for k in range(10): put(snare(1.0 + k * 0.03), K - 1.6 + k * 0.1 * (1 - k * 0.04), 0.35 + 0.05 * k)
+impact(K + 0.65, 1.3)
+put(hp(noise(5), 3500) * env_ad(5, 0.005, 1.6) * 0.45, K + 0.65, 0.6, 0, 0.5)
+impact(K + 2.4, 1.0)
+impact(K + 3.6, 0.8)
 for n, p in [(45, -0.3), (52, 0.0), (57, 0.0), (60, 0.2), (64, 0.3)]:
-    put(brass(hz(n), 5.0), 38.65, 0.25, p, 0.5)
-for k in range(8): put(kick(0.9), 38 + k * 0.75, 0.0)
-put(lp(noise(5), 400) * env_ad(5, 0.05, 1.5), 38.6, 0.8, 0, 0.3)   # rumble under the slow-mo
-for k in range(4): put(pluck(hz([69, 72, 76, 81][k]), 1.2, 4000), 40.0 + k * 0.6, 0.12, 0, 0.7)
-HITS.extend([])
+    put(brass(hz(n), 4.5), K + 0.65, 0.25, p, 0.5)
+put(lp(noise(4.5), 400) * env_ad(4.5, 0.05, 1.5), K + 0.6, 0.8, 0, 0.3)   # rumble under the slow-mo
 
-# -- 44..45: silence, then the end card
-put(boom(4.0, 0.7), 45.0, 0.7, 0, 0.5)
-put(brass(hz(57), 8), 45.2, 0.0)
-for t0, name in [(45, 'F'), (47, 'C'), (49, 'G'), (51, 'Am')]:
+# -- the end card
+put(boom(4.0, 0.7), E, 0.7, 0, 0.5)
+for t0, name in [(E, 'F'), (E + 2, 'C'), (E + 4, 'G'), (E + 6, 'Am')]:
     root, tri = CHORDS[name]
     for n in tri: put(pad(hz(n), 3.2, 1800, 1.0), t0, 0.22, rng.uniform(-0.5, 0.5), 0.7)
     put(pad(hz(root + 12), 3.2, 500, 1.0), t0, 0.5, 0, 0.3)
-mel = [(45.6, 81, 0.9), (46.1, 84, 0.9), (46.6, 88, 1.4), (48.0, 86, 0.9), (48.5, 84, 0.9), (49.0, 91, 1.4), (50.4, 88, 0.9), (50.9, 84, 0.9), (51.4, 81, 2.0)]
-for t0, n, d in mel: put(bell(hz(n), d + 1.0), t0, 0.5, 0.1, 0.8)
-for k in range(8): put(lp(sine(hz(33 if k < 6 else 33), 1.0) * np.exp(-tt(1.0) / 0.5), 160), 45 + k * 1.0, 0.45)
+mel = [(0.6, 81, 0.9), (1.1, 84, 0.9), (1.6, 88, 1.4), (3.0, 86, 0.9), (3.5, 84, 0.9), (4.0, 91, 1.4), (5.4, 88, 0.9), (5.9, 84, 0.9), (6.4, 81, 2.0)]
+for t0, n, d in mel: put(bell(hz(n), d + 1.0), E + t0, 0.5, 0.1, 0.8)
+for k in range(int(TOTAL - E)): put(lp(sine(hz(33), 1.0) * np.exp(-tt(1.0) / 0.5), 160), E + k * 1.0, 0.45)
 
 # ---------- mix down ----------
 # reverb: synthetic hall impulse

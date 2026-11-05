@@ -42,7 +42,7 @@ def layout(base, W, H):
     u = H / 1080
     logo_on(ov, W / 2, H * 0.215, min(W * 0.84, 930 * u))
     tracked(d, (W / 2, H * 0.405), 'WRITE A WORD. MAKE IT REAL.', ImageFont.truetype(FD + 'Inter-ExtraBold.otf', int(max(26, 46 * u))), (255, 255, 255, 255), 8 * u)
-    badge = 'HACKYARD #6  ·  OFFLINE'
+    badge = 'HACKYARD #6  ·  THEME: OFFLINE'
     f = ImageFont.truetype(FD + 'Inter-ExtraBold.otf', int(34 * u)); tw = d.textlength(badge, font=f) + 8 * u * len(badge) * 0.35
     bw, bh = tw + 80 * u, 78 * u; x0, y0 = (W / 2 - bw / 2) if W < H * 1.2 else 70 * u, H * 0.93 - bh / 2
     d.rounded_rectangle((x0, y0, x0 + bw, y0 + bh), bh / 2, fill=(255, 176, 46, 255))

@@ -52,15 +52,15 @@ const stage = (skyName, casts, warm = 0.3, weather = 'clear') => seq(sky(skyName
 export const SHOTS = [
   // ---- cold open: night, empty island, a word is typed ----
   {
-    id: 'open', seconds: 6, prompt: true, warm: 4,
+    id: 'open2', seconds: 5, prompt: true, warm: 4,
     init: sky('night'),
     cam: path([
-      { u: 0, pos: [9, 1.0, 11], tgt: [0, 3, 0], fov: 44 },
-      { u: 0.57, pos: [6, 1.1, 8], tgt: [0, 2.6, 0], fov: 44 },
-      { u: 0.85, pos: [4.6, 1.4, 7], tgt: [0, 4, -1], fov: 50 },
-      { u: 1, pos: [4, 2.2, 6.5], tgt: [0, 6, -2], fov: 52 },
+      { u: 0, pos: [8, 1.1, 10], tgt: [0, 2.6, 0], fov: 44 },
+      { u: 0.55, pos: [5.5, 1.2, 7.5], tgt: [0, 2.6, 0], fov: 46 },
+      { u: 1, pos: [4.2, 1.8, 7], tgt: [-1, 4.5, -1], fov: 52 },
     ]),
-    typing: { text: 'giant golden dragon', start: 0.9, end: 2.9, enter: 3.5 },
+    track: { id: 'dragon', from: 3.1, weight: 0.9 },
+    typing: { text: 'giant golden dragon', start: 0.45, end: 2.25, enter: 2.8 },
   },
 
   // ---- spell montage: one cast per shot, caught mid-summon ----
@@ -135,4 +135,25 @@ export const SHOTS = [
     events: [at(2.5, cast('flaming rainbow rocket', [-3, -6])), at(4, cast('flaming blue rocket', [3, -5])), at(5.2, cast('flaming red rocket', [0, -8]))],
     cam: path([{ u: 0, pos: [0, 1.3, 9], tgt: [0, 7, -6], fov: 55 }, { u: 1, pos: [0, 1.8, 8], tgt: [0, 9, -6], fov: 55 }], { shake: 0.008 }),
   },
+  // ---- v2: longer montage shots (1.5 s), summon visible from frame 0 ----
+  { id: 'n-balloons', seconds: 1.5, init: stage('day', [['3 rainbow balloons', [0, 0]]], 0.15),
+    cam: path([{ u: 0, pos: [3.2, 0.7, 5.5], tgt: [0, 2.2, 0], fov: 58 }, { u: 1, pos: [2.4, 0.9, 4.6], tgt: [0, 4.2, 0], fov: 56 }]) },
+  { id: 'n-dog', seconds: 1.5, init: stage('day', [['big dog', [-2, 0]], ['3 bones', [1.5, 0.5]]], 0.1),
+    cam: path([{ u: 0, pos: [0, 1.0, 6.5], tgt: [-0.5, 0.9, 0], fov: 50 }, { u: 1, pos: [1.8, 1.2, 5.2], tgt: [0, 0.9, 0], fov: 50 }]) },
+  { id: 'n-hotair', seconds: 1.5, init: stage('dawn', [['giant hot air balloon', [0, 0]]], 0.05),
+    cam: path([{ u: 0, pos: [4.5, 0.7, 8.5], tgt: [0, 3, 0], fov: 55 }, { u: 1, pos: [3.2, 1.0, 7.2], tgt: [0, 4.8, 0], fov: 55 }]) },
+  { id: 'n-snow', seconds: 1.5, init: stage('dawn', [['giant snowman', [0, 0]]], 0.1, 'snow'),
+    events: [at(0.3, cast('fire', [1.6, 0.5]))],
+    cam: path([{ u: 0, pos: [4.2, 1.2, 6.2], tgt: [0, 1.8, 0], fov: 50 }, { u: 1, pos: [3.2, 1.3, 5.2], tgt: [0, 2, 0], fov: 50 }]) },
+
+  // ---- v2: one puzzle (the chasm), three answers; the world holds still on the problem first ----
+  { id: 'p-bridge', seconds: 3.5, query: 'nosw&mute&level=2&solve=0', init: sky('sunset'),
+    speed: (t) => (t < 0.7 ? 0 : 1.5),
+    cam: path([{ u: 0, pos: [-1, 3.0, 14], tgt: [0, 0.6, 0], fov: 52 }, { u: 1, pos: [0.5, 2.6, 12.5], tgt: [1, 0.8, 0], fov: 52 }]) },
+  { id: 'p-tramp', seconds: 3, query: 'nosw&mute&level=2&solve=2', init: sky('sunset'),
+    speed: (t) => (t < 0.5 ? 0 : 1.6),
+    cam: path([{ u: 0, pos: [-1, 3.0, 14], tgt: [0, 1.4, 0], fov: 55 }, { u: 1, pos: [0.5, 2.6, 12.5], tgt: [1, 1.6, 0], fov: 55 }]) },
+  { id: 'p-plank', seconds: 2.5, query: 'nosw&mute&level=2&solve=1', init: sky('sunset'),
+    speed: (t) => (t < 0.4 ? 0 : 1.7),
+    cam: path([{ u: 0, pos: [-1, 3.0, 14], tgt: [0, 0.6, 0], fov: 52 }, { u: 1, pos: [0.5, 2.6, 12.5], tgt: [1, 0.8, 0], fov: 52 }]) },
 ];

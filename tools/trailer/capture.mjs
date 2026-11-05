@@ -18,6 +18,7 @@ const only = argv.length ? argv : SHOTS.map((s) => s.id);
 const CSS = `
 #app > :not(canvas):not(.hud-bottom){display:none!important}
 .hud-bottom .help, .hud-bottom .word-chips, .hud-bottom .hotbar, .suggest, .spell-ghost{display:none!important}
+.spell-input::placeholder{color:transparent!important}
 body.prompt-off .hud-bottom{display:none!important}
 .hud-bottom{transform:translateX(-50%) scale(1.7)!important;transform-origin:50% 100%;bottom:40px!important}
 `;
@@ -70,7 +71,17 @@ for (const id of only) {
       const k = shot.speed(t, since);
       await page.evaluate((k) => { window.__blockspell.game.timeScale = k; }, k);
     }
-    if (shot.cam) { const c = shot.cam(t, u); await page.evaluate((c) => { window.__cam = c; }, c); }
+    if (shot.cam) {
+      const c = shot.cam(t, u);
+      if (shot.track && t >= shot.track.from - 0.6) {
+        const p = await page.evaluate((id) => { const e = window.__blockspell.state().entities.find((e) => e.id === id); return e ? [e.x, e.y, e.z] : null; }, shot.track.id);
+        if (p) {
+          const k = Math.min(1, (t - shot.track.from + 0.6) / 0.6), w = shot.track.weight * k * k * (3 - 2 * k);
+          c.tgt = c.tgt.map((v, i) => v + (p[i] - v) * w);
+        }
+      }
+      await page.evaluate((c) => { window.__cam = c; }, c);
+    }
     await page.evaluate((ms) => window.__tick(ms), 1000 / FPS);
     if (i % step === 0) {
       await page.screenshot({ path: join(dir, `${String(i).padStart(5, '0')}.jpg`), type: 'jpeg', quality: 95 });

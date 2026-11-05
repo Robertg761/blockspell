@@ -6,7 +6,7 @@ import math, os, subprocess, sys
 import numpy as np
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 sys.path.insert(0, os.path.dirname(__file__))
-from edit import CLIPS, BLACK, ENDBG, FPS
+from edit import CLIPS, BLACK, ENDBG, FPS, MARK, TOTAL as _T, CLIMAX_END as _CE
 
 args = [a for a in sys.argv[1:] if not a.startswith('--')]
 FRAMES, LOGO, AUDIO, OUT = args[:4]
@@ -22,14 +22,11 @@ def font(name, size): return ImageFont.truetype(FD + name, int(size * SCALE))
 MONO = '/usr/share/fonts/truetype/dejavu/DejaVuSansMono-Bold.ttf'
 
 # ---- timeline -------------------------------------------------------------------------------
-timeline = []  # (start, dur, shot, offset)
-t = 0.0
-for shot, off, dur in CLIPS:
-    timeline.append((t, dur, shot, off)); t += dur
-CLIMAX_END = t
-END_START = t + BLACK
+timeline = [(MARK[shot], dur, shot, off) for shot, off, dur in CLIPS]
+CLIMAX_END = _CE
+END_START = MARK['end']
 timeline.append((END_START, ENDBG[2], ENDBG[0], ENDBG[1]))
-TOTAL = END_START + ENDBG[2]
+TOTAL = _T
 
 def source_frame(f):
     ts = f / FPS
@@ -63,20 +60,24 @@ def win(t, a, b, fin=0.25, fout=0.3):  # 0..1 visibility
     if t < a or t > b: return 0.0
     return min(1.0, (t - a) / fin, (b - t) / fout)
 
+M = MARK
+def clip(shot, text, style='chip', pad=0.0):  # a caption that lives exactly as long as its clip
+    d = {c[0]: c[2] for c in CLIPS}[shot]
+    return (text, M[shot] + pad, M[shot] + d - 0.04, style)
 CAPTIONS = [  # (text, a, b, style)
-    ('WRITE A WORD.', 0.7, 3.3, 'big-top'),
-    ('MAKE IT REAL.', 4.25, 6.0, 'big-top-slam'),
-    ('3 rainbow balloons', 6.0, 7.0, 'chip'), ('flaming red rocket', 7.0, 8.0, 'chip'), ('giant ufo', 8.0, 9.0, 'chip'),
-    ('big dog', 9.0, 10.0, 'chip'), ('giant hotairballoon', 10.0, 11.0, 'chip'), ('giant snowman', 11.0, 12.0, 'chip'),
-    ('flaming giant tnt', 12.0, 14.0, 'chip'),
-    ('A WORLD OF FLOATING ISLANDS', 18.25, 21.75, 'mid'),
-    ('MANY WAYS TO SOLVE EVERY PUZZLE', 22.25, 28.2, 'mid'),
-    ('big bridge', 22.7, 26.0, 'chip'), ('cloud', 26.3, 29.0, 'chip'), ('big ladder', 29.3, 32.0, 'chip'),
-    ('EVERYTHING REACTS.', 32.3, 35.7, 'mid'),
-    ('SO WHAT WILL YOU WRITE?', 36.2, 37.9, 'mid'),
+    ('WRITE A WORD.', 0.5, 2.6, 'big-top'),
+    ('MAKE IT REAL.', 3.55, 5.0, 'big-top-slam'),
+    clip('n-balloons', '3 rainbow balloons'), clip('n-dog', 'big dog'), clip('n-hotair', 'giant hot air balloon'),
+    clip('n-snow', 'giant snowman'), clip('m-tnt', 'flaming giant tnt'),
+    ('AN OPEN WORLD  ·  FULLY OFFLINE', M['world'] + 0.25, M['world'] + 2.9, 'mid'),
+    ('ONE PUZZLE. YOUR ANSWER.', M['p-bridge'] + 0.2, M['p-plank'] + 2.4, 'mid'),
+    clip('p-bridge', 'big bridge', pad=0.9), clip('p-tramp', 'trampoline', pad=0.7), clip('p-plank', 'big plank', pad=0.6),
+    ('REAL PHYSICS. REAL CHAOS.', M['c-demo'] + 0.2, M['c-bounce'] + 1.9, 'mid'),
+    ('WHAT WILL YOU WRITE?', M['climax'] + 2.9, M['climax'] + 4.7, 'mid'),
 ]
-FLASHES = [(3.5, 0.35, 0.25), (12.25, 0.5, 0.3), (14.0, 0.8, 0.45), (32.7, 0.45, 0.3), (38.65, 0.95, 0.6), (40.4, 0.4, 0.3)]
-SHAKES = [(3.5, 14), (14.0, 22), (38.65, 28), (12.25, 8), (32.7, 10), (40.4, 14)]
+FLASHES = [(2.8, 0.35, 0.25), (M['m-tnt'] + 0.25, 0.5, 0.3), (M['title'], 0.8, 0.45), (M['c-demo'] + 0.6, 0.45, 0.3), (M['climax'] + 0.65, 0.95, 0.6), (M['climax'] + 2.4, 0.4, 0.3)]
+SHAKES = [(2.8, 14), (M['title'], 22), (M['climax'] + 0.65, 28), (M['m-tnt'] + 0.25, 8), (M['c-demo'] + 0.6, 10), (M['climax'] + 2.4, 14)]
+TI0, TI1 = M['title'], M['world']
 
 def logo_frame(k):
     k = max(0, min(k, len([x for x in os.listdir(LOGO) if x.endswith('.png')]) - 1))
@@ -117,9 +118,13 @@ def render(f):
     arr = np.asarray(base, dtype=np.float32) / 255.0
     # darken under the title / end card so text and logo read
     dim = 0.0
-    if 14.0 <= ts < 18.0: dim = 0.38 * min(1, (ts - 14.0) / 0.4) * min(1, (18.0 - ts) / 0.5)
+    if TI0 <= ts < TI1: dim = 0.38 * min(1, (ts - TI0) / 0.4) * min(1, (TI1 - ts) / 0.5)
     if ts >= END_START: dim = 0.55 * min(1, (ts - END_START) / 1.2)
     if dim: arr = arr * (1 - dim)
+    sv = max([win(ts, a, b) for _, a, b, st in CAPTIONS if st != 'chip'] + [0])
+    if sv > 0:  # soft dark band behind headline captions so they read over bright skies
+        yy = np.linspace(0, 1, H, dtype=np.float32)[:, None, None]
+        arr = arr * (1 - 0.5 * sv * np.clip(1 - yy / 0.34, 0, 1) ** 1.5)
     for h, strength, dec in FLASHES:
         if ts >= h: arr = arr + (1 - arr) * strength * math.exp(-(ts - h) / dec)
     # fades to / from black
@@ -154,21 +159,22 @@ def render(f):
             d.rounded_rectangle((x0 - slide, y0, x0 + tw + 2 * px - slide, y0 + 44 * SCALE + 2 * py + 8 * SCALE), 18 * SCALE, fill=(14, 18, 34, int(200 * v)), outline=(255, 176, 46, int(255 * v)), width=int(3 * SCALE))
             d.text((x0 + px - slide, y0 + py), label, font=fnt, fill=(255, 244, 214, int(255 * v)))
     # title card: logo + tagline
-    if 14.0 <= ts < 18.0:
-        v = min(1, (18.0 - ts) / 0.4)
-        draw_logo(ov, int((ts - 14.0) * FPS), W / 2, H * 0.43, 1180 * SCALE, v)
-        tv = win(ts, 15.7, 18.0, 0.4, 0.4)
-        if tv > 0: tracked(d, (W / 2, H * 0.67), 'WRITE A WORD. MAKE IT REAL.', font('Inter-ExtraBold.otf', 52), (255, 214, 120, int(255 * tv)), 10)
+    if TI0 <= ts < TI1:
+        v = min(1, (TI1 - ts) / 0.4)
+        draw_logo(ov, int((ts - TI0) * FPS), W / 2, H * 0.43, 1180 * SCALE, v)
+        tv = win(ts, TI0 + 1.7, TI1, 0.4, 0.4)
+        if tv > 0: tracked(d, (W / 2, H * 0.67), 'A VOXEL SANDBOX RUN ON WORDS', font('Inter-ExtraBold.otf', 46), (255, 214, 120, int(255 * tv)), 10)
     # end card
     if ts >= END_START + 0.4:
         u = ts - END_START
         lv = min(1, (u - 0.4) / 0.6)
         draw_logo(ov, int((u - 0.4) * FPS), W / 2, H * 0.34, 980 * SCALE, lv)
         for text, a, fnt, y, col, tr in [
-            ('WRITE A WORD. MAKE IT REAL.', 1.8, font('Inter-ExtraBold.otf', 56), 0.56, (255, 255, 255), 10),
-            ('BUILT FOR HACKYARD #6  ·  OFFLINE', 2.8, font('Inter-Bold.otf', 38), 0.66, (255, 176, 46), 8),
-            ('Plays entirely offline in your browser. No install. No tracking.', 3.8, font('Inter-Medium.otf', 34), 0.74, (225, 230, 245), 1),
-            ('github.com/Robertg761/blockspell', 4.6, ImageFont.truetype(MONO, int(32 * SCALE)), 0.82, (160, 190, 255), 1),
+            ('WRITE A WORD. MAKE IT REAL.', 1.5, font('Inter-ExtraBold.otf', 56), 0.54, (255, 255, 255), 10),
+            ('BUILT FOR HACKYARD #6  ·  THEME: OFFLINE', 2.2, font('Inter-Bold.otf', 36), 0.63, (255, 176, 46), 7),
+            ('Open it once. Then play anywhere, no internet needed.', 2.9, font('Inter-Medium.otf', 34), 0.71, (225, 230, 245), 1),
+            ('Install it on your phone or computer. No tracking.', 3.4, font('Inter-Medium.otf', 34), 0.77, (225, 230, 245), 1),
+            ('github.com/Robertg761/blockspell', 3.9, ImageFont.truetype(MONO, int(32 * SCALE)), 0.85, (160, 190, 255), 1),
         ]:
             v = min(1, max(0, (u - a) / 0.6)) * min(1, (TOTAL - ts) / 1.5)
             if v > 0: tracked(d, (W / 2, H * y + (1 - v) * 14 * SCALE), text, fnt, col + (int(255 * v),), tr)
@@ -179,7 +185,7 @@ def render(f):
 nframes = int((LIMIT or TOTAL) * FPS)
 vf = 'eq=contrast=1.07:saturation=1.15:gamma=0.97,noise=alls=5:allf=t,unsharp=5:5:0.5'
 cmd = ['ffmpeg', '-y', '-loglevel', 'error', '-f', 'rawvideo', '-pix_fmt', 'rgb24', '-s', f'{W}x{H}', '-r', str(FPS), '-i', '-',
-       '-i', AUDIO, '-vf', vf, '-c:v', 'libx264', '-preset', 'slow', '-crf', '16', '-pix_fmt', 'yuv420p', '-movflags', '+faststart',
+       '-i', AUDIO, '-vf', vf, '-c:v', 'libx264', '-preset', 'slow', '-crf', '21', '-pix_fmt', 'yuv420p', '-movflags', '+faststart',
        '-c:a', 'aac', '-b:a', '256k', '-frames:v', str(nframes), '-shortest', OUT]
 p = subprocess.Popen(cmd, stdin=subprocess.PIPE)
 for f in range(nframes):

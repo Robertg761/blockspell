@@ -15,7 +15,7 @@ await page.evaluate(() => {
   const b = window.__blockspell;
   b.cast('giant golden dragon', [0, 0]);
   b.cast('2 rainbow balloons', [-4, 1]);
-  b.cast('giant hotairballoon', [9, -7]);
+  b.cast('giant hot air balloon', [9, -7]);
   g.step(4);
 });
 const dragon = await page.evaluate(() => { const e = window.__blockspell.state().entities.find((e) => /dragon/.test(e.id + e.label)); return e ? [e.x, e.y, e.z] : null; });
