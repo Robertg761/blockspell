@@ -39,7 +39,8 @@ export default defineTask({
     const star = place(world, 'star', f.p(0, 3.6, -4.2), 'ledge-prize');
     if (star) world.removeTag(star, 'flies');
   },
-  check: hold(1, heroStandingIn(f.box([-2, 3.4, -6.5], [2, 5, -2.5]))),
+  // 0.4 past the floor on every side: the hero can stand with their center over the rim
+  check: hold(1, heroStandingIn(f.box([-2.4, 3.4, -6.9], [2.4, 5, -2.1]))),
   start: f.p(0, 0, 3.5),
   solutions: solutions.map((s) => f.solution(s)),
 });
