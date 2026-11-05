@@ -2,6 +2,7 @@ node_modules
 dist
 *.log
 .DS_Store
+.render/
 desktop/node_modules
 desktop/app
 desktop/release
