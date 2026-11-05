@@ -13,6 +13,7 @@ const scale = Number(opt('scale', 1));
 const out = opt('out', 'trailer-frames');
 const step = Number(opt('step', 1));
 const FPS = Number(opt('fps', 24));
+if (!(FPS >= 20)) { console.error('--fps must be 20 or more: the game caps its physics step at 1/20 s, so slower capture rates would run the action slow.'); process.exit(1); }
 const only = argv.length ? argv : SHOTS.map((s) => s.id);
 
 const CSS = `
