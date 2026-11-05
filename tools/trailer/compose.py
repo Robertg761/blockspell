@@ -2,7 +2,7 @@
 """Cuts the rendered shots together, adds titles/logo/flashes/fades, grades, and muxes the score.
    python3 tools/trailer/compose.py FRAMES_DIR LOGO_DIR AUDIO.wav OUT.mp4 [--seconds N] [--scale 1]
 """
-import math, os, subprocess, sys
+import json, math, os, subprocess, sys
 import numpy as np
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 sys.path.insert(0, os.path.dirname(__file__))
@@ -28,15 +28,23 @@ END_START = MARK['end']
 timeline.append((END_START, ENDBG[2], ENDBG[0], ENDBG[1]))
 TOTAL = _T
 
+_meta = {}
+def shot_meta(shot):  # frame rate, step and frame count of a capture (meta.json), cached
+    if shot not in _meta:
+        d = os.path.join(FRAMES, shot)
+        n = len([x for x in os.listdir(d) if x.endswith('.jpg')])
+        m = json.load(open(os.path.join(d, 'meta.json')))
+        _meta[shot] = (m.get('fps', FPS), m.get('step', 1), n)
+    return _meta[shot]
+
 def source_frame(f):
     ts = f / FPS
     for start, dur, shot, off in reversed(timeline):
         if ts >= start:
-            idx = int(round((ts - start + off) * FPS))
-            d = os.path.join(FRAMES, shot)
-            n = len([x for x in os.listdir(d) if x.endswith('.jpg')])
-            idx = min(idx, n - 1)
-            return os.path.join(d, f'{idx:05d}.jpg') if ts < start + dur + 1e-6 else None
+            if ts >= start + dur + 1e-6: return None
+            cfps, step, n = shot_meta(shot)
+            k = min(n - 1, int(round((ts - start + off) * cfps / step)))  # files are named by original frame index
+            return os.path.join(FRAMES, shot, f'{k * step:05d}.jpg')
     return None
 _counts = {}
 
