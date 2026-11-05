@@ -11,6 +11,17 @@ export interface LevelGoal {
   check: (world: GameWorld) => boolean;
 }
 
+/** Small, visible tasks for a guided level. Completion lasts until restart. */
+export interface LevelObjective {
+  id: string;
+  title: string;
+  instruction: string;
+  hint: string;
+  spells: string[];
+  at: V3;
+  check: (world: GameWorld) => boolean;
+}
+
 /**
  * One step of a scripted solution (see src/levels/solve.ts). Solutions are
  * replayed headlessly by tools/levels.html to prove each level is solvable.
@@ -88,6 +99,7 @@ export interface LevelDef {
   par?: number;
   setup: (world: GameWorld) => void;
   goal?: LevelGoal;
+  objectives?: LevelObjective[];
   /** Known working solutions, verified by `tools/levels.html`. */
   solutions?: LevelSolution[];
 }

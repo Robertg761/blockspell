@@ -10,7 +10,7 @@ import { menuLevels, orderedLevels } from './levels';
 import { mark } from './levels/goals';
 import { progress } from './levels/progress';
 import { SolutionRunner } from './levels/solve';
-import { starsFor, type LevelDef, type LevelSolution, type V3 } from './levels/types';
+import { starsFor, type LevelDef, type LevelObjective, type LevelSolution, type V3 } from './levels/types';
 import type { Entity } from './core/entity';
 import { buildZone, castLimitAt, orderedTasks, zoneAt, zoneEntry, zones } from './tasks';
 import { worldSave } from './tasks/save';
@@ -22,7 +22,7 @@ import { hd, onHDChange, setHDEnabled, updateVoxelLOD } from './voxel/hd';
 import { parseSpell, randomWords, suggestAdjectives } from './parser/parser';
 import { adjectives } from './adjectives';
 import { CarryPrompt } from './ui/prompt';
-import { Hud } from './ui/hud';
+import { Hud, type DemoNews } from './ui/hud';
 import { h } from './ui/dom';
 import { isTouch } from './ui/touch';
 import { CARRY, carryHint, carryKind, handGrab, type Carry, type CarryHint } from './behaviors/lib/carry';
@@ -118,6 +118,11 @@ export class Game {
   private raycaster = new Raycaster();
   private logo?: HTMLElement;
   private trackerAcc = 0;
+  private activeObjective: string | null = null;
+  /** Guided levels keep the view clear: word and trophy news waits here for the finish panel. Null once shown. */
+  private heldNews: DemoNews | null = null;
+  /** The end-of-demo camera move: glides out to the whole island and holds behind the finish panel. */
+  private overview: { start: number; from: [Vector3, Vector3]; to: [Vector3, Vector3] } | null = null;
   /** Multi-object casts still spawning (one object every 0.14 s): a zone reset cancels the ones aimed at that zone. */
   private pendingCasts = new Set<{ zone: string | null; x: number; y: number; z: number; left: number; cancelled: boolean }>();
 
@@ -175,7 +180,7 @@ export class Game {
     this.refreshChips();
 
     this.bindInput();
-    this.renderer.controls.addEventListener('start', () => (this.intro = null));
+    this.renderer.controls.addEventListener('start', () => { this.intro = null; this.overview = null; });
     this.loadLevel(levels.find((l) => !l.goal)?.id ?? levels[0].id);
     this.hud.setHD(hd.enabled);
     // HD meshes for the hero and every castable object, built in the background so spawns don't wait
@@ -195,6 +200,7 @@ export class Game {
     this.keys.clear();
     this.hud.showTitle({
       logo: this.logo,
+      onDemo: () => { this.loadLevel('demo'); this.startIntro(); },
       exploreLabel: '▶ Explore',
       onExplore: () => this.explore(),
       onFreePlay: () => this.freePlay(),
@@ -370,9 +376,12 @@ export class Game {
     this.won = false;
     this.failed = false;
     this.words = 0;
+    this.activeObjective = null;
+    this.heldNews = level.objectives ? { words: [], trophies: [], experiments: 0 } : null;
+    this.overview = null;
     this.lastResult = null;
     clearTimeout(this.winTimer);
-    this.hud.hideWin();
+    this.hud.hideOverlay();
     this.reactions.clear();
     this.world.clear();
     this.pendingCasts.clear();
@@ -402,6 +411,8 @@ export class Game {
     this.marker.set(new Vector3(sp[0], sp[1] || (Number.isFinite(g) ? g : 0), sp[2]));
     this.hud.autoFocus = !level.hero;
     this.hud.setLevel(level);
+    if (level.objectives) this.refreshObjectives();
+    this.refreshChips();
     if (this.zone) this.hud.setZoneName(this.zone.name);
     if (level.hero) this.hud.input.blur();
     this.tutorial.onLevel(level);
@@ -583,7 +594,7 @@ export class Game {
     this.tracker.noteCast(this.zone?.id ?? null, res.def.id);
     if (!this.won) {
       this.words++;
-      this.hud.setWords(this.words, this.level.goal ? (this.level.par ?? 2) : null);
+      this.hud.setWords(this.words, this.level.goal && !this.level.objectives ? (this.level.par ?? 2) : null);
     }
     const count = Math.min(res.count, MAX_ENTITIES);
     const base = this.marker.position;
@@ -637,7 +648,9 @@ export class Game {
     }
 
     const name = (count > 1 ? `${count} × ` : '') + res.label;
+    if (fresh.object) this.heldNews?.words.push(res.def.name);
     if (res.correctedFrom) this.hud.toasts.show(`Guessing you meant “${res.def.name}”.`, { title: `✦ ${name}`, kind: 'success' });
+    else if (this.heldNews) { /* the finish panel lists new words */ }
     else if (fresh.object && res.def.blurb)
       this.hud.toasts.show(res.def.blurb, { title: `✦ New word: ${name}  (${this.spellbook.count}/${this.spellbook.total})`, kind: 'success' });
     else if (!this.seen.has(res.def.id) && res.def.blurb) this.hud.toasts.show(res.def.blurb, { title: `✦ ${name}`, kind: 'success' });
@@ -672,6 +685,8 @@ export class Game {
 
   /** Suggestion chips under the spell bar: a few words the player hasn't found yet. */
   private refreshChips(): void {
+    // The demo offers relevant ideas in its task card; random casts distract from the next job.
+    if (this.level?.objectives) { this.hud.setWordChips([]); return; }
     const all = spellbookObjects();
     const unknown = all.filter((d) => !this.spellbook.has(d.id));
     const pool = (unknown.length >= 6 ? unknown : all).map((d) => d.name);
@@ -722,7 +737,7 @@ export class Game {
   /** Every frame in the open world: points the beam and the arrow at the nearest unfinished task. */
   private updateGuide(dt: number): void {
     const h = this.world.hero;
-    const on = settings.get().guide && !!this.level.tasks && !!this.waypointAt && !!h?.alive && !this.titleMode;
+    const on = settings.get().guide && !!(this.level.tasks || this.level.objectives) && !!this.waypointAt && !!h?.alive && !this.titleMode;
     let angle: number | null = null, dist = 0;
     if (on) {
       const wp = this.waypointAt!;
@@ -734,7 +749,7 @@ export class Game {
       angle = Math.atan2(-dx * fz + dz * fx, dx * fx + dz * fz);
     }
     this.hud.setCompass(angle, dist);
-    this.waypoint.update(dt, on && dist > 5 && !this.photo && !this.hud.overlayOpen);
+    this.waypoint.update(dt, on && (this.level.objectives ? dist > 1 : dist > 5) && !this.photo && !this.hud.overlayOpen);
   }
 
   // ------------------------------------------------------------ tools
@@ -821,11 +836,13 @@ export class Game {
 
   /** A trophy was just earned: toast, chime and sparkles. */
   private onExperiment(x: Experiment): void {
+    if (this.heldNews) { this.heldNews.experiments++; return; }
     this.hud.toasts.show(`${x.name}. Ticked in the lab notebook (🏆 panel).`, { title: `${x.icon} Experiment done`, kind: 'success', duration: 4200 });
     this.fx.sound('chime', { pitch: 1.3, volume: 0.7 });
   }
 
   private onTrophy(t: TrophyDef): void {
+    if (this.heldNews) { this.heldNews.trophies.push(t.name); return; }
     this.hud.toasts.show(t.desc, { title: `${t.icon} Trophy: ${t.name}`, kind: 'success', duration: 5000 });
     this.fx.sound('star', { pitch: 1.2 });
     this.fx.sound('chime', { pitch: 1.5, volume: 0.7 });
@@ -1297,6 +1314,8 @@ export class Game {
     if (this.level.hero && (!hero?.alive || hero.y < (this.level.killY ?? -6))) this.respawnHero();
     else if (hero?.alive && this.level.hero && this.swimming(hero, dt)) this.respawnHero(true);
 
+    if (this.level.objectives && !this.won) this.refreshObjectives(true);
+
     if (this.level.tasks) {
       this.tracker.update(dt, this.zone);
       this.trackerAcc += dt;
@@ -1352,6 +1371,36 @@ export class Game {
     for (let t = 0; t < seconds; t += dt) this.tick(dt);
   }
 
+  /** Check every job, so an inventive player can finish them in any order. */
+  private refreshObjectives(check = false): void {
+    const list = this.level.objectives;
+    if (!list) return;
+    if (check) for (const objective of list) {
+      const key = `objective:${objective.id}`;
+      if (this.world.flags[key] || !objective.check(this.world)) continue;
+      this.world.flags[key] = true;
+      this.fx.celebrate({ x: objective.at[0], y: objective.at[1], z: objective.at[2] });
+      this.fx.sound('chime');
+      this.hud.toasts.show(objective.title, { kind: 'success', title: 'Job done!', duration: 2600 });
+    }
+    const done = (o: LevelObjective) => this.world.flags[`objective:${o.id}`] === true;
+    const active = list.find((o) => o.id === this.activeObjective && !done(o)) ?? list.find((o) => !done(o));
+    this.activeObjective = active?.id ?? null;
+    this.waypointAt = active?.at ?? null;
+    this.waypoint.target(active ? { x: active.at[0], y: active.at[1], z: active.at[2] } : null);
+    this.hud.setObjectives(list, list.filter(done).map((o) => o.id), active, (id) => {
+      this.activeObjective = id;
+      this.refreshObjectives();
+    }, () => {
+      if (!active) return;
+      this.setAim(new Vector3(...active.at));
+      const hero = this.world.hero, range = this.level.castRange;
+      if (range && hero?.alive && Math.hypot(active.at[0] - hero.x, active.at[2] - hero.z) > range) {
+        this.hud.toasts.show('Walk a little closer, then cast.', { title: 'Aimed, but out of reach' });
+      }
+    });
+  }
+
   private win(): void {
     this.won = true;
     const stars = starsFor(this.level, this.words);
@@ -1360,20 +1409,59 @@ export class Game {
     this.hud.setGoalDone();
     const h = this.world.hero;
     const p = h?.alive ? h.body.position : this.marker.position;
-    this.fx.celebrate({ x: p.x, y: p.y, z: p.z });
+    // A guided level's last job has just had its own celebration.
+    if (!this.level.objectives) this.fx.celebrate({ x: p.x, y: p.y, z: p.z });
+    else if (!this.runner) this.startOverview();
     this.world.events.emit('levelComplete', { levelId: this.level.id });
     const levels = menuLevels().filter((l) => l.goal);
     const next = levels[levels.indexOf(this.level) + 1] ?? null;
     const level = this.level;
     clearTimeout(this.winTimer);
     this.winTimer = window.setTimeout(() => {
-      if (this.level !== level || this.runner) return;
+      if (this.level !== level || this.runner || this.titleMode) return;
+      if (level.objectives) {
+        const news = this.heldNews ?? { words: [], trophies: [], experiments: 0 };
+        this.heldNews = null;
+        this.hud.showDemoWin(this.words, news, {
+          onExplore: () => this.explore(),
+          onRetry: () => this.loadLevel(level.id),
+          onKeep: () => { this.overview = null; this.hud.hideOverlay(); },
+          onFreePlay: () => this.freePlay(),
+        });
+        return;
+      }
       this.hud.showWin(
         { level, stars, words: this.words, par: level.par ?? 2, newBest, next },
         () => next && this.loadLevel(next.id),
         () => this.loadLevel(level.id),
       );
-    }, 1600);
+    }, level.objectives ? (OVERVIEW_GLIDE + OVERVIEW_HOLD) * 1000 : 1600);
+  }
+
+  /** Pulls back to the level's opening view so the player sees everything they changed. */
+  private startOverview(): void {
+    const view = this.level.camera;
+    if (!view) return;
+    const { camera, controls } = this.renderer;
+    const target = new Vector3(...view.target);
+    const position = new Vector3(...view.position).sub(target).multiplyScalar(OVERVIEW_ZOOM).add(target);
+    this.intro = null;
+    // Real time, not frame time: the panel arrives on a timer, so a slow machine mustn't fall behind it.
+    const start = performance.now() - (this.fx.screen.calm ? OVERVIEW_GLIDE * 1000 : 0);
+    this.overview = { start, from: [camera.position.clone(), controls.target.clone()], to: [position, target] };
+  }
+
+  /** Runs the overview. False once it's over, which hands the camera back to the follow code. */
+  private stepOverview(): boolean {
+    const view = this.overview;
+    if (!view) return false;
+    const { camera, controls } = this.renderer;
+    const t = (performance.now() - view.start) / 1000;
+    const k = ease.inOutSine(Math.min(1, t / OVERVIEW_GLIDE));
+    camera.position.lerpVectors(view.from[0], view.to[0], k);
+    controls.target.lerpVectors(view.from[1], view.to[1], k);
+    if (t > OVERVIEW_GLIDE + OVERVIEW_HOLD + 0.1 && !this.hud.overlayOpen) this.overview = null;
+    return true;
   }
 
   /** Smoothly keeps the hero in view while leaving the player free to orbit. */
@@ -1382,7 +1470,7 @@ export class Game {
     controls.autoRotate = this.titleMode;
     controls.autoRotateSpeed = 0.6;
     const h = this.world.hero;
-    if (!h?.alive || this.titleMode) return;
+    if (!h?.alive || this.titleMode || this.stepOverview()) return;
     const k = 1 - Math.exp(-dt * 3.5);
     const ty = Math.max(h.y + 0.4, (this.level.killY ?? -6) + 3);
     const d = new Vector3((h.x - controls.target.x) * k, (ty - controls.target.y) * k, (h.z - controls.target.z) * k);
@@ -1477,6 +1565,10 @@ export class Game {
   };
 }
 
+/** The end-of-demo camera move: seconds gliding out, seconds holding before the panel, and how far past the opening view it stops. */
+const OVERVIEW_GLIDE = 1.8;
+const OVERVIEW_HOLD = 1.7;
+const OVERVIEW_ZOOM = 1.15;
 const SURPRISED = 'blockspell.surprised.v1';
 const FINALE = 'blockspell.finale.v1';
 const TROPHY_TOTAL = TROPHIES.length;

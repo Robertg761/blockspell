@@ -57,6 +57,20 @@ button, input, select { font: inherit; color: inherit; }
 }
 .goal.done .goal-box { background: var(--good); border-color: var(--good); opacity: 1; box-shadow: inset 0 0 0 2px #fff; }
 .goal.done { color: var(--good); }
+.objectives.hidden { display: none; }
+.objective-progress { font-size: 12px; font-weight: 750; color: #276d3b; margin: 8px 0; }
+.objective-list { display: grid; gap: 4px; }
+.objective-row { display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; border: 1px solid transparent; border-radius: 8px; background: #ffffff80; padding: 6px 8px; font-size: 12px; cursor: pointer; }
+.objective-row[aria-pressed="true"] { border-color: #ba6b0b; background: #fff1d6; font-weight: 700; }
+.objective-row[data-done="true"] { color: #286b3d; background: #e8f5e9; opacity: 1; cursor: default; }
+.objective-number { font-weight: 800; width: 16px; flex: none; }
+.objective-instruction { font-size: 13px; line-height: 1.4; margin: 10px 0 8px; }
+.objective-actions, .objective-spells { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.objective-spells { margin-top: 8px; font-size: 12px; }
+.objective-controls { font-size: 11px; line-height: 1.4; opacity: 0.75; margin: 8px 0 0; }
+.objective-row:focus-visible, .objective-actions button:focus-visible, .objective-spells button:focus-visible { outline: 3px solid #247da3; outline-offset: 2px; }
+.has-objectives .level-desc { display: none; }
+.word-chips:empty { display: none; }
 .goal-free { font-weight: 500; font-size: 13px; opacity: 0.8; }
 .link-btn {
   align-self: flex-start; background: none; border: 0; padding: 2px 0; margin-top: 2px;
@@ -386,6 +400,25 @@ body.touch .chip, body.touch .icon-btn { min-height: 40px; }
 /* ---------- task compass ---------- */
 .goal-compass { margin-left: auto; display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 700; color: #1f7fa8; flex: none; }
 .goal-compass.hidden { display: none; }
+
+@media (max-width: 640px), (max-height: 600px) {
+  .has-objectives .objective-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .has-objectives .objective-row { font-size: 11px; padding: 4px; gap: 3px; }
+  .has-objectives .objective-progress { margin: 4px 0; }
+  .has-objectives .objective-instruction { margin: 5px 0; font-size: 12px; }
+  .has-objectives .objective-spells { margin-top: 4px; }
+  .has-objectives .objective-controls { display: none; }
+  .level-card.has-objectives::after { display: none; }
+}
+@media (max-height: 500px) and (min-width: 641px) {
+  .has-objectives .objective-list { display: none; }
+}
+/* The side tools sit over the right edge of a full-width card on phones. */
+@media (max-width: 640px) {
+  .level-card.has-objectives { margin-right: 46px; }
+}
+body.touch .objective-row { min-height: 34px; }
+.demo-win .link-btn { align-self: center; flex-basis: 100%; margin-top: 0; }
 .compass-arrow { display: inline-block; font-size: 15px; line-height: 1; transition: transform 0.12s linear; }
 
 /* ---------- pinned spells ---------- */
