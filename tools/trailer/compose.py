@@ -81,10 +81,10 @@ CAPTIONS = [  # (text, a, b, style)
     ('ONE PUZZLE. YOUR ANSWER.', M['p-bridge'] + 0.2, M['p-plank'] + 2.4, 'mid'),
     clip('p-bridge', 'big bridge', pad=0.9), clip('p-tramp', 'trampoline', pad=0.7), clip('p-plank', 'big plank', pad=0.6),
     ('REAL PHYSICS. REAL CHAOS.', M['c-demo'] + 0.2, M['c-bounce'] + 1.9, 'mid'),
-    ('WHAT WILL YOU WRITE?', M['climax'] + 2.9, M['climax'] + 4.7, 'mid'),
+    ('WHAT WILL YOU WRITE?', M['climax2'] + 1.5, M['climax2'] + 3.2, 'mid'),
 ]
-FLASHES = [(2.8, 0.35, 0.25), (M['m-tnt'] + 0.25, 0.5, 0.3), (M['title'], 0.8, 0.45), (M['c-demo'] + 0.6, 0.45, 0.3), (M['climax'] + 0.65, 0.95, 0.6), (M['climax'] + 2.4, 0.4, 0.3)]
-SHAKES = [(2.8, 14), (M['title'], 22), (M['climax'] + 0.65, 28), (M['m-tnt'] + 0.25, 8), (M['c-demo'] + 0.6, 10), (M['climax'] + 2.4, 14)]
+FLASHES = [(2.8, 0.35, 0.25), (M['m-tnt'] + 0.25, 0.5, 0.3), (M['title'], 0.8, 0.45), (M['c-demo'] + 0.6, 0.45, 0.3), (M['climax2'] + 0.7, 0.95, 0.6), (M['climax2'] + 2.0, 0.4, 0.3)]
+SHAKES = [(2.8, 14), (M['title'], 22), (M['climax2'] + 0.7, 28), (M['m-tnt'] + 0.25, 8), (M['c-demo'] + 0.6, 10), (M['climax2'] + 2.0, 14)]
 TI0, TI1 = M['title'], M['world']
 
 def logo_frame(k):
@@ -182,7 +182,7 @@ def render(f):
             ('BUILT FOR HACKYARD #6  ·  THEME: OFFLINE', 2.2, font('Inter-Bold.otf', 36), 0.63, (255, 176, 46), 7),
             ('Open it once. Then play anywhere, no internet needed.', 2.9, font('Inter-Medium.otf', 34), 0.71, (225, 230, 245), 1),
             ('Install it on your phone or computer. No tracking.', 3.4, font('Inter-Medium.otf', 34), 0.77, (225, 230, 245), 1),
-            ('github.com/Robertg761/blockspell', 3.9, ImageFont.truetype(MONO, int(32 * SCALE)), 0.85, (160, 190, 255), 1),
+            ('robertg761.github.io/blockspell', 3.9, ImageFont.truetype(MONO, int(32 * SCALE)), 0.85, (160, 190, 255), 1),
         ]:
             v = min(1, max(0, (u - a) / 0.6)) * min(1, (TOTAL - ts) / 1.5)
             if v > 0: tracked(d, (W / 2, H * y + (1 - v) * 14 * SCALE), text, fnt, col + (int(255 * v),), tr)

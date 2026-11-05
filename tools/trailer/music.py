@@ -96,7 +96,7 @@ def brass(f, d, vol=1.0):
 # Section marks come from edit.py so the score always follows the cut.
 from edit import MARK, TOTAL as EDIT_TOTAL
 O = MARK['enter']; M0 = MARK['montage']; TNT = MARK['n-tnt']; TI = MARK['title']; G0 = MARK['world']
-CH = MARK['c-demo']; K = MARK['climax']; E = MARK['end']; PZ = MARK['p-bridge']
+CH = MARK['c-demo']; K = MARK['climax2']; E = MARK['end']; PZ = MARK['p-bridge']
 
 CHORDS = {  # name: (root midi bass, triad midi)
     'Am': (33, [57, 60, 64]), 'F': (29, [53, 57, 60]), 'C': (36, [60, 64, 67]), 'G': (31, [55, 59, 62]),
@@ -157,11 +157,11 @@ for k in range(int((CH - G0) / BEAT)):
     if k % 2 == 1: put(clap(0.9), t0, 0.45, 0, 0.2)
     put(hat(False, 0.7), t0 + 0.25, 0.5, 0.3)
     if k % 4 == 3: put(hat(True, 0.6), t0 + 0.25, 0.35, -0.3)
-for ch_t in np.arange(TI, K + 5, 4):
+for ch_t in np.arange(TI, K + 3, 4):
     name = chord_at(ch_t + 0.01); root, tri = CHORDS[name]
     for n in tri: put(pad(hz(n), 4.4, 1400 if ch_t < CH else 2200, 1.0), ch_t, 0.18, rng.uniform(-0.4, 0.4), 0.5)
     put(pad(hz(root + 12), 4.4, 400, 1.2), ch_t, 0.45, 0, 0.3)
-for k in range(int((K + 5 - TI) / (BEAT / 2))):             # 16th-note bass / arp pattern
+for k in range(int((K + 3.3 - TI) / (BEAT / 2))):             # 16th-note bass / arp pattern
     t0 = TI + k * BEAT / 2
     if t0 < G0: continue
     name = chord_at(t0); root, tri = CHORDS[name]
@@ -181,13 +181,12 @@ for k in range(int((K - CH) / BEAT)):
 impact(CH + 0.6, 0.9)
 put(riser(2.9), K - 2.9, 0.8, 0, 0.3)
 for k in range(10): put(snare(1.0 + k * 0.03), K - 1.6 + k * 0.1 * (1 - k * 0.04), 0.35 + 0.05 * k)
-impact(K + 0.65, 1.3)
-put(hp(noise(5), 3500) * env_ad(5, 0.005, 1.6) * 0.45, K + 0.65, 0.6, 0, 0.5)
-impact(K + 2.4, 1.0)
-impact(K + 3.6, 0.8)
+impact(K + 0.7, 1.3)
+put(hp(noise(5), 3500) * env_ad(5, 0.005, 1.6) * 0.45, K + 0.7, 0.6, 0, 0.5)
+impact(K + 2.0, 1.0)
 for n, p in [(45, -0.3), (52, 0.0), (57, 0.0), (60, 0.2), (64, 0.3)]:
-    put(brass(hz(n), 4.5), K + 0.65, 0.25, p, 0.5)
-put(lp(noise(4.5), 400) * env_ad(4.5, 0.05, 1.5), K + 0.6, 0.8, 0, 0.3)   # rumble under the slow-mo
+    put(brass(hz(n), 3.2), K + 0.7, 0.25, p, 0.5)
+put(lp(noise(3.3), 400) * env_ad(3.3, 0.05, 1.5), K + 0.65, 0.8, 0, 0.3)   # rumble under the slow-mo
 
 # -- the end card
 put(boom(4.0, 0.7), E, 0.7, 0, 0.5)

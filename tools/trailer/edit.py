@@ -11,7 +11,7 @@ CLIPS = [
     ('world', 0, 3),
     ('p-bridge', 0, 3.5), ('p-tramp', 0, 3), ('p-plank', 0, 2.5),
     ('c-demo', 0, 2), ('c-fireworks', 0, 2), ('c-bounce', 0, 2),
-    ('climax', 0, 5),
+    ('climax2', 0.4, 3.3),
 ]
 BLACK = 0.6          # beat of black after the climax
 ENDBG = ('endbg', 0, 7.5)

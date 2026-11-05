@@ -47,6 +47,11 @@ def layout(base, W, H):
     bw, bh = tw + 80 * u, 78 * u; x0, y0 = (W / 2 - bw / 2) if W < H * 1.2 else 70 * u, H * 0.93 - bh / 2
     d.rounded_rectangle((x0, y0, x0 + bw, y0 + bh), bh / 2, fill=(255, 176, 46, 255))
     tracked(d, (x0 + bw / 2, y0 + bh / 2 - 21 * u), badge, f, (36, 22, 8, 255), 5 * u, shadow=False)
+    url = 'robertg761.github.io/blockspell'
+    uf = ImageFont.truetype(MONO, int(max(22, 30 * u)))
+    uw = d.textlength(url, font=uf)
+    if W < H * 1.2: tracked(d, (W / 2, H * 0.835), url, uf, (255, 236, 190, 255), 1)       # square: above the badge
+    else: tracked(d, (W - 70 * u - uw / 2, H * 0.93 - 17 * u), url, uf, (255, 236, 190, 255), 1)  # wide: opposite the badge
     img.alpha_composite(ov)
     return img.convert('RGB')
 

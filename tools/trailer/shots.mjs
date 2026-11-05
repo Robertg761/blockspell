@@ -156,4 +156,8 @@ export const SHOTS = [
   { id: 'p-plank', seconds: 2.5, query: 'nosw&mute&level=2&solve=1', init: sky('sunset'),
     speed: (t) => (t < 0.4 ? 0 : 1.7),
     cam: path([{ u: 0, pos: [-1, 3.0, 14], tgt: [0, 0.6, 0], fov: 52 }, { u: 1, pos: [0.5, 2.6, 12.5], tgt: [1, 0.8, 0], fov: 52 }]) },
+  // ---- v3: a brighter finale -- tnt chain under a rocket volley at sunset, no black debris ----
+  { id: 'climax2', seconds: 3.8, init: seq(sky('sunset'), cast('3 flaming giant tnt', [0, 0]), cast('3 flaming rainbow rocket', [-4, -3]), cast('2 flaming golden rocket', [4, -4]), step(0.5)),
+    speed: (t, since) => (since === null ? 1 : since < 0.15 ? 0.1 : since < 1.0 ? 0.25 : Math.min(0.8, 0.25 + (since - 1.0) * 0.3)),
+    cam: path([{ u: 0, pos: [9, 1.6, 9], tgt: [0, 2.0, 0], fov: 46 }, { u: 0.45, pos: [8, 2.4, 10], tgt: [0, 3.2, -1], fov: 50 }, { u: 1, pos: [3, 7, 15], tgt: [0, 6, -2], fov: 58 }], { shake: 0.02 }) },
 ];
