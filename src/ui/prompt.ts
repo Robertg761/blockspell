@@ -1,7 +1,7 @@
 import { Vector3, type Camera } from 'three';
 import type { CarryHint } from '../behaviors/lib/carry';
 import { rideKind } from '../behaviors/lib/ride';
-import { useLabel } from '../behaviors/lib/use';
+import { nearbyLabel, useLabel } from '../behaviors/lib/use';
 import { h } from './dom';
 import { isTouch } from './touch';
 import './prompt.css';
@@ -9,25 +9,32 @@ import './prompt.css';
 /** The [key, action] pairs to show; an empty key is plain text. */
 function lines(hint: CarryHint): [string, string][] {
   const name = hint.entity.label;
+  const near = hint.verb === 'lift' || hint.verb === 'drag' || hint.verb === 'heavy' || hint.verb === 'ride' ? nearbyLabel(hint.entity) : null;
+  return [...(near ? [['C', near] as [string, string]] : []), ...reach(hint, name)];
+}
+
+function reach(hint: CarryHint, name: string): [string, string][] {
   switch (hint.verb) {
     case 'lift': return [['E', `Grab ${name}`]];
     case 'wear': return [['E', `Put on ${name}`]];
     case 'ride': {
       const verb = hint.entity.def.ride?.verb ?? 'Ride';
-      return [['E', `${verb} ${name}`], ...(hint.entity.has('thrust') ? [['C', 'Light fuse'] as [string, string]] : [])];
+      return [['E', `${verb} ${name}`]];
     }
     case 'riding': {
-      if (!hint.fresh) return [];
+      if (!hint.fresh && !hint.entity.state.passenger) return [];
       const kind = rideKind(hint.entity);
       const flying: [string, string][] = kind === 'plane' || kind === 'hover' ? [['Space', 'Up'], ['Shift', 'Down']] : [];
-      return [['WASD', 'Steer'], ...flying, ['E', 'Get out']];
+      const cargo = hint.entity.state.passenger as { label: string } | null | undefined;
+      return [['WASD', 'Steer'], ...flying, ...(cargo ? [['F', `Drop ${cargo.label}`] as [string, string]] : []), ['E', 'Get out']];
     }
     case 'drag': return [['E', `Drag ${name}`]];
     case 'heavy': return [['', `${name[0].toUpperCase()}${name.slice(1)} is too heavy`]];
     case 'holding': {
       const use = useLabel(hint.entity);
       if (hint.entity.has('wearable')) return [['Space', 'Fly'], ['E', 'Take off']];
-      return [...(use ? [['C', use] as [string, string]] : []), ['E', hint.spot ? 'Put down' : 'Drop'], ['F', 'Throw'], ...(hint.entity.def.grip === undefined ? [['Q', 'Turn'] as [string, string]] : [])];
+      const put = hint.aboard ? `Ride with ${hint.entity.label}` : hint.spot ? 'Put down' : 'Drop';
+      return [...(use ? [['C', use] as [string, string]] : []), ['E', put], ['F', 'Throw'], ...(hint.entity.def.grip === undefined ? [['Q', 'Turn'] as [string, string]] : [])];
     }
     case 'dragging': return [['E', 'Let go']];
   }

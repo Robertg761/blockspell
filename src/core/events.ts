@@ -20,6 +20,8 @@ export interface GameEvents {
   broken: { entity: Entity };
   /** The hero read a book: show them the hint for what they're doing. */
   hint: Record<string, never>;
+  /** The hero picked up a coin they earned. */
+  coin: Record<string, never>;
   /** A line for the player, from something they did. */
   say: { text: string };
   /** The player used slow motion or paused time. */

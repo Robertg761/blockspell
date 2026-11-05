@@ -7,6 +7,8 @@ export const HERO = {
   speed: 2.5,
   /** With Shift down. */
   run: 5,
+  /** Swift boots from the shop multiply the run by this. */
+  bootSpeed: 1.2,
   /** Air control drifts toward this, which is what sets how far a jump carries. A running jump goes no further: the gaps are built around it. */
   airSpeed: 3.6,
   jump: 5.2,

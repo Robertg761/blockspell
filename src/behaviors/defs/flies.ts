@@ -21,7 +21,7 @@ export default defineBehavior({
     e.body.allowSleep = true;
   },
   fixedUpdate(e, world, _h) {
-    if (e.has('frozen') || e.body.mass === 0 || parked(e, world)) return;
+    if (e.has('frozen') || e.body.mass === 0 || parked(e)) return;
     const b = e.body;
     const ground = Math.max(0, world.groundAt(b.position.x, b.position.z));
     const alt = b.position.y - ground;

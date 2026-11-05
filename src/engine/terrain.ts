@@ -53,16 +53,22 @@ export const DEFAULT_TERRAIN: TerrainOptions = {
   cz: 0,
 };
 
-/** A tree baked into the scenery. Tools can cut it down (see behaviors/lib/use.ts). */
-export interface SceneryTree {
-  /** The foot of the trunk, in world space. */
+/** What a piece of scenery is made of: which tools work on it, and what it leaves. */
+export type SceneryKind = 'tree' | 'wood' | 'rock' | 'building';
+
+/** A thing baked into the scenery. Tools can bring it down (see behaviors/lib/use.ts). */
+export interface SceneryPiece {
+  kind: SceneryKind;
+  /** The foot of it, in world space. */
   x: number;
   y: number;
   z: number;
-  /** Height to the top of the crown (m). */
+  /** Height to the top (m). */
   height: number;
-  /** Trunk collider, if it has one. */
-  body: Body | null;
+  /** Rough radius of the solid part (m). */
+  radius: number;
+  /** Its colliders. */
+  bodies: Body[];
   /** How far through it the tools are, in seconds of chainsaw. */
   damage: number;
   gone: boolean;
@@ -73,8 +79,8 @@ export interface SceneryTree {
 export interface Terrain {
   group: Group;
   bodies: Body[];
-  /** The trees on the hills, in world space. */
-  trees: SceneryTree[];
+  /** The trees, rocks and logs on the hills, in world space. */
+  pieces: SceneryPiece[];
   /** The meshes the player can aim at. Ground cover is left out. */
   pickables: Mesh[];
   /** Top surface height at a world position (−Infinity over the void). */
@@ -197,8 +203,19 @@ export function buildTerrain(opts: Partial<TerrainOptions>, physMat: PhysMateria
     body.addShape(new Box(new Vec3(m.sx * DECOR_VOXEL / 2, m.sy * DECOR_VOXEL / 2, m.sz * DECOR_VOXEL / 2)));
     body.position.set(o.cx + (x + m.min[0] + m.sx / 2) * DECOR_VOXEL, (y + m.min[1] + m.sy / 2) * DECOR_VOXEL, o.cz + (z + m.min[2] + m.sz / 2) * DECOR_VOXEL);
     bodies.push(body);
+    return { body, height: m.sy * DECOR_VOXEL, radius: Math.max(m.sx, m.sz) * DECOR_VOXEL / 2 };
   };
-  const trees: SceneryTree[] = [];
+  const pieces: SceneryPiece[] = [];
+  /** Registers something merged into `decor` at this voxel offset, so tools can take it back out. */
+  const breakable = (kind: SceneryKind, model: VoxelBuilder, ox: number, oy: number, oz: number, body: Body, x: number, z: number, height: number, radius: number) => {
+    pieces.push({
+      kind, x, y: oy * DECOR_VOXEL, z, height, radius, bodies: [body], damage: 0, gone: false,
+      erase() {
+        model.paint((vx, vy, vz) => void decor.clear(vx + ox, vy + oy, vz + oz));
+        rebake();
+      },
+    });
+  };
   let rebake = () => {};
   const placeRing = (minFrac: number, random: Rng = rng) => {
     for (let tries = 0; tries < 50; tries++) {
@@ -227,13 +244,7 @@ export function buildTerrain(opts: Partial<TerrainOptions>, physMat: PhysMateria
     tb.addShape(new Box(new Vec3(DV, solidHeight / 2, DV)));
     tb.position.set(o.cx + (cx + 1) * DV, p.h + solidHeight / 2, o.cz + (cz + 1) * DV);
     bodies.push(tb);
-    trees.push({
-      x: tb.position.x, y: p.h, z: tb.position.z, height: solidHeight, body: tb, damage: 0, gone: false,
-      erase() {
-        tree.paint((x, y, z) => void decor.clear(x + ox, y + oy, z + oz));
-        rebake();
-      },
-    });
+    breakable('tree', tree, ox, oy, oz, tb, tb.position.x, tb.position.z, solidHeight, 0.25);
   }
   for (let r = 0; r < o.rocks; r++) {
     const p = placeRing(0.95);
@@ -243,7 +254,8 @@ export function buildTerrain(opts: Partial<TerrainOptions>, physMat: PhysMateria
     const model = buildBoulder(looks, s * SUB);
     const x = Math.round(p.x / DECOR_VOXEL), y = Math.round(p.h / DECOR_VOXEL), z = Math.round(p.z / DECOR_VOXEL);
     decor.merge(model, x, y, z);
-    solidDecor(model, x, y, z);
+    const solid = solidDecor(model, x, y, z);
+    breakable('rock', model, x, y, z, solid.body, solid.body.position.x, solid.body.position.z, solid.height, solid.radius);
   }
   for (let k = 0; k < o.shrubs; k++) {
     const p = placeRing(0.92, looks);
@@ -252,7 +264,10 @@ export function buildTerrain(opts: Partial<TerrainOptions>, physMat: PhysMateria
     const model = roll < 0.62 ? buildShrub(looks, pick(looks, [undefined, '#d8413f', '#f4f1ea', '#f0a6c0'])) : roll < 0.82 ? buildStump(looks) : buildFallenLog(looks);
     const x = Math.round(p.x / DECOR_VOXEL), y = Math.round(p.h / DECOR_VOXEL), z = Math.round(p.z / DECOR_VOXEL);
     decor.merge(model, x, y, z);
-    if (roll >= 0.62) solidDecor(model, x, y, z);
+    if (roll >= 0.62) {
+      const solid = solidDecor(model, x, y, z);
+      breakable('wood', model, x, y, z, solid.body, solid.body.position.x, solid.body.position.z, solid.height, solid.radius);
+    }
   }
   hangCreepers(decor, surface, T / FINE / DECOR_VOXEL);
   const pickables = [terrainMesh];
@@ -300,7 +315,7 @@ export function buildTerrain(opts: Partial<TerrainOptions>, physMat: PhysMateria
   return {
     group,
     bodies,
-    trees,
+    pieces,
     pickables,
     heightAt: (x, z) => localHeight(x - o.cx, z - o.cz),
     clearCover: (x0, z0, x1, z1) => cover.clearRect(x0 - o.cx, z0 - o.cz, x1 - o.cx, z1 - o.cz),

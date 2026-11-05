@@ -414,9 +414,9 @@ export function installDebug(game: Game) {
     game.step(1);
     const tree = w.living((e) => e.def.id === 'tree').pop();
     api.run([{ hold: { dir: [0, -1] }, for: 1.5 }, { hold: { use: true }, for: 3 }, { wait: 1.5 }], 8);
-    out.push(check('actions', 'a chainsaw fells a tree', !!holding && !tree?.alive && w.living((e) => e.def.id === 'log').length === 2, 'the tree still stands'));
+    out.push(check('actions', 'a chainsaw fells a tree', !!holding && !tree?.alive && w.living((e) => e.def.id === 'log' && !e.state.role).length === 2, 'the tree still stands'));
 
-    const stand = w.sceneryTreeNear(-3, 10, 30);
+    const stand = w.sceneryNear(-3, 10, 30, ['tree']);
     if (stand) {
       const statics = w.counts().statics;
       game.teleportHero([stand.x + 1, stand.z]);
@@ -424,6 +424,19 @@ export function installDebug(game: Game) {
       api.run([{ hold: { use: true }, for: 3 }, { wait: 1.5 }], 8);
       out.push(check('actions', 'a chainsaw fells a scenery tree', stand.gone && w.counts().statics === statics - 1, 'the scenery tree still stands'));
     }
+
+    // a seat, and three planks laid together
+    hero = fresh();
+    game.castAt('chair', [hero.x + 2.2, 0, hero.z]);
+    game.step(1.2);
+    const chair = w.living((e) => e.def.id === 'chair').pop();
+    api.run([{ walkTo: [-0.9, 0], of: 'chair', timeout: 2 }, { press: 'use' }, { wait: 0.2 }], 4);
+    out.push(check('actions', 'sit on a chair', !!chair && hero.state.sitting === chair, 'did not sit'));
+    hero = fresh();
+    game.castAt('3 planks', [hero.x + 2.4, 0, hero.z]);
+    game.step(1.8);
+    api.run([{ walkTo: [-1.5, 0], of: 'plank', timeout: 2.5 }, { press: 'grab' }, { wait: 0.1 }, { press: 'use' }, { wait: 0.4 }], 6);
+    out.push(check('actions', 'three planks build a bridge', w.living((e) => e.def.id === 'bridge').length === 1, `${w.living((e) => e.def.id === 'plank').length} planks left`));
 
     // Free Play: nobody's there, so the plane has to wait to be clicked
     const free = orderedLevels().find((l) => !l.hero && !l.goal && !l.tasks);
