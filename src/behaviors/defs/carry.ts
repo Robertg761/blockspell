@@ -2,8 +2,8 @@ import { Quaternion, Vec3 } from 'cannon-es';
 import type { Entity } from '../../core/entity';
 import { GROUP } from '../../core/groups';
 import type { HeroInput } from '../../core/world';
-import { CARRY, carryOf, carryTarget, grab, heldBy, letGo, putDown, toss } from '../lib/carry';
-import { leave, ridingOf, thrownOff } from '../lib/ride';
+import { CARRY, carryOf, carryTarget, grab, heldBy, letGo, petSeat, putDown, toss } from '../lib/carry';
+import { board, dropCargo, leave, ridingOf, seatPet, thrownOff } from '../lib/ride';
 import { tickHandTool, tickUse } from '../lib/use';
 import { defineBehavior } from '../types';
 
@@ -84,27 +84,24 @@ export default [
       if (e.state.riding) {
         if (!ridingOf(e)) thrownOff(e); // burned, popped or reset out from under them
         else if (wantsGrab) leave(world, e);
+        else if (wantsToss) dropCargo(e.state.riding as Entity, world);
         return;
       }
       const held = heldBy(e);
       if (!held) e.state.held = null; // eaten, burned up or reset out of the hero's hands
       const lifted = !!held && carryOf(held)?.mode === 'lift';
       if (wantsGrab) {
-        if (held) putDown(world, e, held);
+        const ride = held && petSeat(world, e, held);
+        if (ride) {
+          board(world, e, ride);
+          seatPet(ride, held, e);
+        } else if (held) putDown(world, e, held);
         else {
           const target = carryTarget(world, e);
           if (target) grab(world, e, target);
         }
       } else if (wantsToss && lifted) toss(world, e, held);
       else if (wantsTurn && lifted) carryOf(held)!.yaw += CARRY.turn;
-      else if (wantsUse && !held) {
-        // a rocket on the ground can be sent off with nobody aboard
-        const target = carryTarget(world, e);
-        if (target?.has('thrust') && target.has('rideable') && !target.state.lit) {
-          target.state.lit = true;
-          world.fx.sound('ignite');
-        }
-      }
       tickUse(world, e, heldBy(e), wantsUse, inp.use, dt);
     },
   }),
@@ -125,6 +122,7 @@ export default [
     },
     fixedUpdate(e, world, h) {
       const c = carryOf(e);
+      if (c?.mode === 'aboard') return; // the seat moves it
       if (c?.mode === 'hand') {
         const b = e.body, at = c.at!;
         b.collisionFilterMask = GROUP.STATIC; // like a lifted thing, it would shove anything aside

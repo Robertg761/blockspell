@@ -32,7 +32,8 @@ export type CarryKind = 'lift' | 'drag' | 'heavy';
  * `hand`: in Free Play, where there's no hero, hovering at `at` under the pointer.
  */
 export interface Carry {
-  mode: 'lift' | 'drag' | 'place' | 'loose' | 'hand';
+  /** `aboard`: a pet or a parcel in the passenger seat, carried along by lib/ride.ts. */
+  mode: 'lift' | 'drag' | 'place' | 'loose' | 'hand' | 'aboard';
   /** Yaw relative to the hero's (hand: the thing's own). */
   yaw: number;
   /** Drag: the distance kept from the hero. */
@@ -48,7 +49,8 @@ export type CarryHint =
   | { verb: CarryKind | 'ride' | 'wear' | 'dragging'; entity: Entity }
   /** `fresh`: just climbed aboard, so it's worth saying what the keys do. */
   | { verb: 'riding'; entity: Entity; fresh: boolean }
-  | { verb: 'holding'; entity: Entity; spot: P3 | null };
+  /** `aboard`: what the hero could climb into with this in their arms. */
+  | { verb: 'holding'; entity: Entity; spot: P3 | null; aboard: Entity | null };
 
 const from = new Vec3(), to = new Vec3();
 
@@ -148,12 +150,19 @@ export function placeSpot(world: GameWorld, hero: Entity, e: Entity): P3 | null 
   return floor ? { x, y: floor.y + e.size.y / 2 + 0.04, z } : null;
 }
 
+/** What the hero could ride with this in their arms: a pet, or a parcel to deliver. Tools and worn things stay on them. */
+export function petSeat(world: GameWorld, hero: Entity, held: Entity): Entity | null {
+  if (carryOf(held)?.mode !== 'lift' || held.def.grip !== undefined || held.has('wearable')) return null;
+  const target = carryTarget(world, hero);
+  return target && canRide(target) ? target : null;
+}
+
 /** What the hero can do right now with the things around them. */
 export function carryHint(world: GameWorld, hero: Entity): CarryHint | null {
   const riding = ridingOf(hero);
   if (riding) return { verb: 'riding', entity: riding, fresh: !!hero.state.pilot || world.time - (hero.state.boardedAt as number) < 7 };
   const held = heldBy(hero);
-  if (held) return carryOf(held)?.mode === 'drag' ? { verb: 'dragging', entity: held } : { verb: 'holding', entity: held, spot: placeSpot(world, hero, held) };
+  if (held) return carryOf(held)?.mode === 'drag' ? { verb: 'dragging', entity: held } : { verb: 'holding', entity: held, spot: placeSpot(world, hero, held), aboard: petSeat(world, hero, held) };
   const entity = carryTarget(world, hero);
   if (!entity) return null;
   if (canRide(entity)) return { verb: 'ride', entity };

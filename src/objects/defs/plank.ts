@@ -5,11 +5,12 @@ export default defineObject({
   name: 'wood plank',
   synonyms: ['wood plank', 'wooden plank', 'board', 'wood', 'lumber', 'timber', 'plank of wood', 'wooden board'],
   category: 'structures',
-  blurb: 'A long board. Bridges gaps, floats, burns.',
+  blurb: 'A long board. Bridges gaps and floats. Lay two more nearby and press C to build a bridge.',
   tags: ['flammable', 'floats'],
   tintKeys: ['wood', 'woodDark', 'woodLight'],
   burstColor: '#b07a43',
   orient: 'span',
+  use: 'craft',
     physics: { mass: 2.5, shape: 'box', friction: 0.8 },
   props: { burnTime: 9 },
   build(b, rng) {

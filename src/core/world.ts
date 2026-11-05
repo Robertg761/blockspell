@@ -11,7 +11,7 @@ import { ease } from '../engine/tween';
 import { GroundCover, scatterTufts } from '../engine/cover';
 import { addGrain } from '../engine/grain';
 import { blockDetail, buildBlock, inferBlockStyle, type BlockStyle } from '../engine/scenery';
-import { buildTerrain, type SceneryTree, type Terrain, type TerrainOptions } from '../engine/terrain';
+import { buildTerrain, type SceneryKind, type SceneryPiece, type Terrain, type TerrainOptions } from '../engine/terrain';
 import { objects } from '../objects';
 import type { ObjectDef } from '../objects/types';
 import { VoxelBuilder } from '../voxel/builder';
@@ -140,9 +140,9 @@ export class GameWorld {
   /** The keyboard-controlled hero of the current level (null in free play). */
   hero: Entity | null = null;
   readonly input: HeroInput = { move: { x: 0, z: 0 }, up: false, down: false, jump: false, grab: false, toss: false, turn: false, run: false, use: false, drive: { x: 0, y: 0 } };
-  /** Trees baked into a zone's scenery. Those baked into the islands are in `terrains`. */
-  private decorTrees: SceneryTree[] = [];
-  /** True once a tree baked into an island has been cut: the islands must be rebuilt for the next attempt. */
+  /** Things baked into a zone's scenery. Those baked into the islands are in `terrains`. */
+  private decorPieces: SceneryPiece[] = [];
+  /** True once something baked into an island has been broken: the islands must be rebuilt for the next attempt. */
   islandsCut = false;
   /** Flying machines turn back this far from the world's center (m). */
   flightLimit = 50;
@@ -525,40 +525,40 @@ export class GameWorld {
     return body;
   }
 
-  /** Registers a tree baked into a zone's decor mesh, so tools can cut it. */
-  addSceneryTree(tree: SceneryTree): void {
-    this.decorTrees.push(tree);
+  /** Registers something baked into a zone's decor mesh, so tools can break it. */
+  addSceneryPiece(piece: SceneryPiece): void {
+    this.decorPieces.push(piece);
   }
 
-  /** The baked tree whose trunk is nearest to (x, z), within `radius`. */
-  sceneryTreeNear(x: number, z: number, radius: number): SceneryTree | null {
-    let best: SceneryTree | null = null;
-    let bd = radius;
-    const check = (t: SceneryTree) => {
-      const d = Math.hypot(t.x - x, t.z - z);
-      if (d <= bd && !t.gone) {
+  /** The baked piece of one of these kinds nearest to (x, z), within `reach` of its side. */
+  sceneryNear(x: number, z: number, reach: number, kinds: readonly SceneryKind[]): SceneryPiece | null {
+    let best: SceneryPiece | null = null;
+    let bd = reach;
+    const check = (p: SceneryPiece) => {
+      const d = Math.hypot(p.x - x, p.z - z) - p.radius;
+      if (d <= bd && !p.gone && kinds.includes(p.kind)) {
         bd = d;
-        best = t;
+        best = p;
       }
     };
-    this.decorTrees.forEach(check);
-    for (const t of this.terrains) t.trees.forEach(check);
+    this.decorPieces.forEach(check);
+    for (const t of this.terrains) t.pieces.forEach(check);
     return best;
   }
 
-  /** Takes a baked tree out of the scenery: its voxels and its collider. */
-  removeSceneryTree(tree: SceneryTree): void {
-    tree.gone = true;
-    tree.erase();
-    if (tree.body) {
-      this.physics.removeBody(tree.body);
-      const i = this.statics.findIndex((s) => s.body === tree.body);
+  /** Takes a piece out of the scenery: its voxels and its colliders. */
+  removeScenery(piece: SceneryPiece): void {
+    piece.gone = true;
+    piece.erase();
+    for (const body of piece.bodies) {
+      this.physics.removeBody(body);
+      const i = this.statics.findIndex((s) => s.body === body);
       if (i >= 0) this.statics.splice(i, 1);
     }
-    if (this.terrains.some((t) => t.trees.includes(tree))) this.islandsCut = true;
+    if (this.terrains.some((t) => t.pieces.includes(piece))) this.islandsCut = true;
   }
 
-  /** Swaps a baked decor mesh's model for a new one (a tree came out of it). */
+  /** Swaps a baked decor mesh's model for a new one (something came out of it). */
   rebakeDecor(mesh: Mesh, model: ReturnType<VoxelBuilder['build']>): void {
     bindVoxelMesh(mesh, { model, voxelSize: 0.25, origin: 'model', style: 'decor', lod: true, label: 'decor' });
   }
@@ -623,7 +623,7 @@ export class GameWorld {
       if (s.body) this.physics.removeBody(s.body);
     }
     this.statics.length = 0;
-    this.decorTrees.length = 0;
+    this.decorPieces.length = 0;
     for (const m of this.scenery) {
       this.scene.remove(m);
       releaseVoxelMesh(m);

@@ -146,13 +146,14 @@ export default [
     name: 'rope',
     synonyms: ['cord', 'lasso', 'line', 'hanging rope'],
     category: 'structures',
-    blurb: 'Climb it. Flammable.',
+    blurb: 'Climb it, or grab it and press C to lasso things and haul them in.',
     tags: ['climbable', 'flammable'],
     tintKeys: ['ropeTan', 'ropeDark'],
     burstColor: '#cfae6e',
     // Half-size voxels (same 1 m x 2.2 m bounds as before) so the strand can be thin and braided.
     voxelSize: 0.05,
     // Collider: the same small 0.4 m block at the base that the old coarse rope decomposed to.
+    use: 'lasso',
     physics: { mass: 1, shape: 'auto', boxes: [[6, 0, 6, 14, 8, 14]], friction: 0.8 },
     props: { burnTime: 4 },
     build(b) {
@@ -711,11 +712,12 @@ export default [
     name: 'chair',
     synonyms: ['seat', 'stool', 'wooden chair'],
     category: 'structures',
-    blurb: 'Take a seat. Burns well.',
+    blurb: 'Press C to take a seat, and a rest does you good. Burns well.',
     tags: ['flammable'],
     tintKeys: ['wood', 'woodDark', 'woodLight'],
     burstColor: '#b07a43',
     voxelSize: 0.06,
+    use: 'sit',
     physics: { mass: 4, shape: 'auto', maxBoxes: 6, friction: 0.6 },
     props: { burnTime: 7 },
     build(b) {

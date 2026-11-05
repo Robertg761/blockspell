@@ -47,7 +47,11 @@ export interface RideDef {
 }
 
 /** What Use (C) does with something in the hero's hands. See behaviors/lib/use.ts. */
-export type UseKind = 'saw' | 'chop' | 'mine' | 'smash' | 'slash' | 'douse' | 'drink' | 'open' | 'read' | 'flip';
+export type UseKind =
+  // in the hands
+  | 'saw' | 'chop' | 'mine' | 'smash' | 'slash' | 'douse' | 'drink' | 'open' | 'read' | 'flip' | 'lasso' | 'craft'
+  // with the hands free, standing next to it
+  | 'sit' | 'nap' | 'kick' | 'play';
 
 /** Spellbook sections. */
 export type ObjectCategory = 'animals' | 'vehicles' | 'structures' | 'nature' | 'food' | 'items';

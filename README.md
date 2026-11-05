@@ -66,7 +66,9 @@ that flies, Space goes up and Shift goes down. A plane needs speed: hold W down 
 pull up with Space, and slowing down over the void ends the way you'd expect. Cars, trains and
 skateboards roll, boats sail (you can't hop out in deep water), and helicopters, UFOs, hot air
 balloons and rockets go straight up. A rocket only has so much fuel, and **C** next to one lights
-it with nobody aboard. Cows, bears, pigs, sheep and dragons can be ridden too. In Free Play,
+it with nobody aboard. Cows, bears, pigs, sheep and dragons can be ridden too. Hard crashes
+hurt: a battered vehicle trails smoke, and one more knock wrecks it and throws you clear. Walk
+up to a vehicle with a pet or a parcel in your arms and **E** takes it along on your shoulder, and **F** drops it from the air. In Free Play,
 click a vehicle or a big animal to take the controls, and **E** gets you out again. Anything hot
 lights a waiting rocket, so *flaming rocket* takes off by itself.
 
@@ -80,8 +82,17 @@ hammer breaks rock, ice and anything fragile, and rock may have a coin in it. A 
 small wooden things and pops balloons. Torches light things, buckets put out fires, keys open
 doors, TNT gets its fuse lit, and food gives you a burst of speed and bounce. Books give a hint,
 gifts open, coins flip, and you can pet whatever animal you're holding. Things that belong to a
-level or task can't be cut down, and creatures are safe from every tool. In Free Play there's no
-hand but the pointer, so drag a tool onto what you want to break and hold it there.
+level or task can't be cut down, and creatures are safe from every tool. Chairs, benches and
+pillows are for resting (a short sit gives you a boost), balls can be kicked, pianos played, and a
+rope in hand is a lasso. Lay planks or logs next to each other and **C** builds with them: two
+planks make a ladder, three a bridge, and two logs a boat, with no spell needed. Coins that come
+out of rocks and buildings, and the three you get for finishing a task, go in your purse: the 🪙
+button sells new shirts and swift boots. Rocks, cottages, pillars and fences in the scenery break
+too, and come back when the level reloads.
+
+In Free Play there's no hand but the pointer. Drag a tool onto what you want to break and hold it
+there, drag food to a hungry animal, or hold a bucket over a fire. Click a jetpack or wings to
+wear them, and click gifts, books, coins, pianos and TNT to set them off.
 
 **Stars.** Every successful cast counts as one spell, however many words it has:
 "ladder", "giant plank" and "3 tiny balloons" are 1 spell each, and spells that fail to
@@ -118,6 +129,8 @@ counts the ways you've found.
 - **Meadow Commons**, **Cliffside**, **Ember Village**, **Farmstead**, **Lily Lake** and **Sky Ruins**
 - **Windmill Hill** (new): spin the windmill sails (a *fan*, a passing *rocket* or a blast will do),
   ring the bell on its gallows (anything flying into it, or a bang nearby), and climb the treehouse.
+- **New since then:** fly through the rings over the Commons, deliver a parcel to the islet, and
+  clear the fallen tree at Harvest Camp.
 - **Harvest Camp** (new): grow a tree from a single seed (it needs water: pour some, bring a cloud, or
   cast a *wet seed*), make camp (a tent, somewhere to sit and a light on the flat pad), and play a tune
   on the piano by dropping things on it.

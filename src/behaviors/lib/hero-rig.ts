@@ -86,7 +86,8 @@ export function animateHero(e: Entity, world: GameWorld, dt: number): void {
   const H = e.size.y;
   const controlled = e.has('controlled');
   const runSpeed = controlled ? HERO.run : e.prop('speed', 2.6);
-  const riding = !!ridingOf(e);
+  const seated = !!e.state.sitting;
+  const riding = !!ridingOf(e) || seated;
   const sp = Math.hypot(v.x, v.z) / e.scale;
   const airTime = (e.state.airTime as number | undefined) ?? (Math.abs(v.y) > 1.5 ? 1 : 0);
   const climbing = !!e.state.climbing;
@@ -155,7 +156,7 @@ export function animateHero(e: Entity, world: GameWorld, dt: number): void {
   }
 
   // ---- in the seat
-  r.sit = damp(r.sit, riding && !ridingOf(e)?.def.ride?.stand ? 1 : 0, 14, dt);
+  r.sit = damp(r.sit, seated || (riding && !ridingOf(e)?.def.ride?.stand) ? 1 : 0, 14, dt);
   if (r.sit > 0.001) {
     legL.rotation.x = mix(legL.rotation.x, SIT_LEG, r.sit);
     legR.rotation.x = mix(legR.rotation.x, SIT_LEG, r.sit);
@@ -206,7 +207,7 @@ export function animateHero(e: Entity, world: GameWorld, dt: number): void {
   if (turn < -Math.PI) turn += Math.PI * 2;
   const glance = (Math.sin(t * 0.61) * 0.2 + Math.sin(t * 0.23) * 0.16) * still;
   r.headYaw = damp(r.headYaw, clamp((turn / dt) * 0.09, -0.55, 0.55) + glance, 9, dt);
-  head.rotation.set(-r.lean * 0.7 + r.climb * -0.3 + (1 - up) * r.air * 0.2 + still * breath * 0.012, r.headYaw - twist, -(r.bank + sway) * 0.6);
+  head.rotation.set((e.state.napping ? 0.45 : 0) - r.lean * 0.7 + r.climb * -0.3 + (1 - up) * r.air * 0.2 + still * breath * 0.012, r.headYaw - twist, -(r.bank + sway) * 0.6);
 
   // ---- scarf: trails behind with speed, lifts in a fall
   const trail = Math.min(1.25, (sp / runSpeed) * 0.9 + Math.max(0, -v.y) * 0.12);

@@ -13,7 +13,7 @@ const f = new Frame(offset(ember.center, [-5, 0, 5.5]));
 
 const solutions: LevelSolution[] = [
   { name: 'fire beside it', steps: [{ cast: 'fire', at: [1.7, 0] }], timeout: 8 },
-  { name: 'torch beside it', steps: [{ cast: 'torch', at: [1.1, 0] }], timeout: 8 },
+  { name: 'torch beside it', steps: [{ cast: 'torch', at: [0.9, 0] }], timeout: 8 },
   { name: 'lava beside it', steps: [{ cast: 'lava', at: [2.2, 0] }], timeout: 8 },
   { name: 'flaming ball', steps: [{ cast: 'flaming ball', at: [1.1, 0] }], timeout: 8 },
   { name: 'bomb', steps: [{ cast: 'bomb', at: [2.4, 0] }], timeout: 10 },
