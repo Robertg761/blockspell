@@ -65,6 +65,8 @@ export class Game {
   /** The swoop-in when a mode starts from the title screen: the camera eases in from farther out. */
   private intro: { t: number; offset: Vector3 } | null = null;
   private marker = new SpawnMarker();
+  /** True while the player has clicked a spot for the next spell. Otherwise spells land in front of the hero. */
+  private aimPinned = false;
   /** Under what the hero would grab, or where what they hold would be set down. */
   private carryRing = new SpawnMarker('#7fe3ff');
   /** Free Play: what the pointer is on, and whether it has picked it up yet (a press that doesn't move is a poke). */
@@ -437,6 +439,7 @@ export class Game {
     const sp = level.spawnPoint ?? [0, 0, 0];
     const g = this.world.groundAt(sp[0], sp[2]);
     this.marker.set(new Vector3(sp[0], sp[1] || (Number.isFinite(g) ? g : 0), sp[2]));
+    this.aimPinned = false;
     this.hud.autoFocus = !level.hero;
     this.hud.setLevel(level);
     if (level.objectives) this.refreshObjectives();
@@ -496,6 +499,7 @@ export class Game {
     const g = w.groundAt(entry[0], entry[2] - 3);
     this.marker.set(new Vector3(entry[0], Number.isFinite(g) ? g : entry[1], entry[2] - 3));
     w.aim = null;
+    this.aimPinned = false;
     if (w.hero?.alive) this.fx.sparkle(w.hero.body.position);
     this.hud.toasts.show(`${zone.name} is back to how it started.`, { kind: 'info', duration: 1800 });
   }
@@ -625,10 +629,62 @@ export class Game {
   }
 
   // ------------------------------------------------------------ spells
+  /** Where the next spell lands: the spot the player clicked, or else in front of the hero (or the view). */
+  castPoint(): Vector3 {
+    if (!this.aimPinned) this.followDefaultAim();
+    return this.marker.position;
+  }
+
+  /** Moves the marker to the default spot, in front of the hero. */
+  private followDefaultAim(): void {
+    const p = this.defaultAim();
+    this.marker.follow(p.x, p.y, p.z);
+  }
+
+  /**
+   * The default place for a spell: a step or two in front of the hero, on whatever is there. A wall or
+   * ledge in the way brings it closer; a gap leaves it hanging at the hero's feet height, so a plank
+   * cast at the edge falls across. With no hero (Free Play) it is the middle of the view, a little below
+   * the center of the screen.
+   */
+  private defaultAim(): Vector3 {
+    const hero = this.world.hero;
+    if (hero?.alive) {
+      const yaw = typeof hero.state.yaw === 'number' ? hero.state.yaw : 0;
+      const dx = Math.sin(yaw), dz = Math.cos(yaw);
+      const feet = hero.y - hero.size.y / 2;
+      const reach = Math.min(1.7, (this.level?.castRange ?? Infinity) * 0.6);
+      let x = hero.x, z = hero.z, y = feet;
+      for (const f of [1, 0.7, 0.4]) {
+        x = hero.x + dx * reach * f;
+        z = hero.z + dz * reach * f;
+        const g = this.world.groundAt(x, z);
+        if (!Number.isFinite(g)) { y = feet; continue; }
+        if (g > feet + 0.9) continue; // a wall or a high ledge: nearer
+        y = g < feet - 1 ? feet : g; // a drop leaves it at the hero's level
+        return new Vector3(x, y, z);
+      }
+      return new Vector3(x, feet, z);
+    }
+    // no hero: the ground a little below the center of the screen, found without raycasting the terrain
+    const t = this.renderer.controls.target;
+    const gy = this.world.groundAt(t.x, t.z);
+    const y = Number.isFinite(gy) ? gy : t.y;
+    this.raycaster.setFromCamera(new Vector2(0, -0.2), this.renderer.camera);
+    const { origin, direction } = this.raycaster.ray;
+    if (direction.y < -0.05) {
+      const k = (y - origin.y) / direction.y;
+      const reach = Math.hypot(origin.x - t.x, origin.z - t.z) + 8;
+      if (k > 0 && k * Math.hypot(direction.x, direction.z) < reach) return new Vector3(origin.x + direction.x * k, y, origin.z + direction.z * k);
+    }
+    return new Vector3(t.x, y, t.z);
+  }
+
   /** Aims at a world point, then casts there (used by solutions and the debug hook). */
   castAt(text: string, at: V3): boolean {
     const p = new Vector3(...at);
     this.marker.set(p);
+    this.aimPinned = true;
     this.world.aim = { x: p.x, y: p.y, z: p.z };
     return this.cast(text);
   }
@@ -653,6 +709,7 @@ export class Game {
       this.hud.toasts.show(`“${res.def.name}” won't work in this level.`, { kind: 'warn' });
       return false;
     }
+    if (!this.aimPinned) this.followDefaultAim();
     const mp = this.marker.position;
     const range = this.castRangeAt(mp.x, mp.y, mp.z);
     const hero = this.world.hero;
@@ -669,7 +726,8 @@ export class Game {
       this.hud.setWords(this.words, this.level.goal && !this.level.objectives ? (this.level.par ?? 2) : null);
     }
     const count = Math.min(res.count, MAX_ENTITIES);
-    const base = this.marker.position;
+    const base = this.marker.position.clone(); // the marker itself keeps moving with the hero
+    this.aimPinned = false; // a clicked spot is for one spell; the next one lands in front of the hero again
     // nudge repeat casts so things don't land in a perfect tower
     const jitter = this.world.nearby(base, 1.5, (e) => e !== this.world.hero).length > 0 ? 0.5 : 0;
     const yaw = this.castYaw(res.def.orient, base);
@@ -721,12 +779,24 @@ export class Game {
 
     const name = (count > 1 ? `${count} × ` : '') + res.label;
     if (fresh.object) this.heldNews?.words.push(res.def.name);
-    if (res.correctedFrom) this.hud.toasts.show(`Guessing you meant “${res.def.name}”.`, { title: `✦ ${name}`, kind: 'success' });
+    // say what Blockspell understood whenever it wasn't exactly what was typed
+    const heard = res.correctedFrom
+      ? `Guessing you meant “${res.def.name}”.`
+      : res.approxFrom
+        ? `Blockspell has no “${res.approxFrom}” yet, so you got the closest thing it knows: ${res.def.name}.`
+        : res.randomFrom
+          ? `“${res.randomFrom}” is a whole kind of thing, so Blockspell picked one: ${res.def.name}.`
+          : null;
+    if (heard) this.hud.toasts.show(heard, { title: `✦ ${name}`, kind: 'success' });
     else if (this.heldNews) { /* the finish panel lists new words */ }
     else if (fresh.object && res.def.blurb)
       this.hud.toasts.show(this.blurbOf(res.def), { title: `✦ New word: ${name}  (${this.spellbook.count}/${this.spellbook.total})`, kind: 'success' });
     else if (!this.seen.has(res.def.id) && res.def.blurb) this.hud.toasts.show(this.blurbOf(res.def), { title: `✦ ${name}`, kind: 'success' });
     this.seen.add(res.def.id);
+    if (res.ignoredNouns.length) {
+      const extra = res.ignoredNouns;
+      this.hud.toasts.show(`A spell conjures one kind of thing, so “${extra.join('”, “')}” ${extra.length === 1 ? 'was' : 'were'} left out. Cast ${extra.length === 1 ? 'it' : 'them'} on ${extra.length === 1 ? 'its' : 'their'} own.`, { kind: 'info' });
+    }
     if (res.unknownAdjectives.length) {
       const bad = res.unknownAdjectives;
       const sugg = suggestAdjectives(bad[0]);
@@ -1410,6 +1480,7 @@ export class Game {
 
   private setAim(p: Vector3): void {
     this.marker.set(p);
+    this.aimPinned = true;
     this.world.aim = { x: p.x, y: p.y, z: p.z };
     this.fx.sound('click');
     this.fx.burst(p, { count: 8, color: ['#ffd84a', '#fff6a8'], speed: 2, up: 1.5, size: 0.06, life: 0.4, glow: true });
@@ -1423,6 +1494,7 @@ export class Game {
     this.world.update(dt);
     this.fx.update(dt);
     this.marker.update(dt);
+    if (!this.aimPinned && !this.titleMode) this.followDefaultAim();
 
     const hero = this.world.hero;
     const rode = hero?.alive ? ridingOf(hero) : null;

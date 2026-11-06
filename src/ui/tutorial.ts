@@ -219,7 +219,7 @@ export class Tutorial {
       },
       {
         id: 'aim', anchor: 'screen',
-        text: touch ? 'Tap the ground to choose where things appear' : 'Click the ground to choose where things appear',
+        text: touch ? 'Spells appear in front of you. Tap the ground to send the next one farther' : 'Spells appear in front of you. Click the ground to send the next one farther',
         when: (c) => c.sinceCast > 2 && !c.game.world.aim,
         done: (c) => !!c.game.world.aim,
       },
@@ -256,7 +256,7 @@ export class Tutorial {
 
   private tooFar(c: Ctx): boolean {
     const hero = c.game.world.hero;
-    const aim = c.game.world.aim ?? (c.level.spawnPoint ? { x: c.level.spawnPoint[0], y: c.level.spawnPoint[1], z: c.level.spawnPoint[2] } : null);
+    const aim = c.game.castPoint();
     const range = aim ? c.game.castRangeAt(aim.x, aim.y, aim.z) : null;
     if (!range || !hero?.alive || !aim) return false;
     return document.activeElement === c.game.hud.input && Math.hypot(aim.x - hero.x, aim.z - hero.z) > range;

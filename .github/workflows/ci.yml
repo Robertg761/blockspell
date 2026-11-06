@@ -19,6 +19,8 @@ jobs:
       # tsc --noEmit, then vite build (which also writes dist/sw.js)
       - run: npm run build
       - run: npm run check-offline
+      # the spell parser: thesaurus integrity and example phrases
+      - run: npm run check-spells
       # the checks drive the system Chrome that ubuntu-latest already has
       - run: npm run check-pwa
         env:
