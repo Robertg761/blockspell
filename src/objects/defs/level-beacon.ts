@@ -11,6 +11,9 @@ function boxGap(a: Entity, b: Entity): number {
   return Math.hypot(gx, gy, gz);
 }
 
+/** Not hot, but they carry a flame a player expects to light the bowl with. */
+const LIGHTS = new Set(['lantern']);
+
 /** Lights the beacon: a lasting flame in the bowl, a glow and an `ignite` event. */
 function light(e: Entity, world: GameWorld): void {
   e.state.lit = true;
@@ -22,7 +25,7 @@ function light(e: Entity, world: GameWorld): void {
 
 /**
  * A stone brazier on a pedestal (a level object). Anything hot or burning
- * that reaches the bowl lights it for good: a torch, a fire, a candle, a
+ * that reaches the bowl lights it for good: a torch, a fire, a candle, a lantern, a
  * flaming box, lava poured beside it, the sun drifting past. Not flammable
  * itself, so it never burns away.
  */
@@ -56,7 +59,7 @@ export default defineObject({
       world.fx.flames.emit({ x: e.x, y: top, z: e.z }, e.size.x * 0.8, 1.1, dt, 1.2, acc);
       return;
     }
-    const near = world.nearby(e.body.position, e.radius + 4, (o) => o !== e && (o.has('hot') || !!o.state.burning));
+    const near = world.nearby(e.body.position, e.radius + 4, (o) => o !== e && (o.has('hot') || !!o.state.burning || LIGHTS.has(o.def.id)));
     const hot = near.some((o) => boxGap(e, o) <= 0.25 + 0.5 * o.prop('heatRadius', 1) * Math.sqrt(o.scale));
     e.state.heat = hot ? e.state.heat + dt : Math.max(0, e.state.heat - dt);
     if (e.state.heat >= 0.5) light(e, world);
