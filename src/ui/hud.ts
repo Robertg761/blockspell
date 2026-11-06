@@ -1,5 +1,5 @@
 import { spellsText, starsForPar, type LevelDef, type LevelObjective } from '../levels/types';
-import { clockText } from '../levels/demo-best';
+import { clockText, demoWays } from '../levels/demo-best';
 import { Audio, loadMuted } from '../engine/audio';
 import { Autocomplete } from './autocomplete';
 import { isTouch } from './touch';
@@ -75,7 +75,11 @@ const starText = (n: number, of = 3) => '★'.repeat(n) + '☆'.repeat(Math.max(
 
 /** What a guided level held back from toasts, for its finish panel. */
 export interface DemoNews { words: string[]; trophies: string[]; experiments: number }
-export interface DemoResult { words: number; stars: number; par: number; time: number; prev: { time: number; words: number; runs: number } | null; fasterBest: boolean; fewerBest: boolean }
+export interface DemoResult {
+  words: number; stars: number; par: number; time: number; prev: { time: number; words: number; runs: number } | null; fasterBest: boolean; fewerBest: boolean;
+  /** Spells that have finished each job, across runs, the ones new this run, and the jobs (for an untried idea). */
+  ways: Record<string, string[]>; newWays: number; jobs: LevelObjective[];
+}
 
 /** All DOM UI: spell input, level card, toasts, overlays. */
 export class Hud {
@@ -341,6 +345,7 @@ export class Hud {
     if (key === this.objectivesKey) return;
     this.objectivesKey = key;
     this.setTracker(active ? { title: active.title, zone: null } : null, 'All four jobs done!');
+    const used = active ? demoWays.all()[active.id] ?? [] : [];
     this.objectives.replaceChildren(h('div.objective-body', {}, [
       h('div.objective-progress', { role: 'status' }, [`${done.length} / ${list.length} jobs done`, this.objectiveClock]),
       h('div.objective-list', { 'aria-label': 'Island jobs' }, list.map((o, i) => h('button.objective-row', {
@@ -354,7 +359,7 @@ export class Hud {
         h('button.chip', { type: 'button', text: 'Hint', onClick: () => this.toasts.show(active.hint, { title: active.title, duration: 10000 }) }),
       ]) : null,
       active ? h('div.objective-spells', {}, [h('span', { text: 'Try a word:' }), ...active.spells.map((spell) =>
-        h('button.chip', { type: 'button', text: spell, title: `Write ${spell} in the spell bar`, onClick: () => this.prefill(spell) }))]) : null,
+        h(`button.chip${used.includes(spell) ? '.used' : ''}`, { type: 'button', text: used.includes(spell) ? `✓ ${spell}` : spell, title: used.includes(spell) ? `You've solved this with ${spell}. Try another way?` : `Write ${spell} in the spell bar`, onClick: () => this.prefill(spell) }))]) : null,
       active ? h('p.objective-controls', { text: isTouch ? 'Type a word below, then Cast: it appears in front of you. Tap the ground to send the next one elsewhere. Use the pad to walk.' : 'Type a word below, then Cast: it appears in front of you. Click the ground to send the next one elsewhere. WASD to walk, Space to jump.' }) : null,
     ]));
   }
@@ -381,6 +386,7 @@ export class Hud {
       h('p', { text: r.stars < 3
         ? `Can you do all four jobs in ${spellsText(r.par)} for ★★★?`
         : r.fasterBest || !r.prev ? 'A different spell solves every job. Can you beat your time with new ones?' : `Your best is ${clockText(r.prev.time)}. One more go?` }),
+      waysLine(),
       earned ? h('p.small', { text: earned }) : null,
       h('div.panel-actions', {}, [
         h('button.btn', { type: 'button', text: '↺ Play again', onClick: go(ops.onRetry) }),
@@ -391,6 +397,17 @@ export class Hud {
     ]));
     for (let i = 0; i < r.stars; i++)
       setTimeout(() => Audio.instance?.play('star', { pitch: 2 ** ((i * 4) / 12) }), (0.25 + i * 0.22) * 1000 + 120);
+    function waysLine() {
+      const found = Object.values(r.ways).reduce((n, l) => n + l.length, 0);
+      // an idea for next time: a listed spell that hasn't finished its job yet
+      const untried = r.jobs.flatMap((j) => j.spells.filter((s) => !(r.ways[j.id] ?? []).includes(s)).map((s) => ({ s, job: j.title.toLowerCase() })));
+      const idea = untried[Math.floor(Math.random() * untried.length)];
+      return h('p.demo-ways', {}, [
+        h('strong', { text: `✦ ${found} ${found === 1 ? 'way' : 'ways'} found` }),
+        r.newWays ? ` (${r.newWays} new this run)` : '',
+        idea ? `. Next time, try “${idea.s}” to ${idea.job}.` : '. You found every listed way. What else works?',
+      ]);
+    }
     function stat(label: string, value: string, note: string) {
       return h(`div.demo-stat${note === 'New best!' ? '.best' : ''}`, {}, [
         h('span.demo-stat-label', { text: label }), h('strong', { text: value }), h('span.demo-stat-note', { text: note }),

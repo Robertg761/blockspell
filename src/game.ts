@@ -9,7 +9,7 @@ import { DEFAULT_TERRAIN } from './engine/terrain';
 import { menuLevels, orderedLevels } from './levels';
 import { mark } from './levels/goals';
 import { progress } from './levels/progress';
-import { clockText, demoBest } from './levels/demo-best';
+import { clockText, demoBest, demoWays } from './levels/demo-best';
 import { SolutionRunner } from './levels/solve';
 import { starsFor, type LevelDef, type LevelObjective, type LevelSolution, type V3 } from './levels/types';
 import type { Entity } from './core/entity';
@@ -139,6 +139,10 @@ export class Game {
   /** Seconds of play in a guided level (the demo), shown as its clock and kept as a best time. */
   private runClock = 0;
   private clockRunning = false;
+  /** Spells cast this run (labels), newest last: a finished demo job is credited to one of them. */
+  private castLog: { label: string; x: number; z: number }[] = [];
+  /** Ways found for the first time this run, for the finish panel. */
+  private newWays = 0;
   private clockShown = -1;
   /** The end-of-demo camera move: glides out to the whole island and holds behind the finish panel. */
   private overview: { start: number; from: [Vector3, Vector3]; to: [Vector3, Vector3] } | null = null;
@@ -298,6 +302,7 @@ export class Game {
     worldSave.reset();
     progress.reset();
     demoBest.reset();
+    demoWays.reset();
     this.spellbook.reset();
     this.trophies.reset();
     this.tutorial.resetTips();
@@ -412,6 +417,8 @@ export class Game {
     this.words = 0;
     this.runClock = 0;
     this.clockRunning = false;
+    this.castLog = [];
+    this.newWays = 0;
     this.clockShown = -1;
     this.activeObjective = null;
     this.heldNews = level.objectives ? { words: [], trophies: [], experiments: 0 } : null;
@@ -746,6 +753,7 @@ export class Game {
       base.set(lure.x, lure.y, lure.z);
       this.fx.sparkle(base, undefined, 10);
     }
+    this.castLog.push({ label: res.label.toLowerCase(), x: base.x, z: base.z });
     this.aimPinned = false; // a clicked spot is for one spell; the next one lands in front of the hero again
     // nudge repeat casts so things don't land in a perfect tower
     const jitter = this.world.nearby(base, 1.5, (e) => e !== this.world.hero).length > 0 ? 0.5 : 0;
@@ -1665,7 +1673,14 @@ export class Game {
       this.world.flags[key] = true;
       this.fx.celebrate({ x: objective.at[0], y: objective.at[1], z: objective.at[2] });
       this.fx.sound('chime');
-      this.hud.toasts.show(objective.title, { kind: 'success', title: 'Job done!', duration: 2600 });
+      // credit a spell cast at the job: the newest one the job is known for (a slow job like the garden finishes
+      // after later casts), else the newest cast there; nothing cast nearby credits nothing rather than a guess
+      const near = this.castLog.filter((c) => Math.hypot(c.x - objective.at[0], c.z - objective.at[2]) < 4).reverse();
+      const way = this.runner ? null : (near.find((c) => objective.spells.includes(c.label)) ?? near[0])?.label ?? null;
+      const fresh = way ? demoWays.add(objective.id, way) : false;
+      if (fresh) this.newWays++;
+      const found = demoWays.all()[objective.id]?.length ?? 0;
+      this.hud.toasts.show(fresh && found > 1 ? `${objective.title} · New way: “${way}” (${found} found)` : objective.title, { kind: 'success', title: 'Job done!', duration: 2600 });
     }
     const done = (o: LevelObjective) => this.world.flags[`objective:${o.id}`] === true;
     const active = list.find((o) => o.id === this.activeObjective && !done(o)) ?? list.find((o) => !done(o));
@@ -1707,7 +1722,7 @@ export class Game {
       if (level.objectives) {
         const news = this.heldNews ?? { words: [], trophies: [], experiments: 0 };
         this.heldNews = null;
-        this.hud.showDemoWin({ words: this.words, stars, par: level.par ?? 4, time: this.runClock, ...record }, news, {
+        this.hud.showDemoWin({ words: this.words, stars, par: level.par ?? 4, time: this.runClock, ...record, ways: demoWays.all(), newWays: this.newWays, jobs: level.objectives }, news, {
           onExplore: () => this.explore(),
           onRetry: () => this.loadLevel(level.id),
           onKeep: () => { this.overview = null; this.hud.hideOverlay(); },
