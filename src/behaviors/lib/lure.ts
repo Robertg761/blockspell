@@ -29,12 +29,23 @@ function blockedBetween(world: GameWorld, a: P, b: P): boolean {
   return false;
 }
 
+/** Is the animal shut in (a pen, a walled yard)? Nearly every way out of 5 m around it runs into a wall, ledge or gap. */
+function enclosed(world: GameWorld, eater: P): boolean {
+  let blocked = 0;
+  for (let k = 0; k < 8; k++) {
+    const a = (k / 8) * Math.PI * 2 + 0.3;
+    if (blockedBetween(world, eater, { x: eater.x + Math.cos(a) * 5, y: eater.y, z: eater.z + Math.sin(a) * 5 })) blocked++;
+  }
+  return blocked >= 7;
+}
+
 /**
  * Where a treat aimed at `at` should really land, so a hungry animal nearby can get to it. Placing
  * food by finger or mouse is imprecise, and a pen wall a few centimeters off means the pup watches
  * its bone sit out of reach. Returns null (leave the aim alone) unless a hungry eater is within
- * LURE_REACH and a wall, ledge or gap is in its way: a clear path needs no help, the animal just
- * walks there. Otherwise the treat lands a step from the animal, on its side of the obstacle.
+ * LURE_REACH, shut in, and a wall, ledge or gap is in its way: a clear path needs no help, the animal
+ * just walks there, and bait set on purpose to coax a free animal through a gate stays where it was
+ * put. Otherwise the treat lands a step from the animal, on its side of the obstacle.
  * `reach` says whether the caster may cast at a point at all (cast range), so this never
  * gets around a level's limits.
  */
@@ -51,6 +62,7 @@ export function lureTarget(world: GameWorld, food: ObjectDef, at: P, reach: (p: 
   const feet = feetOf(best);
   const eater = { x: best.x, y: feet, z: best.z };
   if (!blockedBetween(world, eater, at) && Math.abs(at.y - feet) < 0.8) return null;
+  if (!enclosed(world, eater)) return null;
 
   // a step from the animal, preferring the side the player aimed at, then fanning out around it
   const step = Math.max(0.9, best.radius + 0.6);
