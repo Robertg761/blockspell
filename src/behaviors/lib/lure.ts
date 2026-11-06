@@ -1,6 +1,7 @@
 import type { Entity } from '../../core/entity';
 import type { GameWorld } from '../../core/world';
 import type { ObjectDef } from '../../objects/types';
+import { dietOf } from './diet';
 
 type P = { x: number; y: number; z: number };
 
@@ -9,7 +10,7 @@ export const LURE_REACH = 4.5;
 
 /** Would an eater of this kind go for a freshly cast object of this kind? Only still food counts, never other animals. */
 function likes(eater: Entity, food: ObjectDef): boolean {
-  const diet = eater.def.diet;
+  const diet = dietOf(eater);
   if (!diet || food.tags.includes('animal')) return false;
   return diet.some((d) => food.id === d || food.tags.includes(d as never));
 }
