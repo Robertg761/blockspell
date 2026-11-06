@@ -93,7 +93,7 @@ const CASES = [
   ['black cat', 'cat', { adj: ['black'] }], ['tiny dragon', 'dragon', { adj: ['tiny'] }], ['giant robot', 'robot', { adj: ['giant'] }], ['flaming sword', 'sword', { adj: ['flaming'] }],
   ['a very very big ball', 'ball', { adj: ['big'] }], ['dark blue car', 'car', { adj: ['blue'], noAdj: ['black', 'light'] }], ['light blue car', 'car', { adj: ['blue'], noAdj: ['light'] }],
   ['sleepy puppy', 'dog', { adj: ['slow'] }], ['maroon ball', 'ball', { adj: ['red'] }], ['chocolate cake', 'cake', { adj: ['brown'] }], ['ice cat', 'cat', { adj: ['frozen'] }],
-  ['robot dog', 'dog', { adj: ['metal'] }], ['ball red', 'ball', { adj: ['red'] }], ['a cat on fire', 'cat', { adj: ['flaming'] }], ['dog with a hat', 'dog'], ['cat on a skateboard', 'cat'],
+  ['big and red ball', 'ball', { adj: ['big', 'red'] }], ['red and blue car', 'car', { adj: ['red', 'blue'] }], ['robot dog', 'dog', { adj: ['metal'] }], ['ball red', 'ball', { adj: ['red'] }], ['a cat on fire', 'cat', { adj: ['flaming'] }], ['dog with a hat', 'dog'], ['cat on a skateboard', 'cat'],
   ['cute fluffy bunny', 'rabbit', { noUnknown: true }], ['happy little cloud', 'cloud', { noUnknown: true }], ['a slice of red apple', 'apple', { adj: ['red'], noUnknown: true }],
   ['huge tree', 'tree', { adj: ['giant'] }], ['mini car', 'car', { adj: ['tiny'] }], ['bright red balloon', 'balloon', { adj: ['red'], noAdj: ['glowing'] }],
   // typos are fixed when it is clear what was meant

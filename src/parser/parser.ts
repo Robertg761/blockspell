@@ -248,8 +248,11 @@ export function parseSpell(input: string): ParseResult {
   // "a dog with a hat", "a cat on fire": the thing comes first, the rest only describes it
   let rest = all;
   let tail: string[] = [];
-  // (so is a verb after the thing: "a dragon breathing fire")
-  const cut = all.findIndex((t, i) => i > 0 && (CONNECTORS.has(t) || (t.length >= 5 && t.endsWith('ing') && !adjectiveAt([t], 0) && !!resolveHead(all, i, lex.maxNounWords))));
+  // The thing must already be named before the cut, so "big and red ball" keeps its adjectives. A verb
+  // after the thing ("a dragon breathing fire") starts the description too.
+  const cut = all.findIndex(
+    (t, i) => i > 0 && (CONNECTORS.has(t) || (t.length >= 5 && t.endsWith('ing') && !adjectiveAt([t], 0))) && !!resolveHead(all, i, lex.maxNounWords),
+  );
   if (cut > 0) { rest = all.slice(0, cut); tail = all.slice(cut); }
 
   let found: { hit: Hit; len: number } | undefined;
