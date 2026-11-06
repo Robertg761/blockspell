@@ -26,7 +26,7 @@ reach it, using as few spells as you can.
 | **Space** | Jump. Walking into knee-high steps climbs onto them |
 | **W** next to a ladder, rope, tree or stairs | Climb. At the top you hop over the edge. Space grabs on from the air |
 | **Enter** (or **T**, **/**) | Open the spell bar. Type a spell and press Enter to cast it. Esc closes it |
-| **Click the ground** | Choose where the next spell appears (the glowing marker) |
+| **Click the ground** | Send the next spell there instead (the glowing marker). Without a click, spells land a step in front of you, and the marker shows where |
 | **E** near an object | Grab it: light things go overhead, tools go in your hand, heavy ones are dragged. **E** again sets it down |
 | **E** near a vehicle | Get in. **E** again gets out |
 | **C** while holding something | Use it: saw, chop, eat, light, splash... The prompt says what it does |
@@ -113,7 +113,15 @@ can't simply summon the answer next to the goal.
 - **Magic:** *flaming, frozen, hot, wet, heavy, light, flying, bouncy, sticky, slippery,
   ghostly, angry, fast, slow, metal, magnetic, explosive, glowing, alive, wooden, tasty*
 - **Counts:** *3 balls*, *two dogs* (up to 5)
-- Unknown words get close-match suggestions, and small typos are autocorrected.
+- **It reads like English.** Say it however you like: *please make me a sleepy puppy*, *dog food*,
+  *a bowl of soup*, *cat on fire*, *pizzas*. Plurals, filler words, "a pair of" and a trailing
+  "x3" all work, and so do a few hundred everyday synonyms (a *poodle* is a dog, *dog food* is a bone).
+- **Honest guesses.** If Blockspell has no model of a word but knows a close cousin, it casts that and
+  says so (*horse* gives a cow, *pasta* a pizza). A kind word like *food* or *vehicle* gives a random
+  one. Typos are fixed only when it is clearly one word (*dragn*, *bannana*, *ice creem*); it never
+  swaps in a different word that merely looks similar. Anything else gets close-match suggestions.
+- **Where it lands.** Spells appear a step in front of the hero (the glowing marker shows where).
+  Click the ground to send the next spell somewhere else instead.
 
 Some favourite words: *ladder, stairs, ramp, bridge, plank, trampoline, spring, rope,
 balloon, hot air balloon, rocket, jetpack, plane, car, chainsaw, axe, pickaxe, fan, magnet, bomb, tnt, water, cloud, ice,
@@ -249,6 +257,7 @@ npm run build
 npm run check-offline   # scans dist/ for external URLs that would be fetched at runtime
 npm run check-pwa       # manifest, icons, precache list; reloads three URLs with the network off
 npm run check-tasks     # every open-world task solved by script, with resets, idle and leak checks
+npm run check-spells    # the spell parser: thesaurus integrity and ~170 example phrases (no browser needed)
 ```
 
 `check-pwa` and `check-tasks` drive Chrome through Playwright. They use `/usr/bin/google-chrome`,
@@ -398,7 +407,8 @@ src/
   behaviors/defs/    per-tag behaviors                  <- add behaviors here
   levels/            goals.ts (goal helpers), progress.ts (localStorage stars), solve.ts (solution replay)
   levels/defs/       puzzle levels                      <- add levels here (see tools/level-brief.md)
-  parser/            tokenize -> count -> adjectives + noun -> synonyms, fuzzy suggestions
+  parser/            tokenize -> count -> adjectives + noun -> synonyms, near matches, kinds, safe typo fixes
+                     (thesaurus.ts is the word list; `npm run check-spells` tests it)
   ui/                DOM HUD, level select, toasts, spellbook, tutorial tips, touch controls, voxel logo,
                      settings, trophies, photo mode, side tools, autocomplete, gamepad
   settings.ts trophies.ts share.ts pwa.ts   saved settings, trophy and lab-notebook rules, scene links, service worker glue

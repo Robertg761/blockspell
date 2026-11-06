@@ -320,10 +320,10 @@ export class Hud {
     else if (level.hint && !world) this.goal.append(h('span.goal-free', { text: level.hint }));
     this.goal.classList.remove('done');
     this.help.textContent = world
-      ? 'WASD / arrows: move · Shift: run · Space: jump · W near a ladder: climb · E: grab or get in · C: use · F: throw · Enter: write a word · Click ground: aim · J: journal · R: reset this island'
+      ? 'WASD / arrows: move · Shift: run · Space: jump · W near a ladder: climb · E: grab or get in · C: use · F: throw · Enter: write a word · Click ground: send the next spell there · J: journal · R: reset this island'
       : level.hero
-        ? 'WASD / arrows: move · Shift: run · Space: jump · W near a ladder: climb · E: grab or get in · C: use · F: throw · Enter: write a word · Click ground: aim · R: restart'
-        : 'Drag to orbit · Drag things to move them, flick to throw · Scroll to zoom · Click ground to aim · Click things to poke · Click a vehicle to drive it · Drag a tool onto something to break it';
+        ? 'WASD / arrows: move · Shift: run · Space: jump · W near a ladder: climb · E: grab or get in · C: use · F: throw · Enter: write a word · Click ground: send the next spell there · R: restart'
+        : 'Drag to orbit · Drag things to move them, flick to throw · Scroll to zoom · Click ground to send the next spell there · Click things to poke · Click a vehicle to drive it · Drag a tool onto something to break it';
     this.surpriseBtn.style.display = !level.goal && !level.hero && !world ? '' : 'none';
     this.menuBtn.textContent = world ? '📓 Journal' : '☰ Menu';
     this.menuBtn.title = world ? 'Journal (J)' : 'Menu';
@@ -351,7 +351,7 @@ export class Hud {
       ]) : null,
       active ? h('div.objective-spells', {}, [h('span', { text: 'Try a word:' }), ...active.spells.map((spell) =>
         h('button.chip', { type: 'button', text: spell, title: `Write ${spell} in the spell bar`, onClick: () => this.prefill(spell) }))]) : null,
-      active ? h('p.objective-controls', { text: isTouch ? 'Tap the ground to aim. Type a word below, then Cast. Use the pad to walk.' : 'Click the ground to aim. Type a word below, then Cast. WASD to walk, Space to jump.' }) : null,
+      active ? h('p.objective-controls', { text: isTouch ? 'Type a word below, then Cast: it appears in front of you. Tap the ground to send the next one elsewhere. Use the pad to walk.' : 'Type a word below, then Cast: it appears in front of you. Click the ground to send the next one elsewhere. WASD to walk, Space to jump.' }) : null,
     ]));
   }
 

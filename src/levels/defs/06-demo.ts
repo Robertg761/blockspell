@@ -6,7 +6,7 @@ const objectives: LevelObjective[] = [
   {
     id: 'pup', title: 'Feed the hungry pup', at: [-5, 0, 3],
     instruction: 'Drop a dog treat inside the little stone pen.',
-    hint: 'Click inside the pen, press Enter, type "bone", then Enter to cast. The pup also likes steak, burgers, pizza and cookies.',
+    hint: 'Face the pen (or press "Aim at this job"), press Enter, type "bone", then Enter to cast. Spells land in front of you. The pup also likes steak, burgers, pizza and cookies.',
     spells: ['bone', 'steak'], check: (w) => fed(w, 'demo-pup'),
   },
   {
@@ -19,7 +19,7 @@ const objectives: LevelObjective[] = [
   {
     id: 'lookout', title: 'Climb to the lookout', at: [-4, 0, -2.2],
     instruction: 'Make a way up, then stand on the grassy rock ledge.',
-    hint: 'Aim in front of the ledge and cast "ladder". Walk into it and hold W to climb, then step onto the top. "Stairs" work too.',
+    hint: 'Stand facing the ledge (or press "Aim at this job") and cast "ladder". Walk into it and hold W to climb, then step onto the top. "Stairs" work too.',
     spells: ['ladder', 'stairs'], check: (w) => heroInside(w, [-6, 2.4, -7], [-2, 3.5, -3]) && heroStandingAbove(w, 2.4),
   },
   {

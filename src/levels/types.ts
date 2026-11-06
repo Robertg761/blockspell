@@ -80,7 +80,7 @@ export interface LevelDef {
   /** View distance overrides: fog start and end, camera far plane and max zoom-out distance. */
   view?: { fog: [number, number]; far: number; maxDistance: number };
   camera?: { position: V3; target: V3 };
-  /** Default spawn point for typed objects (before the player clicks the ground). */
+  /** Where the cast marker starts. Spells land in front of the hero (or the view) unless the player clicks the ground. */
   spawnPoint?: V3;
   /** Optional whitelist of object ids the player may spawn. */
   allowedWords?: string[];

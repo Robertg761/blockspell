@@ -17,7 +17,7 @@ import { clearHDSetting, geometryBytes, hdPending, hdStats, hdTop, setHDEnabled 
  * Debug / automation hook, available as `window.__blockspell` in every build.
  *
  *   __blockspell.load(1)                      load level by order number or id
- *   __blockspell.cast('giant balloon', [x, z]) cast at a point (or at the spawn marker)
+ *   __blockspell.cast('giant balloon', [x, z]) cast at a point (or in front of the hero)
  *   __blockspell.step(3)                      run 3 s of simulation synchronously (no rendering)
  *   __blockspell.render()                     draw one frame now
  *   __blockspell.state()                      level, words, won, hero position and zone, entities
@@ -51,7 +51,7 @@ import { clearHDSetting, geometryBytes, hdPending, hdStats, hdTop, setHDEnabled 
  * Query flags (handy for screenshots):
  *   ?level=2               skip the title and load level 2 (order number or id; `world` is the open world)
  *   &spawn=giant%20balloon cast a spell (repeatable; `;` separates several)
- *   &at=x,z                where to cast (default: the level's spawn point)
+ *   &at=x,z                where to cast (default: in front of the hero)
  *   &t=2                   simulate 2 s before the first frame
  *   &solve=0               play solution #0 live
  *   &task=feed-pup         with ?level=world: jump to that task's start (and &solve=0 plays its solution)
