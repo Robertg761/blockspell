@@ -138,6 +138,7 @@ export class Game {
   private heldNews: DemoNews | null = null;
   /** Seconds of play in a guided level (the demo), shown as its clock and kept as a best time. */
   private runClock = 0;
+  private clockRunning = false;
   private clockShown = -1;
   /** The end-of-demo camera move: glides out to the whole island and holds behind the finish panel. */
   private overview: { start: number; from: [Vector3, Vector3]; to: [Vector3, Vector3] } | null = null;
@@ -410,6 +411,7 @@ export class Game {
     this.failed = false;
     this.words = 0;
     this.runClock = 0;
+    this.clockRunning = false;
     this.clockShown = -1;
     this.activeObjective = null;
     this.heldNews = level.objectives ? { words: [], trophies: [], experiments: 0 } : null;
@@ -1578,7 +1580,8 @@ export class Game {
 
     if (this.level.objectives && !this.won) {
       // the clock starts with the player's first move or spell, so reading the card first is free
-      if (this.words > 0 || (hero?.alive && Math.hypot(hero.x - (this.level.hero?.[0] ?? hero.x), hero.z - (this.level.hero?.[2] ?? hero.z)) > 0.3)) this.runClock += dt;
+      if (!this.clockRunning && (this.words > 0 || (hero?.alive && Math.hypot(hero.x - (this.level.hero?.[0] ?? hero.x), hero.z - (this.level.hero?.[2] ?? hero.z)) > 0.3))) this.clockRunning = true;
+      if (this.clockRunning) this.runClock += dt;
       const sec = Math.floor(this.runClock);
       if (sec !== this.clockShown) {
         this.clockShown = sec;
