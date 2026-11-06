@@ -58,7 +58,8 @@ button, input, select { font: inherit; color: inherit; }
 .goal.done .goal-box { background: var(--good); border-color: var(--good); opacity: 1; box-shadow: inset 0 0 0 2px #fff; }
 .goal.done { color: var(--good); }
 .objectives.hidden { display: none; }
-.objective-progress { font-size: 12px; font-weight: 750; color: #276d3b; margin: 8px 0; }
+.objective-progress { font-size: 12px; font-weight: 750; color: #276d3b; margin: 8px 0; display: flex; justify-content: space-between; gap: 8px; }
+.objective-clock { color: #6b7385; font-variant-numeric: tabular-nums; }
 .objective-list { display: grid; gap: 4px; }
 .objective-row { display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; border: 1px solid transparent; border-radius: 8px; background: #ffffff80; padding: 6px 8px; font-size: 12px; cursor: pointer; }
 .objective-row[aria-pressed="true"] { border-color: #ba6b0b; background: #fff1d6; font-weight: 700; }
@@ -431,6 +432,13 @@ body.touch .chip, body.touch .icon-btn { min-height: 40px; }
   .level-card { margin-right: 46px; }
 }
 body.touch .objective-row { min-height: 34px; }
+.demo-stats { display: flex; justify-content: center; gap: 12px; margin: 10px 0 4px; }
+.demo-stat { display: flex; flex-direction: column; align-items: center; min-width: 96px; padding: 8px 14px; border-radius: 14px; background: rgba(40, 60, 90, 0.06); }
+.demo-stat strong { font-size: 26px; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.demo-stat-label { font-size: 11px; font-weight: 750; text-transform: uppercase; letter-spacing: 0.06em; opacity: 0.6; }
+.demo-stat-note { font-size: 12px; opacity: 0.7; }
+.demo-stat.best { background: rgba(255, 196, 58, 0.22); }
+.demo-stat.best .demo-stat-note { opacity: 1; font-weight: 800; color: #b06d00; animation: star-pop 0.55s 0.9s cubic-bezier(0.2, 1.8, 0.4, 1) backwards; }
 .demo-win .link-btn { align-self: center; flex-basis: 100%; margin-top: 0; }
 .compass-arrow { display: inline-block; font-size: 15px; line-height: 1; transition: transform 0.12s linear; }
 

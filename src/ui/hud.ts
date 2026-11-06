@@ -1,4 +1,5 @@
 import { spellsText, starsForPar, type LevelDef, type LevelObjective } from '../levels/types';
+import { clockText } from '../levels/demo-best';
 import { Audio, loadMuted } from '../engine/audio';
 import { Autocomplete } from './autocomplete';
 import { isTouch } from './touch';
@@ -74,6 +75,7 @@ const starText = (n: number, of = 3) => '★'.repeat(n) + '☆'.repeat(Math.max(
 
 /** What a guided level held back from toasts, for its finish panel. */
 export interface DemoNews { words: string[]; trophies: string[]; experiments: number }
+export interface DemoResult { words: number; stars: number; par: number; time: number; prev: { time: number; words: number; runs: number } | null; fasterBest: boolean; fewerBest: boolean }
 
 /** All DOM UI: spell input, level card, toasts, overlays. */
 export class Hud {
@@ -87,6 +89,8 @@ export class Hud {
   private wordsLine = h('div.words-line');
   private objectives = h('div.objectives.hidden');
   private objectivesKey = '';
+  /** The demo's run clock, kept across the job card's re-renders. */
+  private objectiveClock = h('span.objective-clock', { 'aria-label': 'Time' });
   private chips = h('div.word-chips');
   private help = h('div.help');
   private overlay = h('div.overlay.hidden');
@@ -338,7 +342,7 @@ export class Hud {
     this.objectivesKey = key;
     this.setTracker(active ? { title: active.title, zone: null } : null, 'All four jobs done!');
     this.objectives.replaceChildren(h('div.objective-body', {}, [
-      h('div.objective-progress', { role: 'status', text: `${done.length} / ${list.length} jobs done` }),
+      h('div.objective-progress', { role: 'status' }, [`${done.length} / ${list.length} jobs done`, this.objectiveClock]),
       h('div.objective-list', { 'aria-label': 'Island jobs' }, list.map((o, i) => h('button.objective-row', {
         type: 'button', 'aria-pressed': String(active?.id === o.id), disabled: done.includes(o.id),
         'data-done': String(done.includes(o.id)),
@@ -355,7 +359,12 @@ export class Hud {
     ]));
   }
 
-  showDemoWin(words: number, news: DemoNews, ops: { onExplore: () => void; onRetry: () => void; onKeep: () => void; onFreePlay: () => void }): void {
+  /** The demo's run clock in the job card ("1:23"). */
+  setObjectiveClock(text: string): void {
+    this.objectiveClock.textContent = `⏱ ${text}`;
+  }
+
+  showDemoWin(r: DemoResult, news: DemoNews, ops: { onExplore: () => void; onRetry: () => void; onKeep: () => void; onFreePlay: () => void }): void {
     const go = (fn: () => void) => () => { this.hideOverlay(); fn(); };
     const earned = [
       news.words.length ? `New words: ${news.words.join(', ')}.` : '',
@@ -363,18 +372,30 @@ export class Hud {
       news.experiments ? `Lab notebook: ${news.experiments} ticked.` : '',
     ].filter(Boolean).join(' ');
     this.showPanel(h('div.panel.win.demo-win', {}, [
-      h('div.win-stars', { text: '✦' }),
+      h('div.win-stars', {}, [0, 1, 2].map((i) => h(`span.win-star${i < r.stars ? '.on' : ''}`, { text: '★', style: `animation-delay:${0.25 + i * 0.22}s` }))),
       h('h2', { text: 'The island is ready!' }),
-      h('p', { text: 'A happy pup, a new tree, a view from the lookout, and a glowing beacon. You made it happen with words.' }),
-      h('p', { text: `4 jobs finished with ${spellsText(words)}. Try a different solution on your next visit.` }),
+      h('div.demo-stats', {}, [
+        stat('Time', clockText(r.time), r.fasterBest ? 'New best!' : r.prev ? `Best ${clockText(r.prev.time)}` : 'First clear'),
+        stat('Spells', String(r.words), r.fewerBest ? 'New best!' : r.prev ? `Best ${r.prev.words}` : `Par ${r.par}`),
+      ]),
+      h('p', { text: r.stars < 3
+        ? `Can you do all four jobs in ${spellsText(r.par)} for ★★★?`
+        : r.fasterBest || !r.prev ? 'A different spell solves every job. Can you beat your time with new ones?' : `Your best is ${clockText(r.prev.time)}. One more go?` }),
       earned ? h('p.small', { text: earned }) : null,
       h('div.panel-actions', {}, [
-        h('button.btn', { type: 'button', text: 'Explore the full world', onClick: go(ops.onExplore) }),
-        h('button.btn.secondary', { type: 'button', text: 'Replay demo', onClick: go(ops.onRetry) }),
+        h('button.btn', { type: 'button', text: '↺ Play again', onClick: go(ops.onRetry) }),
+        h('button.btn.secondary', { type: 'button', text: 'Explore the full world', onClick: go(ops.onExplore) }),
         h('button.btn.secondary', { type: 'button', text: 'Free Play', onClick: go(ops.onFreePlay) }),
         h('button.link-btn', { type: 'button', text: 'Stay on this island', onClick: ops.onKeep }),
       ]),
     ]));
+    for (let i = 0; i < r.stars; i++)
+      setTimeout(() => Audio.instance?.play('star', { pitch: 2 ** ((i * 4) / 12) }), (0.25 + i * 0.22) * 1000 + 120);
+    function stat(label: string, value: string, note: string) {
+      return h(`div.demo-stat${note === 'New best!' ? '.best' : ''}`, {}, [
+        h('span.demo-stat-label', { text: label }), h('strong', { text: value }), h('span.demo-stat-note', { text: note }),
+      ]);
+    }
   }
 
   /** Open world: the level card names the hero's zone. */
