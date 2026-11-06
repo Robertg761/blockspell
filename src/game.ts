@@ -140,7 +140,7 @@ export class Game {
   private runClock = 0;
   private clockRunning = false;
   /** Spells cast this run (labels), newest last: a finished demo job is credited to one of them. */
-  private castLog: string[] = [];
+  private castLog: { label: string; x: number; z: number }[] = [];
   /** Ways found for the first time this run, for the finish panel. */
   private newWays = 0;
   private clockShown = -1;
@@ -737,7 +737,6 @@ export class Game {
       return false;
     }
     this.hud.pulseInput();
-    this.castLog.push(res.label.toLowerCase());
     this.tracker.noteCast(this.zone?.id ?? null, res.def.id);
     if (!this.won) {
       this.words++;
@@ -754,6 +753,7 @@ export class Game {
       base.set(lure.x, lure.y, lure.z);
       this.fx.sparkle(base, undefined, 10);
     }
+    this.castLog.push({ label: res.label.toLowerCase(), x: base.x, z: base.z });
     this.aimPinned = false; // a clicked spot is for one spell; the next one lands in front of the hero again
     // nudge repeat casts so things don't land in a perfect tower
     const jitter = this.world.nearby(base, 1.5, (e) => e !== this.world.hero).length > 0 ? 0.5 : 0;
@@ -1673,8 +1673,10 @@ export class Game {
       this.world.flags[key] = true;
       this.fx.celebrate({ x: objective.at[0], y: objective.at[1], z: objective.at[2] });
       this.fx.sound('chime');
-      // the newest spell the job is known for (a slow job like the garden finishes after later casts), else the newest spell
-      const way = this.runner ? null : [...this.castLog].reverse().find((l) => objective.spells.includes(l)) ?? this.castLog[this.castLog.length - 1] ?? null;
+      // credit a spell cast at the job: the newest one the job is known for (a slow job like the garden finishes
+      // after later casts), else the newest cast there; nothing cast nearby credits nothing rather than a guess
+      const near = this.castLog.filter((c) => Math.hypot(c.x - objective.at[0], c.z - objective.at[2]) < 4).reverse();
+      const way = this.runner ? null : (near.find((c) => objective.spells.includes(c.label)) ?? near[0])?.label ?? null;
       const fresh = way ? demoWays.add(objective.id, way) : false;
       if (fresh) this.newWays++;
       const found = demoWays.all()[objective.id]?.length ?? 0;
