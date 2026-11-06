@@ -323,6 +323,8 @@ button.sb-word:hover { background: #ffe0b0; }
 .touch-btn.off { display: none; }
 .touch-btn.active { transform: translateY(3px); box-shadow: 0 1px 0 #b86400; }
 body.touch-hero .toasts { bottom: 290px; }
+/* the try-a-word chips would sit between the pad and the buttons: they come back once the spell bar is focused (the pads hide then) */
+body.touch-hero .word-chips { display: none; }
 body.touch button, body.touch .level-card { -webkit-tap-highlight-color: transparent; }
 body.touch .chip, body.touch .icon-btn { min-height: 40px; }
 
@@ -349,6 +351,7 @@ body.touch .chip, body.touch .icon-btn { min-height: 40px; }
   .goal { margin-top: 2px; font-size: 13px; }
   .hud-bottom { bottom: max(12px, env(safe-area-inset-bottom)); gap: 6px; width: calc(100vw - 16px); }
   .spell-bar { padding-left: 14px; }
+  .spell-bar:has(.spell-input:placeholder-shown) .pin-btn { display: none; } /* the star is for a spell you have typed */
   .spell-input { font-size: 16px; padding: 8px 2px; } /* 16px stops iOS zoom-on-focus */
   .spell-ghost { font-size: 16px; padding: 8px 2px; }
   .cast-btn { height: 40px; padding: 0 16px; font-size: 15px; }
@@ -375,6 +378,7 @@ body.touch .chip, body.touch .icon-btn { min-height: 40px; }
   .level-card:not(.expanded) .link-btn,
   .level-card:not(.expanded) .words-line { display: none; }
   .hud-bottom { bottom: 8px; gap: 4px; }
+  .spell-bar:has(.spell-input:placeholder-shown) .pin-btn { display: none; }
   .spell-input { font-size: 16px; padding: 6px 2px; }
   .spell-ghost { font-size: 16px; padding: 6px 2px; }
   .cast-btn { height: 38px; }
@@ -408,14 +412,23 @@ body.touch .chip, body.touch .icon-btn { min-height: 40px; }
   .has-objectives .objective-instruction { margin: 5px 0; font-size: 12px; }
   .has-objectives .objective-spells { margin-top: 4px; }
   .has-objectives .objective-controls { display: none; }
-  .level-card.has-objectives::after { display: none; }
+}
+/* phones: the jobs card shows only the job you are on (its steps, a word to try) until you tap it open */
+@media (max-width: 640px) {
+  .level-card.has-objectives:not(.expanded) .objective-list,
+  .level-card.has-objectives:not(.expanded) .level-name { display: none; }
+  .level-card.has-objectives::after { content: 'tap for all jobs'; }
+  .level-card.has-objectives.expanded::after { content: 'tap to collapse'; }
+  .has-objectives .objective-instruction { margin: 4px 0 6px; }
+  .has-objectives .objective-actions .chip, .has-objectives .objective-spells .chip { padding: 3px 10px; font-size: 12px; }
+  .objective-actions, .objective-spells { gap: 5px; }
 }
 @media (max-height: 500px) and (min-width: 641px) {
   .has-objectives .objective-list { display: none; }
 }
-/* The side tools sit over the right edge of a full-width card on phones. */
+/* The tools button sits over the right edge of a full-width card on phones. */
 @media (max-width: 640px) {
-  .level-card.has-objectives { margin-right: 46px; }
+  .level-card { margin-right: 46px; }
 }
 body.touch .objective-row { min-height: 34px; }
 .demo-win .link-btn { align-self: center; flex-basis: 100%; margin-top: 0; }
