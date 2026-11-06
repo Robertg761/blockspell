@@ -30,6 +30,18 @@ export class SideTools {
   private badges = new Map<ToolId, HTMLElement>();
 
   constructor(onTool: (id: ToolId) => void) {
+    // on phones the strip folds into this one button (see tools.css), so it isn't a column of six icons over the game
+    const toggle = h('button.tool-btn.tools-toggle', { type: 'button', title: 'More tools', 'aria-label': 'More tools', 'aria-expanded': 'false' }, [h('span.tool-icon', { text: '⋯' })]);
+    const setOpen = (open: boolean) => {
+      this.el.classList.toggle('open', open);
+      toggle.setAttribute('aria-expanded', String(open));
+    };
+    toggle.addEventListener('click', () => setOpen(!this.el.classList.contains('open')));
+    // tapping the game, or anything else, tucks them away again
+    document.addEventListener('pointerdown', (e) => {
+      if (this.el.classList.contains('open') && !this.el.contains(e.target as Node)) setOpen(false);
+    });
+    this.el.append(toggle);
     for (const t of TOOLS) {
       const badge = h('span.tool-badge');
       const b = h('button.tool-btn', { type: 'button', title: t.title, 'aria-label': t.title, 'data-tool': t.id, onClick: () => onTool(t.id) }, [h('span.tool-icon', { text: t.icon }), badge]);

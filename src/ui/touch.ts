@@ -77,7 +77,28 @@ export class TouchControls {
       document.body.classList.toggle('touch-hero', show);
       if (!show) this.releaseAll();
     }
-    if (show) this.syncCarry(game.carryHint);
+    if (show) {
+      this.syncCarry(game.carryHint);
+      this.syncClimb(game);
+    }
+  }
+
+  /** Climb is only worth a button when there is something to climb: hold it while on a ladder, show it within reach of one. */
+  private syncClimb(game: Game): void {
+    const hero = game.world.hero;
+    let near = false;
+    if (hero?.alive && !this.riding) {
+      near = !!hero.state.climbing;
+      const p = hero.body.position, pad = 1.3;
+      for (let i = 0; i < game.world.entities.length && !near; i++) {
+        const o = game.world.entities[i];
+        if (!o.alive || !o.has('climbable') || o.has('ghost') || o.has('frozen')) continue;
+        if (o.body.aabbNeedsUpdate) o.body.updateAABB();
+        const { lowerBound: lo, upperBound: hi } = o.body.aabb;
+        near = p.x > lo.x - pad && p.x < hi.x + pad && p.z > lo.z - pad && p.z < hi.z + pad && p.y - hero.size.y / 2 < hi.y + 0.5 && p.y + hero.size.y / 2 > lo.y - 0.5;
+      }
+    }
+    this.setShown(this.climbBtn, 'climb', near || this.climbBtn.classList.contains('active'));
   }
 
   /** Shows the buttons that apply to what the hero can reach or holds. */
@@ -93,7 +114,6 @@ export class TouchControls {
     if (this.jumpBtn.textContent !== jumpLabel) this.jumpBtn.textContent = jumpLabel;
     const use = !hint || riding ? null : holding ? useLabel(hint.entity) : nearbyLabel(hint.entity);
     if (use && this.useBtn.textContent !== use) this.useBtn.textContent = use;
-    this.climbBtn.classList.toggle('off', riding);
     this.setShown(this.grabBtn, 'grab', !!verb && verb !== 'heavy');
     this.setShown(this.tossBtn, 'toss', holding);
     this.setShown(this.turnBtn, 'turn', holding && hint!.entity.def.grip === undefined);

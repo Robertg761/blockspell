@@ -28,6 +28,7 @@ import { h } from './ui/dom';
 import { isTouch } from './ui/touch';
 import { CARRY, carryHint, carryKind, grab, handGrab, heldBy, letGo, type Carry, type CarryHint } from './behaviors/lib/carry';
 import { board, canRide, engineNote, leave, ridingOf, thrownOff } from './behaviors/lib/ride';
+import { lureTarget } from './behaviors/lib/lure';
 import { clickUse, isTool } from './behaviors/lib/use';
 import { waterSurfaceAt } from './behaviors/lib/water';
 import { Spellbook } from './ui/spellbook';
@@ -727,6 +728,15 @@ export class Game {
     }
     const count = Math.min(res.count, MAX_ENTITIES);
     const base = this.marker.position.clone(); // the marker itself keeps moving with the hero
+    // food aimed near a hungry animal but out of its reach (on a pen wall, past a fence) lands by the animal instead
+    const lure = lureTarget(this.world, res.def, base, (p) => {
+      const r = this.castRangeAt(p.x, p.y, p.z);
+      return !(r && hero?.alive && Math.hypot(p.x - hero.x, p.z - hero.z) > r);
+    });
+    if (lure) {
+      base.set(lure.x, lure.y, lure.z);
+      this.fx.sparkle(base, undefined, 10);
+    }
     this.aimPinned = false; // a clicked spot is for one spell; the next one lands in front of the hero again
     // nudge repeat casts so things don't land in a perfect tower
     const jitter = this.world.nearby(base, 1.5, (e) => e !== this.world.hero).length > 0 ? 0.5 : 0;
@@ -1239,9 +1249,18 @@ export class Game {
   private bindInput(): void {
     const canvas = this.renderer.gl.domElement;
     let down: { x: number; y: number } | null = null;
+    // a finger drifts a few pixels during a tap that a mouse never would: fingers get a roomier "that was a tap"
+    const slop = (e: PointerEvent) => (e.pointerType === 'mouse' ? 6 : 14);
+    // a second finger down (pinch to zoom, two-finger orbit) is never a tap
+    const touches = new Set<number>();
+    let multi = false;
     // capturing, to get in before the camera controls: dragging a thing mustn't orbit too
     canvas.addEventListener('pointerdown', (e) => {
       this.fx.audio.unlock();
+      if (e.pointerType !== 'mouse') {
+        touches.add(e.pointerId);
+        if (touches.size > 1) multi = true;
+      }
       down = { x: e.clientX, y: e.clientY };
       if (this.steering) this.hud.input.blur();
       else if (!this.titleMode && !this.photo && e.button === 0 && !this.hand) {
@@ -1259,21 +1278,28 @@ export class Game {
       if (!hand || e.pointerId !== hand.pointer || !down) return;
       if (!hand.e.alive) this.hand = null;
       else if (hand.lifted) this.moveHand(hand.e, e.clientX, e.clientY);
-      else if (Math.hypot(e.clientX - down.x, e.clientY - down.y) >= 6) {
+      else if (Math.hypot(e.clientX - down.x, e.clientY - down.y) >= slop(e)) {
         hand.lifted = true;
         handGrab(this.world, hand.e);
         this.moveHand(hand.e, e.clientX, e.clientY);
       }
     });
     canvas.addEventListener('pointerup', (e) => {
+      touches.delete(e.pointerId);
+      const wasMulti = multi;
+      if (!touches.size) multi = false;
       if (!down || e.button !== 0 || (this.hand && e.pointerId !== this.hand.pointer)) return;
       const moved = Math.hypot(e.clientX - down.x, e.clientY - down.y);
       down = null;
       const dragged = this.hand?.lifted;
       this.dropHand();
-      if (moved < 6 && !dragged && !this.photo) this.click(e.clientX, e.clientY); // photo mode: the pointer only orbits
+      if (moved < slop(e) && !dragged && !wasMulti && !this.photo) this.click(e.clientX, e.clientY, e.pointerType !== 'mouse'); // photo mode: the pointer only orbits
     });
-    canvas.addEventListener('pointercancel', () => this.dropHand());
+    canvas.addEventListener('pointercancel', (e) => {
+      touches.delete(e.pointerId);
+      if (!touches.size) multi = false;
+      this.dropHand();
+    });
     window.addEventListener('blur', () => {
       this.keys.clear();
       this.dropHand();
@@ -1443,7 +1469,12 @@ export class Game {
     this.hand = null;
   }
 
-  private click(cx: number, cy: number): void {
+  /**
+   * Handles a tap or click on the canvas. In a hero level a tap is nearly always "put the next spell
+   * here", so it is forgiving: a step's side face, a creature, or a near miss all still aim at the ground
+   * where the finger pointed. (Free Play, with no hero, keeps poking things.)
+   */
+  private click(cx: number, cy: number, touch = false): void {
     this.aimRay(cx, cy);
 
     const meshes = this.world.living().map((e) => e.mesh);
@@ -1459,12 +1490,45 @@ export class Game {
       if (ent && this.pilotClick(ent)) return;
       if (ent && this.isFreePlay && !this.pilot && clickUse(this.world, ent)) return;
       if (ent && ent !== this.world.hero && !ent.has('ridden')) {
+        if (this.level.hero) {
+          // a tap on a creature or a thing aims at the ground by it, so a bone can land at the dog's paws
+          const p = hitEntity.point;
+          const out = ent.body.mass === 0 ? this.groundBeside(p, hitEntity.face?.normal) : null; // a wall's side: the ground out from it
+          const g = this.world.groundAt(p.x, p.z);
+          this.setAim(out ?? new Vector3(p.x, Number.isFinite(g) ? Math.min(g, p.y) : p.y, p.z));
+          return;
+        }
         this.poke(ent);
         this.fx.sparkle(hitEntity.point, undefined, 10);
       }
       return;
     }
-    if (hitGround && hitGround.face && hitGround.face.normal.y > 0.5) this.setAim(hitGround.point);
+    if (hitGround) {
+      if (hitGround.face && hitGround.face.normal.y > 0.5) return this.setAim(hitGround.point);
+      // the side of a step or a bank: aim at the top edge it leads to, a bit out from the face
+      const p = this.groundBeside(hitGround.point, hitGround.face?.normal);
+      if (p) return this.setAim(p);
+    }
+    // a near miss (the sky, the void past an island's edge): look around the fingertip for ground
+    const reach = touch ? 44 : 14;
+    for (const r of [reach * 0.5, reach]) {
+      for (let k = 0; k < 8; k++) {
+        const a = (k / 8) * Math.PI * 2 + 0.4;
+        this.aimRay(cx + Math.cos(a) * r, cy + Math.sin(a) * r);
+        const near = this.raycaster.intersectObjects(this.world.pickables(), false)[0];
+        if (near?.face && near.face.normal.y > 0.5) return this.setAim(near.point);
+      }
+    }
+  }
+
+  /** Where a ray that struck the side of the terrain (a step, a bank) should aim: the ground just outside the face. */
+  private groundBeside(point: Vector3, normal?: Vector3): Vector3 | null {
+    if (!normal) return null;
+    const x = point.x + normal.x * 0.3, z = point.z + normal.z * 0.3;
+    const g = this.world.groundAt(x, z);
+    // a face that leads nowhere (the underside of an island, a cliff over the void) isn't ground
+    if (!Number.isFinite(g) || g > point.y + 1.2 || g < point.y - 2.5) return null;
+    return new Vector3(x, g, z);
   }
 
   /** Bumps an entity into the air (clicking things). */

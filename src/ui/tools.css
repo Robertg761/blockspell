@@ -22,6 +22,14 @@
 @media (max-height: 460px) {
   .side-tools { flex-direction: row-reverse; flex-wrap: wrap; max-width: 130px; justify-content: flex-start; }
 }
+/* phones: one "more tools" button that opens the strip, instead of the strip sitting over the game */
+.tools-toggle { display: none; font-size: 20px; font-weight: 800; letter-spacing: 0.04em; }
+@media (max-width: 640px), (max-height: 520px) {
+  .tools-toggle { display: grid; }
+  .side-tools:not(.open) .tool-btn:not(.tools-toggle) { display: none !important; }
+  .side-tools.open .tools-toggle { background: #fff1dc; box-shadow: 0 0 0 2.5px var(--accent), var(--shadow); }
+  .side-tools { align-items: flex-end; }
+}
 
 /* ---------- photo mode ---------- */
 body.photo-mode .hud-top-left, body.photo-mode .hud-top-right, body.photo-mode .hud-bottom, body.photo-mode .help,
