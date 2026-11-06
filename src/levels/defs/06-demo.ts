@@ -62,7 +62,9 @@ export default defineLevel({
     // Low walls keep the pup near its food and let the player see into the pen.
     for (const x of [-7, -3]) world.addStaticBox({ position: [x, 0.6, 3], size: [0.35, 1.2, 4.3], color: 'stone' });
     for (const z of [1, 5]) world.addStaticBox({ position: [-5, 0.6, z], size: [4.3, 1.2, 0.35], color: 'stone' });
-    place(world, 'dog', [-5, 0, 3], 'demo-pup');
+    const pup = place(world, 'dog', [-5, 0, 3], 'demo-pup');
+    // A hungry pup takes any food a new player thinks of, not only a dog's usual treats.
+    if (pup) pup.state.diet = ['bone', 'steak', 'burger', 'pizza', 'cookie', 'cheese', 'cake', 'bread', 'donut', 'egg', 'icecream', 'watermelon', 'apple', 'banana', 'carrot', 'honey', 'fish'];
     watchFed(world, 'demo-pup');
     world.addStaticBox({ position: [5, 0.1, 3], size: [3.5, 0.2, 3.5], color: 'dirt' });
     for (const x of [3.25, 6.75]) world.addStaticBox({ position: [x, 0.3, 3], size: [0.2, 0.6, 3.7], color: 'stone' });
