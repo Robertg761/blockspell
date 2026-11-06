@@ -439,6 +439,9 @@ body.touch .objective-row { min-height: 34px; }
 .demo-stat-note { font-size: 12px; opacity: 0.7; }
 .demo-stat.best { background: rgba(255, 196, 58, 0.22); }
 .demo-stat.best .demo-stat-note { opacity: 1; font-weight: 800; color: #b06d00; animation: star-pop 0.55s 0.9s cubic-bezier(0.2, 1.8, 0.4, 1) backwards; }
+.demo-ways { font-size: 14px; margin: 4px 0; }
+.demo-ways strong { color: #b06d00; }
+.objective-spells .chip.used { opacity: 0.6; }
 .demo-win .link-btn { align-self: center; flex-basis: 100%; margin-top: 0; }
 .compass-arrow { display: inline-block; font-size: 15px; line-height: 1; transition: transform 0.12s linear; }
 
