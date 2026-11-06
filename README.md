@@ -2,6 +2,8 @@
 
 **Write a word. Make it real.**
 
+![Blockspell key art](media/blockspell-keyart.png)
+
 Blockspell is a 3D voxel puzzle game that runs in your browser. Type the name of a
 thing (*ball*, *dog*, *fire*, *ladder*…), optionally with adjectives (*big red ball*,
 *flaming box*, *3 tiny balloons*), and a voxel object pops into a physics world.
@@ -11,7 +13,7 @@ away and pop near flames. Solve each level by summoning the right things.
 
 Built for **Hackyard Yard #6: "Offline"**.
 
-**[▶ Play it in your browser](https://robertg761.github.io/blockspell/)** · **[⬇ Download for Windows, macOS, Linux and Android](https://github.com/Robertg761/blockspell/releases/latest)** · [How the offline part works](#get-it-on-a-computer-or-phone)
+**[▶ Play it in your browser](https://robertg761.github.io/blockspell/)** · **[⬇ Download for Windows, macOS, Linux and Android](https://github.com/Robertg761/blockspell/releases/latest)** · **[🎬 Watch the demo video](media/blockspell-trailer.mp4)** · [How the offline part works](#get-it-on-a-computer-or-phone)
 
 ## How to play
 
