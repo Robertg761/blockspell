@@ -9,6 +9,7 @@ import { DEFAULT_TERRAIN } from './engine/terrain';
 import { menuLevels, orderedLevels } from './levels';
 import { mark } from './levels/goals';
 import { progress } from './levels/progress';
+import { clockText, demoBest } from './levels/demo-best';
 import { SolutionRunner } from './levels/solve';
 import { starsFor, type LevelDef, type LevelObjective, type LevelSolution, type V3 } from './levels/types';
 import type { Entity } from './core/entity';
@@ -135,6 +136,10 @@ export class Game {
   private activeObjective: string | null = null;
   /** Guided levels keep the view clear: word and trophy news waits here for the finish panel. Null once shown. */
   private heldNews: DemoNews | null = null;
+  /** Seconds of play in a guided level (the demo), shown as its clock and kept as a best time. */
+  private runClock = 0;
+  private clockRunning = false;
+  private clockShown = -1;
   /** The end-of-demo camera move: glides out to the whole island and holds behind the finish panel. */
   private overview: { start: number; from: [Vector3, Vector3]; to: [Vector3, Vector3] } | null = null;
   /** Multi-object casts still spawning (one object every 0.14 s): a zone reset cancels the ones aimed at that zone. */
@@ -292,6 +297,7 @@ export class Game {
   private eraseProgress(): void {
     worldSave.reset();
     progress.reset();
+    demoBest.reset();
     this.spellbook.reset();
     this.trophies.reset();
     this.tutorial.resetTips();
@@ -404,6 +410,9 @@ export class Game {
     this.won = false;
     this.failed = false;
     this.words = 0;
+    this.runClock = 0;
+    this.clockRunning = false;
+    this.clockShown = -1;
     this.activeObjective = null;
     this.heldNews = level.objectives ? { words: [], trophies: [], experiments: 0 } : null;
     this.overview = null;
@@ -1569,7 +1578,17 @@ export class Game {
     if (this.level.hero && (!hero?.alive || hero.y < (this.level.killY ?? -6))) this.respawnHero();
     else if (hero?.alive && this.level.hero && this.swimming(hero, dt)) this.respawnHero(true);
 
-    if (this.level.objectives && !this.won) this.refreshObjectives(true);
+    if (this.level.objectives && !this.won) {
+      // the clock starts with the player's first move or spell, so reading the card first is free
+      if (!this.clockRunning && (this.words > 0 || (hero?.alive && Math.hypot(hero.x - (this.level.hero?.[0] ?? hero.x), hero.z - (this.level.hero?.[2] ?? hero.z)) > 0.3))) this.clockRunning = true;
+      if (this.clockRunning) this.runClock += dt;
+      const sec = Math.floor(this.runClock);
+      if (sec !== this.clockShown) {
+        this.clockShown = sec;
+        this.hud.setObjectiveClock(clockText(this.runClock));
+      }
+      this.refreshObjectives(true);
+    }
 
     if (this.level.tasks) {
       this.tracker.update(dt, this.zone);
@@ -1670,6 +1689,7 @@ export class Game {
     this.won = true;
     const stars = starsFor(this.level, this.words);
     const newBest = progress.record(this.level.id, stars, this.words);
+    const record = this.level.objectives && !this.runner ? demoBest.record(this.runClock, this.words) : { prev: null, fasterBest: false, fewerBest: false };
     this.lastResult = { stars, words: this.words };
     this.hud.setGoalDone();
     const h = this.world.hero;
@@ -1687,7 +1707,7 @@ export class Game {
       if (level.objectives) {
         const news = this.heldNews ?? { words: [], trophies: [], experiments: 0 };
         this.heldNews = null;
-        this.hud.showDemoWin(this.words, news, {
+        this.hud.showDemoWin({ words: this.words, stars, par: level.par ?? 4, time: this.runClock, ...record }, news, {
           onExplore: () => this.explore(),
           onRetry: () => this.loadLevel(level.id),
           onKeep: () => { this.overview = null; this.hud.hideOverlay(); },
